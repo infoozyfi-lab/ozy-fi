@@ -63,4 +63,79 @@ export const ITEMS = [
   { name: 'U3. Fantasia', price: 10.50, toppings: true, cat: 'rucola', desc: 'Choose any four (4) toppings.' },
 
   // Vikings
-  { name: 'T1. Mama Zone', price: 11.
+  { name: 'T1. Mama Zone', price: 11.20, toppings: true, cat: 'vikings', desc: 'Bell pepper, onion, lettuce, light feta, olives, garlic or salad dressing.' },
+  { name: 'T2. Ozy Zone', price: 10.50, toppings: true, cat: 'vikings', tag: 'Signature', desc: 'Pepperoni, kebab meat, lettuce, garlic or salad dressing.' },
+  { name: 'T3. Fantasia', price: 10.50, toppings: true, cat: 'vikings', desc: 'Choose any four (4) toppings.' },
+
+  // Vegan
+  { name: 'VP1. Vöner Pizza', price: 10.90, toppings: true, cat: 'vegaani', tag: 'Vegan', desc: 'Vöner, red onion, cherry tomato, chili, vegan cheese.' },
+  { name: 'VP2. Vegan For Life', price: 10.90, toppings: true, cat: 'vegaani', tag: 'Vegan', desc: 'Fresh mushroom, bell pepper, capers, red onion, vegan cheese.' },
+  { name: 'VP3. Green Pizza', price: 11.20, toppings: true, cat: 'vegaani', tag: 'Vegan', desc: 'Cherry tomato, bell pepper, olives, red onion, mushroom, vegan cheese.' },
+  { name: 'VP4. Vöner Mexicano', price: 10.90, toppings: true, cat: 'vegaani', tag: 'Vegan', desc: 'Vöner, jalapeño, pineapple, garlic, vegan cheese.' },
+  { name: 'VP5. Vegan Fantasia', price: 10.90, toppings: true, cat: 'vegaani', tag: 'Vegan', desc: 'Choose four (4) toppings + vegan cheese.' },
+
+  // Vöner
+  { name: 'V1. Vöner in Bread', price: 8.90, toppings: false, cat: 'voner', desc: 'Vöner, lettuce & sauces in pita bread.' },
+  { name: 'V3. Vöner Iskender', price: 9.90, toppings: false, cat: 'voner', desc: 'Vöner over chopped bread, lettuce, garlic mayo & sauces.' },
+  { name: 'V6. Vöner Wrap', price: 8.90, toppings: false, cat: 'voner', desc: 'Vöner rolled in bread with lettuce & sauces.' },
+
+  // Schnitzels
+  { name: 'L1. Onion Schnitzel', price: 13.90, toppings: false, cat: 'leikkeet', desc: 'Fried onion, fried tomato, lettuce, choice of potatoes.' },
+  { name: 'L2. Hawaiian Schnitzel', price: 13.90, toppings: false, cat: 'leikkeet', desc: 'Fried pineapple, fried tomato, lettuce, choice of potatoes.' },
+  { name: 'L4. Wiener Schnitzel', price: 13.90, toppings: false, cat: 'leikkeet', desc: 'Anchovy, lemon, fried tomato, lettuce, choice of potatoes.' },
+  { name: 'L5. Swiss Schnitzel', price: 14.90, toppings: false, cat: 'leikkeet', desc: 'Ham, cheese, lettuce, fried tomato, choice of potatoes.' },
+  { name: "L6. Hunter's Schnitzel", price: 14.90, toppings: false, cat: 'leikkeet', desc: 'Mushroom sauce, lettuce, fried tomato, choice of potatoes.' },
+
+  // Chicken
+  { name: '1. In Bread', price: 8.90, toppings: false, cat: 'broileri', desc: 'In pita bread, served fresh.' },
+  { name: '2. Wrap', price: 8.90, toppings: false, cat: 'broileri', desc: 'Rolled in flatbread.' },
+  { name: '3. Iskender', price: 9.90, toppings: false, cat: 'broileri', desc: 'Over chopped bread, with garlic mayo.' },
+
+  // Kebab
+  { name: '1. In Bread', price: 7.90, toppings: false, cat: 'kebab', desc: 'In pita bread, served fresh.' },
+  { name: '2. Wrap', price: 7.90, toppings: false, cat: 'kebab', desc: 'Rolled in flatbread.' },
+  { name: '3. Iskender', price: 8.90, toppings: false, cat: 'kebab', desc: 'Over chopped bread, with garlic mayo.' },
+
+  // Chicken Kebab
+  { name: '1. In Bread', price: 8.90, toppings: false, cat: 'kanakebab', desc: 'In pita bread, served fresh.' },
+  { name: '2. Wrap', price: 8.90, toppings: false, cat: 'kanakebab', desc: 'Rolled in flatbread.' },
+  { name: '3. Iskender', price: 9.90, toppings: false, cat: 'kanakebab', desc: 'Over chopped bread, with garlic mayo.' },
+
+  // Salads
+  { name: 'S1. Greek Salad', price: 7.90, toppings: false, cat: 'salaatit', desc: 'Feta, onion, olives, lemon.' },
+  { name: 'S2. Tuna Salad', price: 8.90, toppings: false, cat: 'salaatit', desc: 'Tuna, shrimp, lemon.' },
+  { name: 'S3. Chicken Salad', price: 8.90, toppings: false, cat: 'salaatit', desc: 'Chicken, pineapple, feta, onion, lemon.' },
+  { name: 'S4. Ham Salad', price: 8.90, toppings: false, cat: 'salaatit', desc: 'Ham, pineapple, blue cheese, lemon.' },
+  { name: 'S5. Build-Your-Own Salad', price: 9.90, toppings: false, cat: 'salaatit', desc: 'Choose four toppings.' },
+
+  // Burgers
+  { name: 'H1. Burger', price: 6.90, toppings: false, cat: 'burgerit', desc: '1 × 120 g patty.' },
+  { name: 'H2. Cheeseburger', price: 7.90, toppings: false, cat: 'burgerit', desc: '1 × 120 g patty, cheese.' },
+  { name: 'H3. Double Burger', price: 10.90, toppings: false, cat: 'burgerit', desc: '2 × 120 g patty, cheese.' },
+  { name: 'H4. Bacon Burger', price: 10.90, toppings: false, cat: 'burgerit', desc: '1 × 120 g patty, bacon, cheese.' },
+  { name: 'H5. Super Burger', price: 14.90, toppings: false, cat: 'burgerit', tag: 'Big appetite', desc: '3 × 120 g patty, bacon, cheese, egg.' },
+  { name: 'H6. Hot Burger', price: 12.90, toppings: false, cat: 'burgerit', tag: 'Spicy', desc: '2 × 120 g patty, cheese, jalapeño, pineapple, hot sauce.' },
+  { name: 'H7. Fries Only', price: 3.90, toppings: false, cat: 'burgerit', desc: 'Classic French fries.' },
+].map((it, i) => ({
+  id: it.id || `${it.cat}-${i}`,
+  image: catImage(it.cat),
+  ...it,
+}));
+
+export const TOPPING_PRICE = 1.5;
+export const SIZE_LARGE_UPCHARGE = 3.5;
+export const TOPPINGS = ['Extra cheese', 'Pepperoni', 'Mushroom', 'Onion', 'Bacon', 'Jalapeño', 'Olives', 'Pineapple', 'Ham', 'Garlic'];
+export const BASE_OPTIONS = [
+  { id: 'classic', label: 'Classic pizza base', delta: 0 },
+  { id: 'thin', label: 'Thin crispy base', delta: 0 },
+  { id: 'gf', label: 'Gluten-free base', delta: 2.0 },
+];
+export const SAUCE_OPTIONS = [
+  { id: 'tomato', label: 'Tomato sauce', delta: 0 },
+  { id: 'bbq', label: 'BBQ sauce', delta: 0 },
+  { id: 'garlic', label: 'Garlic cream sauce', delta: 0.5 },
+];
+export const CHEESE_OPTIONS = [
+  { id: 'normal', label: 'Normal cheese', delta: 0 },
+  { id: 'double', label: 'Double cheese', delta: 1.5 },
+];
