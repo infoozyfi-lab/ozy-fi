@@ -2,8 +2,11 @@
 // Each category carries a `image` field used as the demo product photo
 // for every item inside it (served via a hotlink image API, see README).
 
-const img = (q, w = 900, h = 700) =>
-  `https://www.sourcesplash.com/i/random?q=${encodeURIComponent(q)}&w=${w}&h=${h}`;
+const img = (q, w = 900, h = 700) => {
+  const tags = q.trim().toLowerCase().replace(/\s+/g, ',');
+  const seed = [...q].reduce((a, c) => a + c.charCodeAt(0), 0);
+  return `https://loremflickr.com/${w}/${h}/${encodeURIComponent(tags)}/all?lock=${seed}`;
+};
 
 export const CATEGORIES = [
   { id: 'pizzat', title: 'Pizzas', sub: "Classic tomato base · price varies with toppings", image: img('pepperoni pizza') },
@@ -118,7 +121,7 @@ export const ITEMS = [
   { name: 'H7. Fries Only', price: 3.90, toppings: false, cat: 'burgerit', desc: 'Classic French fries.' },
 ].map((it, i) => ({
   id: it.id || `${it.cat}-${i}`,
-  image: catImage(it.cat),
+  image: img(`${it.name.replace(/^[A-Za-z0-9]+\.\s*/, '')} ${it.desc.split(',')[0].split('.')[0]}`),
   ...it,
 }));
 
