@@ -1,5 +1,9 @@
-html, body { overflow-x: hidden; width: 100%; }
+html, body { width: 100%; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { overflow-x: clip; }
+@supports not (overflow-x: clip) {
+  body { overflow-x: hidden; }
+}
 :root{
   --bg: #17110D;
   --bg-alt: #1F1712;
