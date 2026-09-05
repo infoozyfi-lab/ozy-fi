@@ -284,6 +284,105 @@ footer{ padding: 56px 0 32px; }
 .pp-qty span{ font-family:'Anton', sans-serif; min-width: 18px; text-align:center; }
 .pp-add-btn{ flex:1; }
 
+/* ---------- PRODUCT PAGE — bottom accordion / fillings (moved out of
+   ProductPage.js's <style jsx> block; static export was not reliably
+   loading component-scoped styles, so these now live here as plain CSS) --- */
+.pp-section { margin-top: 28px; }
+.pp-heading {
+  font-size: 22px; font-weight: 800; color: #f5ede4; margin: 0 0 12px;
+}
+.pp-empty-hint {
+  font-size: 14px; color: #a89a8c; margin: 0; padding: 14px 16px;
+  background: #1c140f; border-radius: 10px;
+}
+
+.pp-fillings-list, .pp-cat-body {
+  border: 1px solid #3a2c22; border-radius: 12px; overflow: hidden;
+}
+.pp-filling-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border-bottom: 1px solid #2a2018; background: #1c140f;
+}
+.pp-filling-row:last-child { border-bottom: none; }
+.pp-filling-row .fname { font-size: 15px; color: #f0e6da; }
+.pp-filling-row .fprice, .fqty-badge { color: #f0793f; font-weight: 700; }
+
+.pp-qty-stepper {
+  display: flex; align-items: center; gap: 10px;
+}
+.pp-qty-stepper button {
+  width: 30px; height: 30px; border-radius: 50%; border: none;
+  font-size: 18px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.pp-qty-stepper button:first-child { background: #3a1f18; color: #e5533d; }
+.pp-qty-stepper button:last-child { background: #3a2a14; color: #f0973f; }
+.pp-qty-stepper button:disabled { opacity: 0.35; cursor: default; }
+.pp-qty-stepper span { min-width: 16px; text-align: center; font-weight: 700; color: #f0e6da; }
+
+.pp-swatch-row {
+  display: flex; align-items: center; gap: 12px;
+  border: 1px solid #3a2c22; border-radius: 12px; padding: 12px 16px; background: #1c140f;
+}
+.pp-swatch {
+  width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.pp-swatch-sm { width: 18px; height: 18px; border-radius: 5px; }
+.pp-swatch-label { flex: 1; font-size: 15px; color: #f0e6da; }
+
+.change-btn {
+  color: #f0793f; font-weight: 700; font-size: 14px; border: none;
+  background: none; cursor: pointer; display: inline-flex; align-items: center; gap: 2px;
+}
+.chev { display: inline-block; transition: transform 0.15s ease; }
+.chev.up { transform: rotate(180deg); }
+
+.pp-bottom-row-head, .pp-select-head {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  background: #1c140f; border: none; padding: 14px 16px; cursor: pointer;
+  font-size: 15px; color: #f0e6da; text-align: left;
+}
+.pp-bottom-row { border: 1px solid #3a2c22; border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
+.pp-select-box { border: 1px solid #f0793f; border-radius: 12px; overflow: hidden; }
+
+.pp-bottom-options { border-top: 1px solid #2a2018; }
+.pp-bottom-options label {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; font-size: 14px; color: #f0e6da;
+  border-bottom: 1px solid #2a2018; cursor: pointer; background: #150f0c;
+}
+.pp-bottom-options label:last-child { border-bottom: none; }
+.pp-bottom-options label.is-current { background: #2a1f14; font-weight: 700; }
+.pp-bottom-options .opt-delta { margin-left: auto; color: #f0793f; font-weight: 700; }
+
+.pp-cat-list { display: flex; flex-direction: column; gap: 10px; }
+.pp-cat { background: #2a2018; border-radius: 12px; overflow: hidden; }
+.pp-cat-head {
+  width: 100%; display: flex; align-items: center; gap: 12px;
+  background: none; border: none; padding: 16px; cursor: pointer;
+  font-size: 17px; font-weight: 700; color: #f5ede4; text-align: left;
+}
+.pp-cat-icon { font-size: 18px; }
+.pp-cat-title { flex: 1; }
+.pp-cat-badge {
+  background: #1e5fa8; color: #fff; font-size: 11px; font-weight: 700;
+  padding: 3px 8px; border-radius: 5px;
+}
+.pp-cat-chev { font-size: 20px; }
+.pp-cat-body { background: #1c140f; }
+
+.pp-details-list { border-top: 1px solid #3a2c22; }
+.pp-details-row { border-bottom: 1px solid #3a2c22; }
+.pp-details-head {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  background: none; border: none; padding: 16px 0; cursor: pointer;
+  font-size: 17px; font-weight: 700; color: #f5ede4; text-align: left;
+}
+.pp-details-body {
+  margin: 0 0 16px; font-size: 14px; line-height: 1.5; color: #a89a8c;
+}
+
 /* ---------- CART DRAWER ---------- */
 .cart-overlay{ position: fixed; inset:0; background: rgba(10,7,5,0.6); display:none; z-index: 190; }
 .cart-overlay.open{ display:block; }
@@ -340,4 +439,31 @@ footer{ padding: 56px 0 32px; }
 .pay-option-text b{ display:block; }
 .pay-option-text span{ color: var(--muted); font-size: 0.82rem; }
 .pay-option input{ accent-color: var(--ember); margin-left:auto; }
-.checkout-summary{ border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 14px 0; margin-bottom: 18px; max-height: 160px
+.checkout-summary{ border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 14px 0; margin-bottom: 18px; max-height: 160px; overflow-y:auto; }
+.checkout-summary .cs-row{ display:flex; justify-content:space-between; font-size: 0.88rem; color: var(--muted); padding: 4px 0; }
+.checkout-summary .cs-total{ display:flex; justify-content:space-between; font-weight:700; color: var(--cream); padding-top: 10px; margin-top: 6px; border-top: 1px dashed var(--line); }
+.checkout-nav{ display:flex; gap:10px; margin-top: 4px; }
+.btn-secondary{
+  background: var(--bg); border: 1px solid var(--line); color: var(--cream); padding: 15px 20px; border-radius: var(--radius);
+  font-weight:700; font-size: 1rem; cursor:pointer;
+}
+.confirm-box{ text-align:center; padding: 10px 0; }
+.confirm-box .big{ font-family:'Anton',sans-serif; font-size: 2rem; color: var(--ember); margin: 10px 0; }
+.confirm-box p{ color: var(--muted); }
+.confirm-box .cod-note{
+  display:flex; align-items:center; gap:10px; background: rgba(255,106,61,0.08); border: 1px solid var(--ember);
+  border-radius: 8px; padding: 14px; margin-top: 16px; text-align:left;
+}
+
+/* ---------- RESPONSIVE ---------- */
+@media (max-width: 860px){
+  .nav-links{ display:none; }
+  .burger{ display:block; }
+  .story-grid, .visit-grid{ grid-template-columns: 1fr; }
+  .footer-grid{ grid-template-columns: 1fr; }
+  .order-tabs{ flex-direction: column; }
+  .menu-item{ grid-template-columns: 46px 1fr auto; }
+  .menu-item-thumb{ width:46px; height:46px; }
+  .menu-item .price{ grid-row: 1 / 3; }
+  .add-btn{ display:none; }
+}
