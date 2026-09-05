@@ -14,6 +14,18 @@ import {
 
 const StoreContext = createContext(null);
 
+function slugify(str) {
+  return str
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
+
+function setUrl(path) {
+  if (typeof window === 'undefined') return;
+  window.history.pushState({}, '', path);
+}
+
 function fillingsTotal(fillings) {
   return Object.entries(fillings || {}).reduce((sum, [id, qty]) => {
     if (!qty) return sum;
@@ -64,9 +76,13 @@ export function StoreProvider({ children }) {
       dip: DIP_OPTIONS[0].id,
     });
     setProductPageOpen(true);
+    setUrl(`/product/${slugify(item.name)}`);
   }, []);
 
-  const closeProduct = useCallback(() => setProductPageOpen(false), []);
+  const closeProduct = useCallback(() => {
+    setProductPageOpen(false);
+    setUrl('/');
+  }, []);
 
   const toggleTopping = useCallback((topping) => {
     setSelection((s) => {
@@ -134,6 +150,7 @@ export function StoreProvider({ children }) {
       },
     ]);
     setProductPageOpen(false);
+    setUrl('/');
   }, [activeProduct, selection, unitPrice, lineTotal]);
 
   const removeFromCart = useCallback((key) => {
@@ -182,9 +199,14 @@ export function StoreProvider({ children }) {
   const goToCheckout = useCallback(() => {
     if (cart.length === 0) return;
     setCartOpen(false);
-    setDrinkUpsellOpen(false);
-    setCheckoutOpen(true);
+    setDrinkUpsellOpen(true);
+    setUrl('/checkout');
   }, [cart.length]);
+
+  const closeCheckout = useCallback(() => {
+    setCheckoutOpen(false);
+    setUrl('/');
+  }, []);
 
   const continueFromUpsell = useCallback(() => {
     setDrinkUpsellOpen(false);
@@ -196,7 +218,13 @@ export function StoreProvider({ children }) {
     setConfirmedOrder({ orderNum, customer, total: cartTotal, items: cart });
     setCheckoutOpen(false);
     setCart([]);
+    setUrl('/order-confirmed');
   }, [cart, cartTotal]);
+
+  const closeConfirm = useCallback(() => {
+    setConfirmedOrder(null);
+    setUrl('/');
+  }, []);
 
   const value = {
     cart,
@@ -226,8 +254,10 @@ export function StoreProvider({ children }) {
     setCartOpen,
     goToCheckout,
     setCheckoutOpen,
+    closeCheckout,
     placeOrder,
     setConfirmedOrder,
+    closeConfirm,
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
