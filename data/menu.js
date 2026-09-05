@@ -228,3 +228,28 @@ export const DIP_OPTIONS = [
   { id: 'blue-cheese-dip', label: 'Blue cheese dip', delta: 1.20 },
   { id: 'sweet-chili-dip', label: 'Sweet chili dip', delta: 1.00 },
 ];
+
+// Standalone add-on products shown in the cart / checkout upsell shortcuts
+// ("A cold drink on the side?", "Dip the edges", "Snacks" pills).
+export const DRINKS = [
+  { id: 'pepsi-max-05', name: 'Pepsi Max 0.5 l', price: 3.90, image: img('pepsi max bottle') },
+  { id: 'pepsi-05', name: 'Pepsi 0.5 l', price: 3.90, image: img('pepsi bottle') },
+  { id: 'jaffa-05', name: 'Jaffa 0.5 l', price: 3.90, image: img('orange soda bottle') },
+  { id: 'sprite-05', name: 'Sprite 0.5 l', price: 3.90, image: img('sprite bottle') },
+  { id: '7up-free-05', name: '7UP Free 0.5 l', price: 3.90, image: img('7up bottle') },
+  { id: 'water-05', name: 'Still water 0.5 l', price: 2.50, image: img('water bottle') },
+];
+
+export const DIP_CUPS = [
+  { id: 'dip-garlic', name: 'Garlic dip', price: 1.00, image: img('garlic dip cup') },
+  { id: 'dip-bbq', name: 'BBQ dip', price: 1.00, image: img('bbq dip cup') },
+  { id: 'dip-blue-cheese', name: 'Blue cheese dip', price: 1.20, image: img('blue cheese dip cup') },
+  { id: 'dip-sweet-chili', name: 'Sweet chili dip', price: 1.00, image: img('sweet chili dip cup') },
+];
+
+export const SNACKS = [
+  { id: 'snack-garlic-bread', name: 'Garlic bread', price: 4.90, image: img('garlic bread') },
+  { id: 'snack-cheese-sticks', name: 'Cheese sticks', price: 5.90, image: img('mozzarella cheese sticks') },
+  { id: 'snack-chicken-wings', name: 'Chicken wings', price: 6.90, image: img('chicken wings plate') },
+  { id: 'snack-onion-rings', name: 'Onion rings', price: 4.50, image: img('onion rings') },
+];
