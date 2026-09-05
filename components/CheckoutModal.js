@@ -220,6 +220,10 @@ export default function CheckoutModal() {
                       <div
                         className={`extra-list-row${line ? ' in-cart' : ''}${isJustAdded ? ' just-added' : ''}`}
                         key={item.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => handleAdd(item)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleAdd(item); }}
                       >
                         <img src={item.image} alt={item.name} />
                         {isJustAdded ? (
@@ -233,14 +237,12 @@ export default function CheckoutModal() {
                             <span className="extra-list-price">{item.price.toFixed(2)} €</span>
                           </div>
                         )}
-                        <button
-                          type="button"
+                        <span
                           className="extra-list-add"
-                          aria-label={`Add ${item.name}`}
-                          onClick={() => handleAdd(item)}
+                          aria-hidden="true"
                         >
                           +
-                        </button>
+                        </span>
                       </div>
                     );
                   })}
