@@ -10,6 +10,7 @@ import CtaStrip from '@/components/CtaStrip';
 import Footer from '@/components/Footer';
 import ProductPage from '@/components/ProductPage';
 import CartDrawer from '@/components/CartDrawer';
+import DrinkUpsellModal from '@/components/DrinkUpsellModal';
 import CheckoutModal from '@/components/CheckoutModal';
 import ConfirmModal from '@/components/ConfirmModal';
 import OrderBar from '@/components/OrderBar';
@@ -28,6 +29,7 @@ export default function Home() {
 
       <ProductPage />
       <CartDrawer />
+      <DrinkUpsellModal />
       <CheckoutModal />
       <ConfirmModal />
       <OrderBar />
