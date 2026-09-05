@@ -14,7 +14,7 @@ const EXTRA_SECTIONS = {
 
 export default function CheckoutModal() {
   const {
-    cart, cartTotal, isCheckoutOpen, setCheckoutOpen, placeOrder,
+    cart, cartTotal, isCheckoutOpen, closeCheckout, placeOrder,
     removeFromCart, updateCartQty, addDrinkToCart,
   } = useStore();
   const [step, setStep] = useState(1);
@@ -22,8 +22,9 @@ export default function CheckoutModal() {
   const [openSection, setOpenSection] = useState(null);
 
   const close = () => {
-    setCheckoutOpen(false);
+    closeCheckout();
     setStep(1);
+    setOpenSection(null);
   };
 
   const onField = (key) => (e) => setCustomer((c) => ({ ...c, [key]: e.target.value }));
@@ -104,8 +105,8 @@ export default function CheckoutModal() {
                 <button
                   type="button"
                   key={key}
-                  className={`shortcut-pill${openSection === key ? ' active' : ''}`}
-                  onClick={() => setOpenSection((s) => (s === key ? null : key))}
+                  className="shortcut-pill"
+                  onClick={() => setOpenSection(key)}
                 >
                   <span className="shortcut-thumbs">
                     {section.items.slice(0, 2).map((it) => (
@@ -116,30 +117,6 @@ export default function CheckoutModal() {
                 </button>
               ))}
             </div>
-
-            {openSection && (
-              <div className="extra-list">
-                {EXTRA_SECTIONS[openSection].items.map((item) => {
-                  const line = cart.find((l) => l.drinkId === item.id);
-                  return (
-                    <div className="extra-list-row" key={item.id}>
-                      <img src={item.image} alt={item.name} />
-                      <div className="extra-list-body">
-                        <span className="extra-list-name">{item.name}</span>
-                        <span className="extra-list-price">{item.price.toFixed(2)} €</span>
-                      </div>
-                      <button
-                        type="button"
-                        className={`extra-list-add${line ? ' in-cart' : ''}`}
-                        onClick={() => addDrinkToCart(item)}
-                      >
-                        {line ? `In cart · ${line.qty}` : '+'}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
 
             <button
               type="button"
@@ -215,6 +192,43 @@ export default function CheckoutModal() {
           </form>
         )}
         </div>
+      </div>
+
+      <div className={`extra-page${openSection ? ' open' : ''}`}>
+        {openSection && (
+          <>
+            <div className="pp-topbar">
+              <button className="pp-back" type="button" aria-label="Close" onClick={() => setOpenSection(null)}>×</button>
+              <span className="pp-topbar-title">{EXTRA_SECTIONS[openSection].label.toUpperCase()}</span>
+              <span style={{ width: 28 }} />
+            </div>
+            <div className="pp-scroll">
+              <div className="wrap" style={{ paddingTop: 8, paddingBottom: 40 }}>
+                <div className="extra-list">
+                  {EXTRA_SECTIONS[openSection].items.map((item) => {
+                    const line = cart.find((l) => l.drinkId === item.id);
+                    return (
+                      <div className="extra-list-row" key={item.id}>
+                        <img src={item.image} alt={item.name} />
+                        <div className="extra-list-body">
+                          <span className="extra-list-name">{item.name}</span>
+                          <span className="extra-list-price">{item.price.toFixed(2)} €</span>
+                        </div>
+                        <button
+                          type="button"
+                          className={`extra-list-add${line ? ' in-cart' : ''}`}
+                          onClick={() => addDrinkToCart(item)}
+                        >
+                          {line ? `In cart · ${line.qty}` : '+'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
