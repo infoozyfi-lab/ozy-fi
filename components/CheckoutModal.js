@@ -2,11 +2,15 @@
 
 import { useState } from 'react';
 import { useStore } from '@/context/StoreContext';
+import { DRINKS } from '@/data/menu';
 
 const EMPTY = { name: '', phone: '', address: '', city: '', notes: '' };
 
 export default function CheckoutModal() {
-  const { cart, cartTotal, isCheckoutOpen, setCheckoutOpen, placeOrder } = useStore();
+  const {
+    cart, cartTotal, isCheckoutOpen, setCheckoutOpen, placeOrder,
+    removeFromCart, updateCartQty, addDrinkToCart,
+  } = useStore();
   const [step, setStep] = useState(1);
   const [customer, setCustomer] = useState(EMPTY);
 
@@ -17,11 +21,6 @@ export default function CheckoutModal() {
 
   const onField = (key) => (e) => setCustomer((c) => ({ ...c, [key]: e.target.value }));
 
-  const goToReview = (e) => {
-    e.preventDefault();
-    setStep(2);
-  };
-
   const submitOrder = (e) => {
     e.preventDefault();
     placeOrder(customer);
@@ -31,18 +30,78 @@ export default function CheckoutModal() {
 
   return (
     <div className={`modal-overlay${isCheckoutOpen ? ' open' : ''}`}>
-      <div className="modal-box">
+      <div className="modal-box checkout-box">
         <button className="modal-close" type="button" onClick={close}>×</button>
-        <h3>Checkout</h3>
+        <h3>Your order</h3>
 
         <div className="checkout-steps">
           <div className={`checkout-step-dot${step === 1 ? ' active' : step > 1 ? ' done' : ''}`}>1</div>
           <div className={`checkout-step-line${step > 1 ? ' done' : ''}`} />
-          <div className={`checkout-step-dot${step === 2 ? ' active' : ''}`}>2</div>
+          <div className={`checkout-step-dot${step === 2 ? ' active' : step > 2 ? ' done' : ''}`}>2</div>
+          <div className={`checkout-step-line${step > 2 ? ' done' : ''}`} />
+          <div className={`checkout-step-dot${step === 3 ? ' active' : ''}`}>3</div>
         </div>
 
         {step === 1 && (
-          <form id="checkoutForm" onSubmit={goToReview}>
+          <div>
+            <p className="desc" style={{ marginBottom: 16 }}>Review your order</p>
+            <div className="checkout-summary">
+              {cart.length === 0 && <p className="desc">Your cart is empty.</p>}
+              {cart.map((l) => (
+                <div className="cs-row cs-row-editable" key={l.key}>
+                  <img src={l.image} alt={l.name} className="cs-thumb" />
+                  <div className="cs-body">
+                    <span className="cs-name">{l.name}</span>
+                    {l.details && l.details.length > 0 && (
+                      <span className="cs-details">{l.details.join(', ')}</span>
+                    )}
+                    <div className="cs-qty-row">
+                      <div className="cs-qty">
+                        <button type="button" onClick={() => updateCartQty(l.key, l.qty - 1)}>−</button>
+                        <span>{l.qty}</span>
+                        <button type="button" onClick={() => updateCartQty(l.key, l.qty + 1)}>+</button>
+                      </div>
+                      <button type="button" className="cs-remove" onClick={() => removeFromCart(l.key)}>Remove</button>
+                    </div>
+                  </div>
+                  <span className="cs-price">{l.lineTotal.toFixed(2)} €</span>
+                </div>
+              ))}
+              <div className="cs-total">
+                <span>Total</span>
+                <span>{cartTotal.toFixed(2)} €</span>
+              </div>
+            </div>
+
+            <p className="pp-label" style={{ marginTop: 24 }}>A cold drink on the side?</p>
+            <div className="drink-upsell-row">
+              {DRINKS.map((d) => {
+                const line = cart.find((l) => l.drinkId === d.id);
+                return (
+                  <button type="button" className="drink-tile" key={d.id} onClick={() => addDrinkToCart(d)}>
+                    <img src={d.image} alt={d.name} />
+                    <span className="dname">{d.name}</span>
+                    <span className="dprice">{line ? `In cart · ${line.qty}` : `${d.price.toFixed(2)} €`}</span>
+                    <span className="drink-add-btn">+</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              className="btn-primary"
+              style={{ width: '100%', marginTop: 24 }}
+              disabled={cart.length === 0}
+              onClick={() => setStep(2)}
+            >
+              Continue — {cartTotal.toFixed(2)} €
+            </button>
+          </div>
+        )}
+
+        {step === 2 && (
+          <form id="checkoutForm" onSubmit={(e) => { e.preventDefault(); setStep(3); }}>
             <p className="desc" style={{ marginBottom: 16 }}>Delivery details</p>
             <label>
               Full name
@@ -61,16 +120,17 @@ export default function CheckoutModal() {
               <input required type="text" value={customer.city} onChange={onField('city')} />
             </label>
             <label>
-              Notes for the courier (optional)
-              <input type="text" value={customer.notes} onChange={onField('notes')} placeholder="Doorbell, gate code, allergies…" />
+              Notes for the restaurant (optional)
+              <input type="text" value={customer.notes} onChange={onField('notes')} placeholder="Door code, floor, allergies…" />
             </label>
-            <button type="submit" className="btn-primary" style={{ width: '100%' }}>
-              Continue to payment
-            </button>
+            <div className="checkout-nav">
+              <button type="button" className="btn-secondary" onClick={() => setStep(1)}>Back</button>
+              <button type="submit" className="btn-primary" style={{ flex: 1 }}>Continue</button>
+            </div>
           </form>
         )}
 
-        {step === 2 && (
+        {step === 3 && (
           <form onSubmit={submitOrder}>
             <div className="checkout-summary">
               {cart.map((l) => (
@@ -91,14 +151,14 @@ export default function CheckoutModal() {
                 <span className="pay-icon">💵</span>
                 <span className="pay-option-text">
                   <b>Cash on delivery</b>
-                  <span>Pay the courier when your order arrives</span>
+                  <span>Pay when your order arrives</span>
                 </span>
                 <input type="radio" name="payment" value="cod" checked readOnly />
               </label>
             </div>
 
             <div className="checkout-nav">
-              <button type="button" className="btn-secondary" onClick={() => setStep(1)}>Back</button>
+              <button type="button" className="btn-secondary" onClick={() => setStep(2)}>Back</button>
               <button type="submit" className="btn-primary" style={{ flex: 1 }}>
                 Place order — {cartTotal.toFixed(2)} €
               </button>
