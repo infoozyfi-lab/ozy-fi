@@ -12,6 +12,7 @@ import ProductPage from '@/components/ProductPage';
 import CartDrawer from '@/components/CartDrawer';
 import CheckoutModal from '@/components/CheckoutModal';
 import ConfirmModal from '@/components/ConfirmModal';
+import OrderBar from '@/components/OrderBar';
 
 export default function Home() {
   return (
@@ -29,6 +30,7 @@ export default function Home() {
       <CartDrawer />
       <CheckoutModal />
       <ConfirmModal />
+      <OrderBar />
     </StoreProvider>
   );
 }
