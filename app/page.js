@@ -9,6 +9,7 @@ import Visit from '@/components/Visit';
 import CtaStrip from '@/components/CtaStrip';
 import Footer from '@/components/Footer';
 import ProductPage from '@/components/ProductPage';
+import DrinkUpsellModal from '@/components/DrinkUpsellModal';
 import CheckoutModal from '@/components/CheckoutModal';
 import ConfirmModal from '@/components/ConfirmModal';
 import OrderBar from '@/components/OrderBar';
@@ -26,6 +27,7 @@ export default function Home() {
       <Footer />
 
       <ProductPage />
+      <DrinkUpsellModal />
       <CheckoutModal />
       <ConfirmModal />
       <OrderBar />
