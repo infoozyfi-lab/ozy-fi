@@ -427,6 +427,14 @@ footer{ padding: 56px 0 32px; }
 }
 .checkout-page.open{ transform: translateX(0); visibility: visible; }
 
+/* ---------- EXTRA CATEGORY FULL PAGE (All drinks / Dip / Snacks — kotipizza style) ---------- */
+.extra-page{
+  position: fixed; inset: 0; z-index: 330; background: var(--bg);
+  display:flex; flex-direction:column; transform: translateX(100%);
+  transition: transform 0.3s ease; visibility: hidden;
+}
+.extra-page.open{ transform: translateX(0); visibility: visible; }
+
 /* ---------- EXTRA ITEM LIST (All drinks / Dip the edges / Snacks — kotipizza list style) ---------- */
 .extra-list{ display:flex; flex-direction:column; margin-top: 14px; border-top: 1px solid var(--line); }
 .extra-list-row{ display:flex; align-items:center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line); }
