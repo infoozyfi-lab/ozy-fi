@@ -277,7 +277,6 @@ export default function ProductPage() {
               <span className="pp-price-dec">.{decPart}</span>
               <span className="pp-price-eur">€</span>
             </div>
-            <span className="pp-price-label">Price</span>
           </div>
         </div>
 
