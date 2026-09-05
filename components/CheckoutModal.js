@@ -211,7 +211,7 @@ export default function CheckoutModal() {
               <span style={{ width: 28 }} />
             </div>
             <div className="pp-scroll">
-              <div className="wrap" style={{ paddingTop: 8, paddingBottom: 100 }}>
+              <div className="wrap" style={{ paddingTop: 8, paddingBottom: 24 }}>
                 <div className="extra-list">
                   {EXTRA_SECTIONS[openSection].items.map((item) => {
                     const line = cart.find((l) => l.drinkId === item.id);
