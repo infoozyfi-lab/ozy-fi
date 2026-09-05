@@ -7,9 +7,20 @@ import {
   BASE_OPTIONS,
   SAUCE_OPTIONS,
   CHEESE_OPTIONS,
+  ALL_FILLINGS,
+  SAUCE_STRIPE_OPTIONS,
+  DIP_OPTIONS,
 } from '@/data/menu';
 
 const StoreContext = createContext(null);
+
+function fillingsTotal(fillings) {
+  return Object.entries(fillings || {}).reduce((sum, [id, qty]) => {
+    if (!qty) return sum;
+    const item = ALL_FILLINGS.find((f) => f.id === id);
+    return item ? sum + item.price * qty : sum;
+  }, 0);
+}
 
 function calcUnitPrice(product) {
   if (!product) return 0;
@@ -20,14 +31,17 @@ function calcUnitPrice(product) {
     unit += BASE_OPTIONS.find((o) => o.id === product.base).delta;
     unit += SAUCE_OPTIONS.find((o) => o.id === product.sauce).delta;
     unit += CHEESE_OPTIONS.find((o) => o.id === product.cheese).delta;
+    unit += fillingsTotal(product.fillings);
+    unit += SAUCE_STRIPE_OPTIONS.find((o) => o.id === product.sauceStripe).delta;
+    unit += DIP_OPTIONS.find((o) => o.id === product.dip).delta;
   }
   return unit;
 }
 
 export function StoreProvider({ children }) {
   const [cart, setCart] = useState([]);
-  const [activeProduct, setActiveProduct] = useState(null);
-  const [selection, setSelection] = useState(null);
+  const [activeProduct, setActiveProduct] = useState(null); // item opened in the product page
+  const [selection, setSelection] = useState(null); // customization state for activeProduct
   const [isProductPageOpen, setProductPageOpen] = useState(false);
   const [isCartOpen, setCartOpen] = useState(false);
   const [isCheckoutOpen, setCheckoutOpen] = useState(false);
@@ -44,6 +58,9 @@ export function StoreProvider({ children }) {
       base: BASE_OPTIONS[0].id,
       sauce: SAUCE_OPTIONS[0].id,
       cheese: CHEESE_OPTIONS[0].id,
+      fillings: {},
+      sauceStripe: SAUCE_STRIPE_OPTIONS[0].id,
+      dip: DIP_OPTIONS[0].id,
     });
     setProductPageOpen(true);
   }, []);
@@ -65,6 +82,20 @@ export function StoreProvider({ children }) {
   const setQty = useCallback((fn) => setSelection((s) => ({ ...s, qty: Math.max(1, fn(s.qty)) })), []);
   const setOption = useCallback((key, id) => setSelection((s) => ({ ...s, [key]: id })), []);
 
+  const setFillingQty = useCallback((fillingId, nextQty) => {
+    setSelection((s) => {
+      if (!s) return s;
+      const qty = Math.max(0, nextQty);
+      const fillings = { ...s.fillings };
+      if (qty === 0) {
+        delete fillings[fillingId];
+      } else {
+        fillings[fillingId] = qty;
+      }
+      return { ...s, fillings };
+    });
+  }, []);
+
   const unitPrice = useMemo(() => calcUnitPrice(selection), [selection]);
   const lineTotal = useMemo(() => (selection ? unitPrice * selection.qty : 0), [unitPrice, selection]);
 
@@ -80,6 +111,14 @@ export function StoreProvider({ children }) {
       if (sauceOpt.id !== 'tomato') details.push(sauceOpt.label);
       const cheeseOpt = CHEESE_OPTIONS.find((o) => o.id === selection.cheese);
       if (cheeseOpt.id !== 'normal') details.push(cheeseOpt.label);
+      Object.entries(selection.fillings || {}).forEach(([id, qty]) => {
+        const item = ALL_FILLINGS.find((f) => f.id === id);
+        if (item && qty > 0) details.push(qty > 1 ? `${item.label} x${qty}` : item.label);
+      });
+      const sauceStripeOpt = SAUCE_STRIPE_OPTIONS.find((o) => o.id === selection.sauceStripe);
+      if (sauceStripeOpt.id !== 'none') details.push(sauceStripeOpt.label);
+      const dipOpt = DIP_OPTIONS.find((o) => o.id === selection.dip);
+      if (dipOpt.id !== 'none') details.push(dipOpt.label);
     }
     setCart((c) => [
       ...c,
@@ -133,6 +172,7 @@ export function StoreProvider({ children }) {
     setSize,
     setQty,
     setOption,
+    setFillingQty,
     addToCart,
     removeFromCart,
     setCartOpen,
