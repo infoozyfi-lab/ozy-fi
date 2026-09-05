@@ -200,7 +200,7 @@ export function StoreProvider({ children }) {
     if (cart.length === 0) return;
     setCartOpen(false);
     setDrinkUpsellOpen(true);
-    setUrl('/checkout');
+    setUrl('/drinks');
   }, [cart.length]);
 
   const closeCheckout = useCallback(() => {
@@ -211,6 +211,7 @@ export function StoreProvider({ children }) {
   const continueFromUpsell = useCallback(() => {
     setDrinkUpsellOpen(false);
     setCheckoutOpen(true);
+    setUrl('/checkout');
   }, []);
 
   const placeOrder = useCallback((customer) => {
