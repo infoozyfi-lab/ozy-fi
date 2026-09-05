@@ -20,6 +20,14 @@ export default function CheckoutModal() {
   const [step, setStep] = useState(1);
   const [customer, setCustomer] = useState(EMPTY);
   const [openSection, setOpenSection] = useState(null);
+  const [justAddedId, setJustAddedId] = useState(null);
+
+  const handleAdd = (item) => {
+    addDrinkToCart(item);
+    setJustAddedId(item.id);
+    window.clearTimeout(handleAdd._t);
+    handleAdd._t = window.setTimeout(() => setJustAddedId(null), 1100);
+  };
 
   const close = () => {
     closeCheckout();
@@ -203,29 +211,50 @@ export default function CheckoutModal() {
               <span style={{ width: 28 }} />
             </div>
             <div className="pp-scroll">
-              <div className="wrap" style={{ paddingTop: 8, paddingBottom: 40 }}>
+              <div className="wrap" style={{ paddingTop: 8, paddingBottom: 100 }}>
                 <div className="extra-list">
                   {EXTRA_SECTIONS[openSection].items.map((item) => {
                     const line = cart.find((l) => l.drinkId === item.id);
+                    const isJustAdded = justAddedId === item.id;
                     return (
-                      <div className="extra-list-row" key={item.id}>
+                      <div
+                        className={`extra-list-row${line ? ' in-cart' : ''}${isJustAdded ? ' just-added' : ''}`}
+                        key={item.id}
+                      >
                         <img src={item.image} alt={item.name} />
-                        <div className="extra-list-body">
-                          <span className="extra-list-name">{item.name}</span>
-                          <span className="extra-list-price">{item.price.toFixed(2)} €</span>
-                        </div>
+                        {isJustAdded ? (
+                          <div className="extra-list-body extra-list-added">
+                            <span className="extra-added-check">✓</span>
+                            <span>Added</span>
+                          </div>
+                        ) : (
+                          <div className="extra-list-body">
+                            <span className="extra-list-name">{item.name}</span>
+                            <span className="extra-list-price">{item.price.toFixed(2)} €</span>
+                          </div>
+                        )}
                         <button
                           type="button"
-                          className={`extra-list-add${line ? ' in-cart' : ''}`}
-                          onClick={() => addDrinkToCart(item)}
+                          className="extra-list-add"
+                          aria-label={`Add ${item.name}`}
+                          onClick={() => handleAdd(item)}
                         >
-                          {line ? `In cart · ${line.qty}` : '+'}
+                          +
                         </button>
                       </div>
                     );
                   })}
                 </div>
               </div>
+            </div>
+            <div className="extra-footer">
+              <button
+                type="button"
+                className="btn-primary extra-ready-btn"
+                onClick={() => setOpenSection(null)}
+              >
+                Ready
+              </button>
             </div>
           </>
         )}
