@@ -5,7 +5,7 @@ import { useStore } from '@/context/StoreContext';
 
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { cartTotal, setCartOpen } = useStore();
+  const { setCartOpen } = useStore();
 
   const scrollTo = (id) => (e) => {
     e.preventDefault();
@@ -32,8 +32,8 @@ export default function Header() {
           <li><a href="#visit" onClick={scrollTo('visit')}>Gift cards</a></li>
         </ul>
         <div className="nav-order">
-          <button className="cart-btn" type="button" onClick={() => setCartOpen(true)}>
-            🛒 Cart <span>{cartTotal.toFixed(2)} €</span>
+          <button className="cart-icon-btn" type="button" aria-label="Cart" onClick={() => setCartOpen(true)}>
+            🛒
           </button>
         </div>
         <button
