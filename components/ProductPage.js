@@ -24,7 +24,6 @@ function money(n) {
   return `${n.toFixed(2)} €`;
 }
 
-/* ---------- Bottom rows (base / sauce / cheese) ---------- */
 function BottomRow({ label, options, current, onChange }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.id === current);
@@ -54,7 +53,6 @@ function BottomRow({ label, options, current, onChange }) {
   );
 }
 
-/* ---------- Finish with sauce stripes (colour swatch + change) ---------- */
 function SauceStripeRow({ current, onChange }) {
   const [open, setOpen] = useState(false);
   const selected = SAUCE_STRIPE_OPTIONS.find((o) => o.id === current);
@@ -89,7 +87,6 @@ function SauceStripeRow({ current, onChange }) {
   );
 }
 
-/* ---------- Dip the edges ---------- */
 function DipRow({ current, onChange }) {
   const [open, setOpen] = useState(false);
   const selected = DIP_OPTIONS.find((o) => o.id === current);
@@ -122,7 +119,6 @@ function DipRow({ current, onChange }) {
   );
 }
 
-/* ---------- Qty stepper used for current fillings + more-fillings lists ---------- */
 function QtyStepper({ qty, onDec, onInc }) {
   return (
     <div className="pp-qty-stepper">
@@ -133,7 +129,6 @@ function QtyStepper({ qty, onDec, onInc }) {
   );
 }
 
-/* ---------- Currently added fillings ---------- */
 function CurrentFillings({ fillings, onSetQty }) {
   const entries = Object.entries(fillings).filter(([, qty]) => qty > 0);
   return (
@@ -165,7 +160,6 @@ function CurrentFillings({ fillings, onSetQty }) {
   );
 }
 
-/* ---------- More fillings: collapsible categories ---------- */
 function MoreFillingsCategory({ category, fillings, onSetQty, open, onToggle }) {
   return (
     <div className="pp-cat">
@@ -199,7 +193,6 @@ function MoreFillingsCategory({ category, fillings, onSetQty, open, onToggle }) 
   );
 }
 
-/* ---------- Product details accordion ---------- */
 const PRODUCT_DETAIL_SECTIONS = [
   {
     id: 'raw-material',
@@ -245,7 +238,6 @@ function ProductDetails() {
   );
 }
 
-/* ---------- Main product page ---------- */
 export default function ProductPage() {
   const {
     activeProduct, selection, unitPrice, lineTotal,
@@ -395,7 +387,6 @@ export default function ProductPage() {
           background: #1c140f; border-radius: 10px;
         }
 
-        /* current fillings + more-fillings rows */
         .pp-fillings-list, .pp-cat-body {
           border: 1px solid #3a2c22; border-radius: 12px; overflow: hidden;
         }
@@ -420,7 +411,6 @@ export default function ProductPage() {
         .pp-qty-stepper button:disabled { opacity: 0.35; cursor: default; }
         .pp-qty-stepper span { min-width: 16px; text-align: center; font-weight: 700; color: #f0e6da; }
 
-        /* sauce stripe swatch row */
         .pp-swatch-row {
           display: flex; align-items: center; gap: 12px;
           border: 1px solid #3a2c22; border-radius: 12px; padding: 12px 16px; background: #1c140f;
@@ -432,7 +422,6 @@ export default function ProductPage() {
         .pp-swatch-sm { width: 18px; height: 18px; border-radius: 5px; }
         .pp-swatch-label { flex: 1; font-size: 15px; color: #f0e6da; }
 
-        /* generic change/select controls */
         .change-btn {
           color: #f0793f; font-weight: 700; font-size: 14px; border: none;
           background: none; cursor: pointer; display: inline-flex; align-items: center; gap: 2px;
@@ -458,7 +447,6 @@ export default function ProductPage() {
         .pp-bottom-options label.is-current { background: #2a1f14; font-weight: 700; }
         .pp-bottom-options .opt-delta { margin-left: auto; color: #f0793f; font-weight: 700; }
 
-        /* more fillings categories */
         .pp-cat-list { display: flex; flex-direction: column; gap: 10px; }
         .pp-cat { background: #2a2018; border-radius: 12px; overflow: hidden; }
         .pp-cat-head {
@@ -475,7 +463,6 @@ export default function ProductPage() {
         .pp-cat-chev { font-size: 20px; }
         .pp-cat-body { background: #1c140f; }
 
-        /* product details accordion */
         .pp-details-list { border-top: 1px solid #3a2c22; }
         .pp-details-row { border-bottom: 1px solid #3a2c22; }
         .pp-details-head {
@@ -489,4 +476,4 @@ export default function ProductPage() {
       `}</style>
     </div>
   );
-}
+                    }
