@@ -182,7 +182,8 @@ export function StoreProvider({ children }) {
   const goToCheckout = useCallback(() => {
     if (cart.length === 0) return;
     setCartOpen(false);
-    setDrinkUpsellOpen(true);
+    setDrinkUpsellOpen(false);
+    setCheckoutOpen(true);
   }, [cart.length]);
 
   const continueFromUpsell = useCallback(() => {
