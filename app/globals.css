@@ -67,6 +67,12 @@ header{
 .cart-icon-btn{
   background: transparent; border: none; color: var(--cream);
   font-size: 1.4rem; line-height:1; cursor:pointer; padding: 6px;
+  position: relative;
+}
+.cart-icon-badge{
+  position: absolute; top: -2px; right: -2px; background: var(--ember); color: #1A0D06;
+  font-family:'Anton', sans-serif; font-size: 0.68rem; min-width: 17px; height: 17px;
+  border-radius: 50%; display:flex; align-items:center; justify-content:center; padding: 0 2px;
 }
 .burger{ display:none; background:none; border:none; cursor:pointer; padding: 4px; }
 .burger span{ display:block; width: 24px; height: 2px; background: var(--cream); margin: 5px 0; }
@@ -446,6 +452,94 @@ footer{ padding: 56px 0 32px; }
 .checkout-summary{ border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 14px 0; margin-bottom: 18px; max-height: 160px; overflow-y:auto; }
 .checkout-summary .cs-row{ display:flex; justify-content:space-between; font-size: 0.88rem; color: var(--muted); padding: 4px 0; }
 .checkout-summary .cs-total{ display:flex; justify-content:space-between; font-weight:700; color: var(--cream); padding-top: 10px; margin-top: 6px; border-top: 1px dashed var(--line); }
+.checkout-summary .cs-row-editable{
+  display:flex; align-items:flex-start; gap: 12px; padding: 12px 0; color: var(--cream);
+  border-bottom: 1px solid var(--line);
+}
+.checkout-summary .cs-row-editable:last-of-type{ border-bottom:none; }
+.cs-thumb{ width: 48px; height: 48px; border-radius: 8px; object-fit:cover; border:1px solid var(--line); flex-shrink:0; }
+.cs-body{ flex:1; min-width:0; display:flex; flex-direction:column; gap: 4px; }
+.cs-name{ font-weight:700; word-break: break-word; }
+.cs-details{ color: var(--muted); font-size: 0.8rem; word-break: break-word; }
+.cs-qty-row{ display:flex; align-items:center; gap: 14px; margin-top: 4px; flex-wrap:wrap; }
+.cs-qty{ display:flex; align-items:center; gap: 10px; background: var(--bg-card); border:1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
+.cs-qty button{ width: 22px; height: 22px; border-radius:50%; border:1px solid var(--line); background: var(--bg); color: var(--cream); cursor:pointer; font-size: 0.9rem; }
+.cs-remove{ background:none; border:none; color: var(--muted); text-decoration:underline; font-size: 0.8rem; cursor:pointer; padding:0; }
+.cs-price{ font-family:'Anton', sans-serif; color: var(--ember); white-space:nowrap; flex-shrink:0; }
+
+/* ---------- DRINK / EXTRAS TILES (used in checkout upsell rows) ---------- */
+.drink-upsell-row{ display:flex; gap: 12px; overflow-x:auto; padding-bottom: 6px; -webkit-overflow-scrolling: touch; scrollbar-width:none; }
+.drink-upsell-row::-webkit-scrollbar{ display:none; }
+.drink-tile{
+  flex: 0 0 auto; width: 108px; border: 1px solid var(--line); border-radius: 10px; padding: 10px;
+  background: var(--bg-card); text-align:center; cursor:pointer; color:inherit; font-family:inherit;
+  display:flex; flex-direction:column; align-items:center; gap: 4px; transition: border-color 0.15s ease;
+}
+.drink-tile:hover{ border-color: var(--ember); }
+.drink-tile img{ width: 100%; height: 64px; object-fit:cover; border-radius: 6px; margin-bottom: 4px; }
+.drink-tile .dname{ font-size: 0.78rem; color: var(--cream); font-weight:600; line-height:1.25; min-height: 2.1em; }
+.drink-tile .dprice{ font-size: 0.75rem; color: var(--muted); }
+.drink-add-btn{
+  width: 24px; height: 24px; border-radius:50%; background: var(--ember); color:#1A0D06;
+  font-size: 0.95rem; font-weight:700; display:flex; align-items:center; justify-content:center; margin-top: 2px;
+}
+
+/* ---------- SHORTCUT PILLS (All drinks / Dip the edges / Snacks) ---------- */
+.shortcut-row{ display:flex; gap: 10px; overflow-x:auto; padding: 12px 0 4px; -webkit-overflow-scrolling: touch; scrollbar-width:none; }
+.shortcut-row::-webkit-scrollbar{ display:none; }
+.shortcut-pill{
+  flex: 0 0 auto; display:flex; align-items:center; gap: 8px; padding: 6px 14px 6px 6px;
+  background: var(--bg-card); border: 1px solid var(--line); border-radius: 999px; color: var(--cream);
+  font-size: 0.85rem; font-weight:600; cursor:pointer; transition: border-color 0.15s ease;
+}
+.shortcut-pill:hover{ border-color: var(--ember); }
+.shortcut-pill.active{ border-color: var(--ember); color: var(--ember); }
+.shortcut-thumbs{ display:flex; }
+.shortcut-thumbs img{
+  width: 28px; height: 28px; border-radius: 50%; object-fit: cover; border: 2px solid var(--bg-card);
+  background: var(--bg);
+}
+.shortcut-thumbs img + img{ margin-left: -12px; }
+
+/* ---------- DRINK UPSELL FULL PAGE (kotipizza "Pepsi or Pepsi Max?" style) ---------- */
+.upsell-page{
+  position: fixed; inset:0; z-index: 320; background: var(--bg);
+  display:flex; flex-direction:column; transform: translateY(100%);
+  transition: transform 0.3s ease; visibility:hidden;
+}
+.upsell-page.open{ transform: translateY(0); visibility:visible; }
+.upsell-close{
+  position:absolute; top: 18px; right: 18px; z-index:2; background:none; border:none;
+  color: var(--cream); font-size: 1.8rem; cursor:pointer; line-height:1;
+}
+.upsell-scroll{ flex:1; overflow-y:auto; padding: 80px 24px 24px; -webkit-overflow-scrolling: touch; }
+.upsell-title{
+  font-family:'Anton', sans-serif; font-size: clamp(1.8rem, 7vw, 2.6rem); color: var(--cream);
+  text-align:center; margin: 0 0 36px; line-height: 1.1;
+}
+.upsell-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 480px; margin: 0 auto; }
+.upsell-card{
+  background: var(--bg-card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 12px 18px;
+  display:flex; flex-direction:column; align-items:center; gap: 10px; cursor:pointer; color:inherit; font-family:inherit;
+  transition: border-color 0.15s ease;
+}
+.upsell-card:hover, .upsell-card:active{ border-color: var(--ember); }
+.upsell-card img{ width: 84px; height: 130px; object-fit:contain; }
+.upsell-card-name{ font-weight:700; color: var(--cream); font-size: 0.95rem; text-align:center; }
+.upsell-card-btn{
+  background: var(--ember); color:#1A0D06; font-weight:700; font-size: 0.85rem;
+  padding: 8px 16px; border-radius: 999px; white-space:nowrap;
+}
+.upsell-footer{
+  display:flex; gap: 12px; padding: 16px 24px; border-top: 1px solid var(--line);
+  background: var(--bg-alt); flex-shrink:0;
+}
+.upsell-skip{
+  flex:1; background: transparent; border: 1px solid var(--line); color: var(--cream);
+  border-radius: var(--radius); font-weight:700; font-size: 0.95rem; cursor:pointer;
+}
+.upsell-continue{ flex:1; }
+
 .checkout-nav{ display:flex; gap:10px; margin-top: 4px; }
 .btn-secondary{
   background: var(--bg); border: 1px solid var(--line); color: var(--cream); padding: 15px 20px; border-radius: var(--radius);
