@@ -133,7 +133,6 @@ export function StoreProvider({ children }) {
       },
     ]);
     setProductPageOpen(false);
-    setCartOpen(true);
   }, [activeProduct, selection, unitPrice, lineTotal]);
 
   const removeFromCart = useCallback((key) => {
