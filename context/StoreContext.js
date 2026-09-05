@@ -40,8 +40,8 @@ function calcUnitPrice(product) {
 
 export function StoreProvider({ children }) {
   const [cart, setCart] = useState([]);
-  const [activeProduct, setActiveProduct] = useState(null); // item opened in the product page
-  const [selection, setSelection] = useState(null); // customization state for activeProduct
+  const [activeProduct, setActiveProduct] = useState(null);
+  const [selection, setSelection] = useState(null);
   const [isProductPageOpen, setProductPageOpen] = useState(false);
   const [isCartOpen, setCartOpen] = useState(false);
   const [isCheckoutOpen, setCheckoutOpen] = useState(false);
