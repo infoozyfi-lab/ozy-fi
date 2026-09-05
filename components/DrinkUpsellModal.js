@@ -6,6 +6,11 @@ import { DRINKS } from '@/data/menu';
 export default function DrinkUpsellModal() {
   const { isDrinkUpsellOpen, setDrinkUpsellOpen, continueFromUpsell, cart, addDrinkToCart } = useStore();
 
+  const closeToHome = () => {
+    setDrinkUpsellOpen(false);
+    if (typeof window !== 'undefined') window.history.pushState({}, '', '/');
+  };
+
   const qtyFor = (drinkId) => {
     const line = cart.find((l) => l.drinkId === drinkId);
     return line ? line.qty : 0;
@@ -13,7 +18,7 @@ export default function DrinkUpsellModal() {
 
   return (
     <div className={`upsell-page${isDrinkUpsellOpen ? ' open' : ''}`}>
-      <button className="upsell-close" type="button" onClick={() => setDrinkUpsellOpen(false)}>×</button>
+      <button className="upsell-close" type="button" onClick={closeToHome}>×</button>
 
       <div className="upsell-scroll">
         <h2 className="upsell-title">A cold drink<br />on the side?</h2>
