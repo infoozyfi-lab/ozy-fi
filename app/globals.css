@@ -436,19 +436,34 @@ footer{ padding: 56px 0 32px; }
 
 /* ---------- EXTRA ITEM LIST (All drinks / Dip the edges / Snacks — kotipizza list style) ---------- */
 .extra-list{ display:flex; flex-direction:column; margin-top: 14px; border-top: 1px solid var(--line); }
-.extra-list-row{ display:flex; align-items:center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.extra-list-row{
+  display:flex; align-items:center; gap: 14px; padding: 14px 10px; margin: 0 -10px;
+  border-bottom: 1px solid var(--line); border-radius: 10px;
+  transition: background 0.2s ease;
+}
+.extra-list-row.in-cart{ background: rgba(255,106,61,0.12); }
+.extra-list-row.just-added{ background: rgba(255,106,61,0.22); }
 .extra-list-row img{ width: 56px; height: 56px; border-radius: 8px; object-fit:cover; flex-shrink:0; border: 1px solid var(--line); }
 .extra-list-body{ flex:1; min-width:0; display:flex; flex-direction:column; gap: 2px; }
 .extra-list-name{ font-weight:700; color: var(--cream); }
 .extra-list-price{ color: var(--muted); font-size: 0.85rem; }
+.extra-list-added{
+  flex-direction:row; align-items:center; gap: 8px; font-weight:700; color: var(--ember); font-size: 1rem;
+}
+.extra-added-check{
+  width: 22px; height: 22px; border-radius:50%; background: var(--ember); color:#1A0D06;
+  display:flex; align-items:center; justify-content:center; font-size: 0.8rem; flex-shrink:0;
+}
 .extra-list-add{
   flex-shrink:0; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--ember);
   background: transparent; color: var(--ember); font-size: 1.2rem; font-weight:700; cursor:pointer;
   display:flex; align-items:center; justify-content:center; line-height:1; transition: background 0.15s ease, color 0.15s ease;
 }
 .extra-list-add:hover{ background: rgba(255,106,61,0.1); }
-.extra-list-add.in-cart{
-  width:auto; border-radius: 999px; padding: 0 12px; background: var(--ember); color: #1A0D06; font-size: 0.8rem;
+.extra-footer{ position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 340; }
+.extra-ready-btn{
+  width:100%; border-radius: 999px; padding: 16px 20px;
+  box-shadow: 0 10px 26px rgba(0,0,0,0.45);
 }
 
 /* ---------- CHECKOUT (kotipizza-style steps) ---------- */
