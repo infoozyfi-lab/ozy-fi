@@ -64,6 +64,10 @@ header{
   display:flex; align-items:center; gap: 8px; cursor:pointer;
 }
 .cart-btn:hover{ border-color: var(--ember); }
+.cart-icon-btn{
+  background: transparent; border: none; color: var(--cream);
+  font-size: 1.4rem; line-height:1; cursor:pointer; padding: 6px;
+}
 .burger{ display:none; background:none; border:none; cursor:pointer; padding: 4px; }
 .burger span{ display:block; width: 24px; height: 2px; background: var(--cream); margin: 5px 0; }
 .mobile-nav{
