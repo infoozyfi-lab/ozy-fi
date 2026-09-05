@@ -263,7 +263,6 @@ footer{ padding: 56px 0 32px; }
 .pp-name{ font-family:'Anton', sans-serif; font-size: clamp(1.7rem, 5vw, 2.2rem); color: var(--cream); margin: 0 0 12px; }
 .pp-desc{ color: var(--muted); font-size: 1rem; margin: 0 0 28px; }
 .pp-label{ color: var(--gold); font-weight:700; font-size: 0.8rem; letter-spacing: 0.05em; text-transform: uppercase; margin: 0 0 12px; }
-.pp-section{ margin-bottom: 32px; }
 .pp-toggle{ display:flex; border: 1px solid var(--line); border-radius: 999px; overflow:hidden; }
 .pp-toggle-opt{ flex:1; background: transparent; border:none; color: var(--muted); padding: 14px 10px; font-weight:700; font-size: 0.95rem; cursor:pointer; transition: background 0.15s ease, color 0.15s ease; }
 .pp-toggle-opt.active{ background: var(--ember); color: #1A0D06; }
@@ -279,14 +278,6 @@ footer{ padding: 56px 0 32px; }
 .pp-finish-tile .fprice{ color: var(--muted); font-size: 0.72rem; }
 .pp-finish-tile.selected{ border-color: var(--ember); background: rgba(255,106,61,0.12); }
 .pp-finish-tile.selected .fprice{ color: var(--ember); font-weight:700; }
-.pp-bottom-list{ border: 1px solid var(--line); border-radius: 8px; overflow:hidden; }
-.pp-bottom-row{ display:flex; justify-content:space-between; align-items:center; padding: 15px 16px; border-bottom: 1px solid var(--line); flex-wrap:wrap; }
-.pp-bottom-row:last-child{ border-bottom:none; }
-.pp-bottom-row .label{ color: var(--cream); font-size: 0.95rem; }
-.pp-bottom-row .change-btn{ background:none; border:none; color: var(--gold); font-weight:700; font-size: 0.85rem; cursor:pointer; display:flex; align-items:center; gap: 4px; }
-.pp-bottom-options{ flex-basis:100%; padding-top:10px; }
-.pp-bottom-options label{ display:flex; align-items:center; gap:8px; padding:8px 0; color:var(--cream); font-size:0.88rem; cursor:pointer; }
-.pp-bottom-options input{ accent-color: var(--ember); }
 .pp-footer{ display:flex; align-items:center; gap: 14px; padding: 14px 18px; border-top: 1px solid var(--line); background: var(--bg-alt); flex-shrink:0; }
 .pp-qty{ display:flex; align-items:center; gap: 14px; background: var(--bg-card); border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; flex-shrink:0; }
 .pp-qty button{ width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--bg); color: var(--cream); font-size: 1.1rem; cursor:pointer; }
@@ -349,31 +340,4 @@ footer{ padding: 56px 0 32px; }
 .pay-option-text b{ display:block; }
 .pay-option-text span{ color: var(--muted); font-size: 0.82rem; }
 .pay-option input{ accent-color: var(--ember); margin-left:auto; }
-.checkout-summary{ border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 14px 0; margin-bottom: 18px; max-height: 160px; overflow-y:auto; }
-.checkout-summary .cs-row{ display:flex; justify-content:space-between; font-size: 0.88rem; color: var(--muted); padding: 4px 0; }
-.checkout-summary .cs-total{ display:flex; justify-content:space-between; font-weight:700; color: var(--cream); padding-top: 10px; margin-top: 6px; border-top: 1px dashed var(--line); }
-.checkout-nav{ display:flex; gap:10px; margin-top: 4px; }
-.btn-secondary{
-  background: var(--bg); border: 1px solid var(--line); color: var(--cream); padding: 15px 20px; border-radius: var(--radius);
-  font-weight:700; font-size: 1rem; cursor:pointer;
-}
-.confirm-box{ text-align:center; padding: 10px 0; }
-.confirm-box .big{ font-family:'Anton',sans-serif; font-size: 2rem; color: var(--ember); margin: 10px 0; }
-.confirm-box p{ color: var(--muted); }
-.confirm-box .cod-note{
-  display:flex; align-items:center; gap:10px; background: rgba(255,106,61,0.08); border: 1px solid var(--ember);
-  border-radius: 8px; padding: 14px; margin-top: 16px; text-align:left;
-}
-
-/* ---------- RESPONSIVE ---------- */
-@media (max-width: 860px){
-  .nav-links{ display:none; }
-  .burger{ display:block; }
-  .story-grid, .visit-grid{ grid-template-columns: 1fr; }
-  .footer-grid{ grid-template-columns: 1fr; }
-  .order-tabs{ flex-direction: column; }
-  .menu-item{ grid-template-columns: 46px 1fr auto; }
-  .menu-item-thumb{ width:46px; height:46px; }
-  .menu-item .price{ grid-row: 1 / 3; }
-  .add-btn{ display:none; }
-}
+.checkout-summary{ border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 14px 0; margin-bottom: 18px; max-height: 160px
