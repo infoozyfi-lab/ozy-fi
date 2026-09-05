@@ -3,7 +3,7 @@
 import { useStore } from '@/context/StoreContext';
 
 export default function OrderBar() {
-  const { cart, cartTotal, setCartOpen, isProductPageOpen } = useStore();
+  const { cart, cartTotal, goToCheckout, isProductPageOpen } = useStore();
 
   const itemCount = cart.reduce((sum, line) => sum + line.qty, 0);
 
@@ -13,7 +13,7 @@ export default function OrderBar() {
     <button
       type="button"
       className={`order-bar${isProductPageOpen ? ' on-product-page' : ''}`}
-      onClick={() => setCartOpen(true)}
+      onClick={goToCheckout}
     >
       <span className="order-bar-count">{itemCount}</span>
       <span className="order-bar-label">View order</span>

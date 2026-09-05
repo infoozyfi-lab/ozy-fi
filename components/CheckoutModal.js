@@ -2,9 +2,15 @@
 
 import { useState } from 'react';
 import { useStore } from '@/context/StoreContext';
-import { DRINKS } from '@/data/menu';
+import { DRINKS, DIP_CUPS, SNACKS } from '@/data/menu';
 
-const EMPTY = { name: '', phone: '', address: '', city: '', notes: '' };
+const EMPTY = { name: '', email: '', phone: '', notes: '' };
+
+const EXTRA_SECTIONS = {
+  drinks: { label: 'All drinks', items: DRINKS },
+  dips: { label: 'Dip the edges', items: DIP_CUPS },
+  snacks: { label: 'Snacks', items: SNACKS },
+};
 
 export default function CheckoutModal() {
   const {
@@ -13,6 +19,7 @@ export default function CheckoutModal() {
   } = useStore();
   const [step, setStep] = useState(1);
   const [customer, setCustomer] = useState(EMPTY);
+  const [openSection, setOpenSection] = useState(null);
 
   const close = () => {
     setCheckoutOpen(false);
@@ -88,6 +95,40 @@ export default function CheckoutModal() {
               })}
             </div>
 
+            <div className="shortcut-row">
+              {Object.entries(EXTRA_SECTIONS).map(([key, section]) => (
+                <button
+                  type="button"
+                  key={key}
+                  className={`shortcut-pill${openSection === key ? ' active' : ''}`}
+                  onClick={() => setOpenSection((s) => (s === key ? null : key))}
+                >
+                  <span className="shortcut-thumbs">
+                    {section.items.slice(0, 2).map((it) => (
+                      <img key={it.id} src={it.image} alt="" />
+                    ))}
+                  </span>
+                  {section.label}
+                </button>
+              ))}
+            </div>
+
+            {openSection && (
+              <div className="drink-upsell-row" style={{ marginTop: 12 }}>
+                {EXTRA_SECTIONS[openSection].items.map((item) => {
+                  const line = cart.find((l) => l.drinkId === item.id);
+                  return (
+                    <button type="button" className="drink-tile" key={item.id} onClick={() => addDrinkToCart(item)}>
+                      <img src={item.image} alt={item.name} />
+                      <span className="dname">{item.name}</span>
+                      <span className="dprice">{line ? `In cart · ${line.qty}` : `${item.price.toFixed(2)} €`}</span>
+                      <span className="drink-add-btn">+</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             <button
               type="button"
               className="btn-primary"
@@ -102,26 +143,22 @@ export default function CheckoutModal() {
 
         {step === 2 && (
           <form id="checkoutForm" onSubmit={(e) => { e.preventDefault(); setStep(3); }}>
-            <p className="desc" style={{ marginBottom: 16 }}>Delivery details</p>
+            <p className="desc" style={{ marginBottom: 16 }}>Order details</p>
             <label>
-              Full name
+              First name and last name
               <input required type="text" value={customer.name} onChange={onField('name')} />
+            </label>
+            <label>
+              Email address
+              <input required type="email" value={customer.email} onChange={onField('email')} />
             </label>
             <label>
               Phone
               <input required type="tel" value={customer.phone} onChange={onField('phone')} />
             </label>
             <label>
-              Delivery address
-              <input required type="text" value={customer.address} onChange={onField('address')} />
-            </label>
-            <label>
-              City / Postal code
-              <input required type="text" value={customer.city} onChange={onField('city')} />
-            </label>
-            <label>
-              Notes for the restaurant (optional)
-              <input type="text" value={customer.notes} onChange={onField('notes')} placeholder="Door code, floor, allergies…" />
+              Additional information for the restaurant
+              <input type="text" value={customer.notes} onChange={onField('notes')} placeholder="e.g. door code, floor, company, food allergy" />
             </label>
             <div className="checkout-nav">
               <button type="button" className="btn-secondary" onClick={() => setStep(1)}>Back</button>

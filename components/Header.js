@@ -5,7 +5,8 @@ import { useStore } from '@/context/StoreContext';
 
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { setCartOpen } = useStore();
+  const { setCartOpen, cart } = useStore();
+  const itemCount = cart.reduce((sum, line) => sum + line.qty, 0);
 
   const scrollTo = (id) => (e) => {
     e.preventDefault();
@@ -33,7 +34,22 @@ export default function Header() {
         </ul>
         <div className="nav-order">
           <button className="cart-icon-btn" type="button" aria-label="Cart" onClick={() => setCartOpen(true)}>
-            🛒
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M7 8V6.5C7 4.01472 9.01472 2 11.5 2H12.5C14.9853 2 17 4.01472 17 6.5V8"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M5.5 8H18.5L19.3 20.2C19.393 21.601 18.283 22.79 16.879 22.79H7.121C5.717 22.79 4.607 21.601 4.7 20.2L5.5 8Z"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinejoin="round"
+              />
+            </svg>
+            {itemCount > 0 && <span className="cart-icon-badge">{itemCount}</span>}
           </button>
         </div>
         <button
