@@ -460,7 +460,10 @@ footer{ padding: 56px 0 32px; }
   display:flex; align-items:center; justify-content:center; line-height:1; transition: background 0.15s ease, color 0.15s ease;
 }
 .extra-list-add:hover{ background: rgba(255,106,61,0.1); }
-.extra-footer{ position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 340; }
+.extra-footer{
+  display:flex; padding: 14px 18px; border-top: 1px solid var(--line);
+  background: var(--bg-alt); flex-shrink:0;
+}
 .extra-ready-btn{
   width:100%; border-radius: 999px; padding: 16px 20px;
   box-shadow: 0 10px 26px rgba(0,0,0,0.45);
