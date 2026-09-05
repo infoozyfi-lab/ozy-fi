@@ -3,11 +3,11 @@
 import { useStore } from '@/context/StoreContext';
 
 export default function OrderBar() {
-  const { cart, cartTotal, goToCheckout, isProductPageOpen } = useStore();
+  const { cart, cartTotal, goToCheckout, isProductPageOpen, isCheckoutOpen } = useStore();
 
   const itemCount = cart.reduce((sum, line) => sum + line.qty, 0);
 
-  if (itemCount === 0) return null;
+  if (itemCount === 0 || isCheckoutOpen) return null;
 
   return (
     <button

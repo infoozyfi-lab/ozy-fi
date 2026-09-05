@@ -242,7 +242,7 @@ export default function ProductPage() {
   const {
     activeProduct, selection, unitPrice, lineTotal,
     isProductPageOpen, closeProduct, toggleTopping, setSize, setQty, setOption,
-    setFillingQty, addToCart, setCartOpen,
+    setFillingQty, addToCart, goToCheckout,
   } = useStore();
 
   const [openCat, setOpenCat] = useState(null);
@@ -262,7 +262,7 @@ export default function ProductPage() {
           className="pp-cart"
           type="button"
           aria-label="Cart"
-          onClick={() => { closeProduct(); setCartOpen(true); }}
+          onClick={() => { closeProduct(); goToCheckout(); }}
         >
           🛒
         </button>

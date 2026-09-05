@@ -36,11 +36,15 @@ export default function CheckoutModal() {
   };
 
   return (
-    <div className={`modal-overlay${isCheckoutOpen ? ' open' : ''}`}>
-      <div className="modal-box checkout-box">
-        <button className="modal-close" type="button" onClick={close}>×</button>
-        <h3>Your order</h3>
+    <div className={`checkout-page${isCheckoutOpen ? ' open' : ''}`}>
+      <div className="pp-topbar">
+        <button className="pp-back" type="button" aria-label="Close" onClick={close}>←</button>
+        <span className="pp-topbar-title">Your order</span>
+        <span style={{ width: 28 }} />
+      </div>
 
+      <div className="pp-scroll">
+        <div className="wrap" style={{ paddingTop: 24, paddingBottom: 40 }}>
         <div className="checkout-steps">
           <div className={`checkout-step-dot${step === 1 ? ' active' : step > 1 ? ' done' : ''}`}>1</div>
           <div className={`checkout-step-line${step > 1 ? ' done' : ''}`} />
@@ -114,16 +118,24 @@ export default function CheckoutModal() {
             </div>
 
             {openSection && (
-              <div className="drink-upsell-row" style={{ marginTop: 12 }}>
+              <div className="extra-list">
                 {EXTRA_SECTIONS[openSection].items.map((item) => {
                   const line = cart.find((l) => l.drinkId === item.id);
                   return (
-                    <button type="button" className="drink-tile" key={item.id} onClick={() => addDrinkToCart(item)}>
+                    <div className="extra-list-row" key={item.id}>
                       <img src={item.image} alt={item.name} />
-                      <span className="dname">{item.name}</span>
-                      <span className="dprice">{line ? `In cart · ${line.qty}` : `${item.price.toFixed(2)} €`}</span>
-                      <span className="drink-add-btn">+</span>
-                    </button>
+                      <div className="extra-list-body">
+                        <span className="extra-list-name">{item.name}</span>
+                        <span className="extra-list-price">{item.price.toFixed(2)} €</span>
+                      </div>
+                      <button
+                        type="button"
+                        className={`extra-list-add${line ? ' in-cart' : ''}`}
+                        onClick={() => addDrinkToCart(item)}
+                      >
+                        {line ? `In cart · ${line.qty}` : '+'}
+                      </button>
+                    </div>
                   );
                 })}
               </div>
@@ -202,6 +214,7 @@ export default function CheckoutModal() {
             </div>
           </form>
         )}
+        </div>
       </div>
     </div>
   );

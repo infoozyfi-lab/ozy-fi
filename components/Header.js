@@ -5,7 +5,7 @@ import { useStore } from '@/context/StoreContext';
 
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { setCartOpen, cart } = useStore();
+  const { goToCheckout, cart } = useStore();
   const itemCount = cart.reduce((sum, line) => sum + line.qty, 0);
 
   const scrollTo = (id) => (e) => {
@@ -33,7 +33,7 @@ export default function Header() {
           <li><a href="#visit" onClick={scrollTo('visit')}>Gift cards</a></li>
         </ul>
         <div className="nav-order">
-          <button className="cart-icon-btn" type="button" aria-label="Cart" onClick={() => setCartOpen(true)}>
+          <button className="cart-icon-btn" type="button" aria-label="Cart" onClick={goToCheckout}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path
                 d="M7 8V6.5C7 4.01472 9.01472 2 11.5 2H12.5C14.9853 2 17 4.01472 17 6.5V8"
