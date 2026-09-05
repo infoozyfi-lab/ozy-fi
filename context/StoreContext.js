@@ -45,6 +45,7 @@ export function StoreProvider({ children }) {
   const [isProductPageOpen, setProductPageOpen] = useState(false);
   const [isCartOpen, setCartOpen] = useState(false);
   const [isCheckoutOpen, setCheckoutOpen] = useState(false);
+  const [isDrinkUpsellOpen, setDrinkUpsellOpen] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState(null);
 
   const openProduct = useCallback((item) => {
@@ -139,13 +140,55 @@ export function StoreProvider({ children }) {
     setCart((c) => c.filter((line) => line.key !== key));
   }, []);
 
+  const addDrinkToCart = useCallback((drink) => {
+    setCart((c) => {
+      const existing = c.find((line) => line.drinkId === drink.id);
+      if (existing) {
+        return c.map((line) =>
+          line.key === existing.key
+            ? { ...line, qty: line.qty + 1, lineTotal: line.unitPrice * (line.qty + 1) }
+            : line
+        );
+      }
+      return [
+        ...c,
+        {
+          key: `${drink.id}-${Date.now()}`,
+          drinkId: drink.id,
+          name: drink.name,
+          image: drink.image,
+          details: [],
+          qty: 1,
+          unitPrice: drink.price,
+          lineTotal: drink.price,
+        },
+      ];
+    });
+  }, []);
+
+  const updateCartQty = useCallback((key, nextQty) => {
+    setCart((c) => {
+      if (nextQty <= 0) return c.filter((line) => line.key !== key);
+      return c.map((line) =>
+        line.key === key
+          ? { ...line, qty: nextQty, lineTotal: line.unitPrice * nextQty }
+          : line
+      );
+    });
+  }, []);
+
   const cartTotal = useMemo(() => cart.reduce((sum, l) => sum + l.lineTotal, 0), [cart]);
 
   const goToCheckout = useCallback(() => {
     if (cart.length === 0) return;
     setCartOpen(false);
-    setCheckoutOpen(true);
+    setDrinkUpsellOpen(true);
   }, [cart.length]);
+
+  const continueFromUpsell = useCallback(() => {
+    setDrinkUpsellOpen(false);
+    setCheckoutOpen(true);
+  }, []);
 
   const placeOrder = useCallback((customer) => {
     const orderNum = `#OZY-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -164,6 +207,9 @@ export function StoreProvider({ children }) {
     isProductPageOpen,
     isCartOpen,
     isCheckoutOpen,
+    isDrinkUpsellOpen,
+    setDrinkUpsellOpen,
+    continueFromUpsell,
     confirmedOrder,
     openProduct,
     closeProduct,
@@ -174,6 +220,8 @@ export function StoreProvider({ children }) {
     setFillingQty,
     addToCart,
     removeFromCart,
+    addDrinkToCart,
+    updateCartQty,
     setCartOpen,
     goToCheckout,
     setCheckoutOpen,
