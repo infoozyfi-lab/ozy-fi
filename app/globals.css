@@ -439,7 +439,7 @@ footer{ padding: 56px 0 32px; }
 .extra-list-row{
   display:flex; align-items:center; gap: 14px; padding: 14px 10px; margin: 0 -10px;
   border-bottom: 1px solid var(--line); border-radius: 10px;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease; cursor: pointer;
 }
 .extra-list-row.in-cart{ background: rgba(255,106,61,0.12); }
 .extra-list-row.just-added{ background: rgba(255,106,61,0.22); }
