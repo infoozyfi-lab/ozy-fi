@@ -478,22 +478,65 @@ footer{ padding: 56px 0 32px; }
 }
 
 /* ---------- CHECKOUT (kotipizza-style steps) ---------- */
-.checkout-steps{ display:flex; align-items:center; gap: 6px; margin: 0 0 22px; }
+.checkout-steps{ display:flex; align-items:flex-start; gap: 6px; margin: 0 0 24px; }
+.checkout-step{ display:flex; flex-direction:column; align-items:center; gap: 6px; flex-shrink:0; }
 .checkout-step-dot{
-  width: 24px; height: 24px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); color: var(--muted);
-  font-size: 0.75rem; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  width: 26px; height: 26px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); color: var(--muted);
+  font-size: 0.78rem; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  transition: all 0.2s ease;
 }
 .checkout-step-dot.active{ background: var(--ember); border-color: var(--ember); color: #1A0D06; }
 .checkout-step-dot.done{ background: var(--gold); border-color: var(--gold); color: #1A0D06; }
-.checkout-step-line{ flex:1; height:1px; background: var(--line); }
+.checkout-step-label{ font-size: 0.72rem; color: var(--muted); white-space:nowrap; }
+.checkout-step-label.active{ color: var(--cream); font-weight:700; }
+.checkout-step-line{ flex:1; height:1px; background: var(--line); margin-top: 13px; }
 .checkout-step-line.done{ background: var(--gold); }
 
-#checkoutForm label{ display:block; font-size: 0.86rem; color: var(--muted); margin-bottom: 14px; }
+/* Sticky footer (mirrors .extra-footer) shared by every checkout step */
+.checkout-footer{
+  display:flex; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--line);
+  background: var(--bg-alt); flex-shrink:0;
+}
+.checkout-footer .btn-primary{ box-shadow: 0 10px 26px rgba(0,0,0,0.45); }
+
+/* Collapsible mini order summary shown on Details / Payment steps */
+.mini-summary{
+  border: 1px solid var(--line); border-radius: 12px; margin-bottom: 20px; overflow:hidden; background: var(--bg-card);
+}
+.mini-summary-head{
+  width:100%; display:flex; align-items:center; justify-content:space-between; padding: 13px 16px;
+  background:none; border:none; color: var(--cream); cursor:pointer; font-size: 0.92rem;
+}
+.mini-summary-head b{ color: var(--ember); font-family:'Anton', sans-serif; font-size: 1.05rem; }
+.mini-summary-chev{ color: var(--muted); transition: transform 0.2s ease; }
+.mini-summary-chev.up{ transform: rotate(180deg); }
+.mini-summary-body{ padding: 0 16px 14px; border-top: 1px solid var(--line); }
+.mini-summary-body .cs-row{ display:flex; justify-content:space-between; font-size: 0.86rem; color: var(--muted); padding: 8px 0 0; }
+
+/* Form field validation */
+#checkoutForm label{ display:block; font-size: 0.86rem; color: var(--muted); margin-bottom: 16px; }
 #checkoutForm input{
   display:block; width:100%; margin-top: 6px; background: var(--bg); border: 1px solid var(--line); color: var(--cream);
-  padding: 11px 12px; border-radius: 5px; font-size: 0.95rem;
+  padding: 11px 12px; border-radius: 5px; font-size: 0.95rem; transition: border-color 0.15s ease;
 }
 #checkoutForm input:focus{ border-color: var(--ember); outline:none; }
+#checkoutForm label.has-error input{ border-color: #ff5c5c; }
+.field-error{ display:block; color: #ff5c5c; font-size: 0.78rem; margin-top: 5px; font-weight:600; }
+
+/* Submit button loading spinner */
+.btn-primary.is-loading{ color: transparent; position:relative; pointer-events:none; }
+.btn-primary.is-loading::after{
+  content:''; position:absolute; top:50%; left:50%; width: 18px; height: 18px; margin: -9px 0 0 -9px;
+  border: 2px solid rgba(26,13,6,0.35); border-top-color: #1A0D06; border-radius: 50%;
+  animation: btn-spin 0.7s linear infinite;
+}
+@keyframes btn-spin{ to{ transform: rotate(360deg); } }
+
+/* Empty cart state inside checkout */
+.checkout-empty{ text-align:center; padding: 60px 20px; color: var(--muted); }
+.checkout-empty p{ margin: 6px 0 22px; }
+.checkout-empty-icon{ font-size: 2.4rem; margin-bottom: 8px; }
+
 .payment-method{ margin: 18px 0 22px; }
 .payment-method > p{ font-size: 0.86rem; color: var(--muted); margin: 0 0 10px; }
 .pay-option{
@@ -603,12 +646,19 @@ footer{ padding: 56px 0 32px; }
   font-weight:700; font-size: 1rem; cursor:pointer;
 }
 .confirm-box{ text-align:center; padding: 10px 0; }
+.confirm-check{
+  width: 56px; height: 56px; border-radius: 50%; background: var(--ember); color: #1A0D06;
+  display:flex; align-items:center; justify-content:center; font-size: 1.6rem; font-weight:700;
+  margin: 0 auto 16px;
+}
 .confirm-box .big{ font-family:'Anton',sans-serif; font-size: 2rem; color: var(--ember); margin: 10px 0; }
 .confirm-box p{ color: var(--muted); }
 .confirm-box .cod-note{
   display:flex; align-items:center; gap:10px; background: rgba(255,106,61,0.08); border: 1px solid var(--ember);
   border-radius: 8px; padding: 14px; margin-top: 16px; text-align:left;
 }
+.confirm-eta{ color: var(--muted); font-size: 0.86rem; margin-top: 10px; }
+.confirm-box .btn-primary{ width:100%; margin-top: 22px; }
 
 /* ---------- ORDER BAR (kotipizza-style persistent "View order" bar) ---------- */
 .order-bar{
