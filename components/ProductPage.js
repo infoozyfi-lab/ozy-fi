@@ -175,10 +175,14 @@ function MoreFillingsCategory({ category, fillings, onSetQty, open, onToggle }) 
             const qty = fillings[item.id] || 0;
             return (
               <div className="pp-filling-row" key={item.id}>
-                <span className="fname">
+                <button
+                  type="button"
+                  className="fname"
+                  onClick={() => onSetQty(item.id, qty + 1)}
+                >
                   {item.label}
                   <span className="fprice"> +{item.price.toFixed(2)} €</span>
-                </span>
+                </button>
                 <QtyStepper
                   qty={qty}
                   onDec={() => onSetQty(item.id, qty - 1)}

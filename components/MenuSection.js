@@ -96,16 +96,18 @@ export default function MenuSection() {
                 className="menu-item"
                 onClick={() => openProduct(item)}
               >
+                <span className="menu-item-info">
+                  <span className="name-row">
+                    <h3>{item.name}</h3>
+                    {item.tag && <span className="tag">{item.tag}</span>}
+                  </span>
+                  {item.desc && <p className="desc">{item.desc}</p>}
+                  <span className="price">{item.price.toFixed(2)} €</span>
+                </span>
                 <span className="menu-item-thumb">
                   <img src={item.image} alt={item.name} loading="lazy" />
+                  <span className="add-btn" aria-hidden="true">+</span>
                 </span>
-                <span className="name-row">
-                  <h3>{item.name}</h3>
-                  {item.tag && <span className="tag">{item.tag}</span>}
-                </span>
-                <p className="desc">{item.desc}</p>
-                <span className="price">{item.price.toFixed(2)} €</span>
-                <span className="add-btn" aria-hidden="true">+</span>
               </button>
             ))}
           </div>
