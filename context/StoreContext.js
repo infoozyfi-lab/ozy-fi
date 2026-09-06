@@ -141,6 +141,7 @@ export function StoreProvider({ children }) {
       ...c,
       {
         key: `${activeProduct.id}-${Date.now()}`,
+        productId: activeProduct.id,
         name: activeProduct.name,
         image: activeProduct.image,
         details,
@@ -172,6 +173,7 @@ export function StoreProvider({ children }) {
         {
           key: `${drink.id}-${Date.now()}`,
           drinkId: drink.id,
+          productId: drink.id,
           name: drink.name,
           image: drink.image,
           details: [],
@@ -214,9 +216,33 @@ export function StoreProvider({ children }) {
     setUrl('/checkout');
   }, []);
 
-  const placeOrder = useCallback((customer) => {
-    const orderNum = `#OZY-${Math.floor(1000 + Math.random() * 9000)}`;
-    setConfirmedOrder({ orderNum, customer, total: cartTotal, items: cart });
+  const placeOrder = useCallback(async (customer) => {
+    const payload = {
+      customer,
+      total: cartTotal,
+      items: cart.map((line) => ({
+        productId: line.productId || null,
+        name: line.name,
+        qty: line.qty,
+        lineTotal: line.lineTotal,
+        details: line.details || [],
+      })),
+    };
+
+    const res = await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Could not place order. Please try again.');
+    }
+
+    const data = await res.json();
+
+    setConfirmedOrder({ orderNum: `#${data.orderNum}`, customer, total: cartTotal, items: cart });
     setCheckoutOpen(false);
     setCart([]);
     setUrl('/order-confirmed');
