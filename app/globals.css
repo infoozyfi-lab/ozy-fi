@@ -313,7 +313,11 @@ footer{ padding: 56px 0 32px; }
   padding: 14px 16px; border-bottom: 1px solid #2a2018; background: #1c140f;
 }
 .pp-filling-row:last-child { border-bottom: none; }
-.pp-filling-row .fname { font-size: 15px; color: #f0e6da; }
+.pp-filling-row .fname {
+  font-size: 15px; color: #f0e6da; background:none; border:none; padding:0; margin:0;
+  text-align:left; cursor:pointer; font-family:inherit; flex:1;
+}
+.pp-filling-row .fname:hover, .pp-filling-row .fname:focus-visible{ color: var(--ember); }
 .pp-filling-row .fprice, .fqty-badge { color: #f0793f; font-weight: 700; }
 
 .pp-qty-stepper {
