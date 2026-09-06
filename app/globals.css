@@ -311,12 +311,11 @@ footer{ padding: 56px 0 32px; }
 .pp-filling-row {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 16px; border-bottom: 1px solid #2a2018; background: #1c140f;
-  border: 1px solid transparent; transition: border-color 0.15s ease, background 0.15s ease;
+  border: 1px solid transparent; border-radius: 10px; transition: border-color 0.15s ease;
 }
 .pp-filling-row.active {
-  border-color: var(--ember); background: rgba(255,106,61,0.08); border-radius: 10px;
+  border-color: rgba(255,106,61,0.55);
 }
-.pp-fillings-list .pp-filling-row.active, .pp-cat-body .pp-filling-row.active { margin: 2px 0; }
 .pp-filling-row:last-child { border-bottom: none; }
 .pp-filling-row .fname {
   font-size: 15px; color: #f0e6da; background:none; border:none; padding:0; margin:0;
