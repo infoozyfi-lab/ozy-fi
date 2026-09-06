@@ -1,7 +1,16 @@
 {
   "name": "ozyfi",
   "compatibility_date": "2025-01-01",
+  "main": "./worker/index.js",
   "assets": {
-    "directory": "./out"
-  }
+    "directory": "./out",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ozyfi-db",
+      "database_id": "6b037686-f0b6-4733-b229-266681fa0a8b"
+    }
+  ]
 }
