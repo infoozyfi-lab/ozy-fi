@@ -2,18 +2,6 @@
 
 import { useState } from 'react';
 import { useStore } from '@/context/StoreContext';
-import {
-  TOPPINGS,
-  TOPPING_PRICE,
-  SIZE_LARGE_UPCHARGE,
-  BASE_OPTIONS,
-  SAUCE_OPTIONS,
-  CHEESE_OPTIONS,
-  FILLING_CATEGORIES,
-  ALL_FILLINGS,
-  SAUCE_STRIPE_OPTIONS,
-  DIP_OPTIONS,
-} from '@/data/menu';
 
 const TOPPING_EMOJI = {
   'Extra cheese': '🧀', Pepperoni: '🔴', Mushroom: '🍄', Onion: '🧅',
@@ -53,9 +41,10 @@ function BottomRow({ label, options, current, onChange }) {
   );
 }
 
-function SauceStripeRow({ current, onChange }) {
+function SauceStripeRow({ options, current, onChange }) {
   const [open, setOpen] = useState(false);
-  const selected = SAUCE_STRIPE_OPTIONS.find((o) => o.id === current);
+  const selected = options.find((o) => o.id === current) || options[0];
+  if (!selected) return null;
   return (
     <div className="pp-section">
       <p className="pp-label">Finish with sauce stripes</p>
@@ -68,7 +57,7 @@ function SauceStripeRow({ current, onChange }) {
       </div>
       {open && (
         <div className="pp-bottom-options">
-          {SAUCE_STRIPE_OPTIONS.map((opt) => (
+          {options.map((opt) => (
             <label key={opt.id} className={opt.id === current ? 'is-current' : ''}>
               <input
                 type="radio"
@@ -87,20 +76,21 @@ function SauceStripeRow({ current, onChange }) {
   );
 }
 
-function DipRow({ current, onChange }) {
+function DipRow({ options, current, onChange }) {
   const [open, setOpen] = useState(false);
-  const selected = DIP_OPTIONS.find((o) => o.id === current);
+  const selected = options.find((o) => o.id === current) || options[0];
+  if (!selected) return null;
   return (
     <div className="pp-section">
       <p className="pp-label">Dip the edges</p>
       <div className="pp-select-box">
         <button type="button" className="pp-select-head" onClick={() => setOpen((v) => !v)}>
-          <span>{selected.id === 'none' ? 'Select a dip' : selected.label}</span>
+          <span>{selected.id === options[0]?.id ? 'Select a dip' : selected.label}</span>
           <span className="change-btn">select <span className={`chev${open ? ' up' : ''}`}>▾</span></span>
         </button>
         {open && (
           <div className="pp-bottom-options">
-            {DIP_OPTIONS.map((opt) => (
+            {options.map((opt) => (
               <label key={opt.id} className={opt.id === current ? 'is-current' : ''}>
                 <input
                   type="radio"
@@ -129,7 +119,7 @@ function QtyStepper({ qty, onDec, onInc }) {
   );
 }
 
-function CurrentFillings({ fillings, onSetQty }) {
+function CurrentFillings({ allFillings, fillings, onSetQty }) {
   const entries = Object.entries(fillings).filter(([, qty]) => qty > 0);
   return (
     <div className="pp-section">
@@ -139,7 +129,7 @@ function CurrentFillings({ fillings, onSetQty }) {
       ) : (
         <div className="pp-fillings-list">
           {entries.map(([id, qty]) => {
-            const item = ALL_FILLINGS.find((f) => f.id === id);
+            const item = allFillings.find((f) => f.id === id);
             if (!item) return null;
             return (
               <div className="pp-filling-row active" key={id}>
@@ -251,6 +241,10 @@ export default function ProductPage() {
     activeProduct, selection, unitPrice, lineTotal,
     isProductPageOpen, closeProduct, toggleTopping, setSize, setQty, setOption,
     setFillingQty, addToCart, goToCheckout,
+    toppings: TOPPINGS, toppingPrice: TOPPING_PRICE, sizeLargeUpcharge: SIZE_LARGE_UPCHARGE,
+    baseOptions: BASE_OPTIONS, sauceOptions: SAUCE_OPTIONS, cheeseOptions: CHEESE_OPTIONS,
+    fillingCategories: FILLING_CATEGORIES, allFillings: ALL_FILLINGS,
+    sauceStripeOptions: SAUCE_STRIPE_OPTIONS, dipOptions: DIP_OPTIONS,
   } = useStore();
 
   const [openCat, setOpenCat] = useState(null);
@@ -319,13 +313,13 @@ export default function ProductPage() {
                 <div className="pp-finish-row">
                   {TOPPINGS.map((t) => (
                     <button
-                      key={t}
+                      key={t.id}
                       type="button"
-                      className={`pp-finish-tile${selection.toppings.includes(t) ? ' selected' : ''}`}
-                      onClick={() => toggleTopping(t)}
+                      className={`pp-finish-tile${selection.toppings.includes(t.label) ? ' selected' : ''}`}
+                      onClick={() => toggleTopping(t.label)}
                     >
-                      <span className="emoji">{TOPPING_EMOJI[t] || '●'}</span>
-                      <span className="fname">{t}</span>
+                      <span className="emoji">{TOPPING_EMOJI[t.label] || '●'}</span>
+                      <span className="fname">{t.label}</span>
                       <span className="fprice">+{TOPPING_PRICE.toFixed(2)} €</span>
                     </button>
                   ))}
@@ -341,9 +335,9 @@ export default function ProductPage() {
                 </div>
               </div>
 
-              <CurrentFillings fillings={selection.fillings} onSetQty={setFillingQty} />
+              <CurrentFillings allFillings={ALL_FILLINGS} fillings={selection.fillings} onSetQty={setFillingQty} />
 
-              <SauceStripeRow current={selection.sauceStripe} onChange={(id) => setOption('sauceStripe', id)} />
+              <SauceStripeRow options={SAUCE_STRIPE_OPTIONS} current={selection.sauceStripe} onChange={(id) => setOption('sauceStripe', id)} />
 
               <div className="pp-section">
                 <p className="pp-heading">More fillings</p>
@@ -361,7 +355,7 @@ export default function ProductPage() {
                 </div>
               </div>
 
-              <DipRow current={selection.dip} onChange={(id) => setOption('dip', id)} />
+              <DipRow options={DIP_OPTIONS} current={selection.dip} onChange={(id) => setOption('dip', id)} />
 
               <ProductDetails />
             </>

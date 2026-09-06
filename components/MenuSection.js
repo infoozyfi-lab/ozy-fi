@@ -1,93 +1,28 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useStore } from '@/context/StoreContext';
 
 const SCROLLSPY_OFFSET = 132;
 
 export default function MenuSection() {
-  const { openProduct } = useStore();
-
-  const [categories, setCategories] = useState([]);
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const {
+    openProduct,
+    categories,
+    products: items,
+    menuLoading: loading,
+    menuError: error,
+  } = useStore();
 
   const tabRefs = useRef({});
   const sectionRefs = useRef({});
   const activeTabRef = useRef(null);
 
   useEffect(() => {
-    async function loadMenu() {
-      try {
-        setLoading(true);
-        setError('');
-
-        const res = await fetch('/api/menu', {
-          cache: 'no-store',
-        });
-
-        if (!res.ok) {
-          throw new Error('Failed to load menu');
-        }
-
-        const data = await res.json();
-
-        const mappedCategories = (data.categories || []).map(
-          (cat) => ({
-            id: cat.id,
-            title: cat.title,
-            sub: cat.sub,
-            image: cat.image,
-            sort_order: cat.sort_order,
-          })
-        );
-
-        const mappedItems = (data.products || [])
-          .filter((item) => item.active !== 0)
-          .map((item) => ({
-            id: item.id,
-            cat: item.category_id,
-            name: item.name,
-            desc: item.description,
-
-            price:
-              item.offer_price !== null
-                ? Number(item.offer_price)
-                : Number(item.price),
-
-            basePrice: Number(item.price),
-
-            offerPrice:
-              item.offer_price !== null
-                ? Number(item.offer_price)
-                : null,
-
-            image: item.image,
-            tag: item.tag,
-
-            toppings: Boolean(item.has_toppings),
-            toppingsEnabled: Boolean(item.has_toppings),
-
-            sort_order: item.sort_order,
-          }));
-
-        setCategories(mappedCategories);
-        setItems(mappedItems);
-
-        if (mappedCategories.length > 0) {
-          activeTabRef.current = mappedCategories[0].id;
-        }
-      } catch (err) {
-        console.error('Menu loading error:', err);
-        setError('Unable to load menu. Please try again.');
-      } finally {
-        setLoading(false);
-      }
+    if (categories.length > 0 && !activeTabRef.current) {
+      activeTabRef.current = categories[0].id;
     }
-
-    loadMenu();
-  }, []);
+  }, [categories]);
 
   const scrollToCat = (id) => {
     const el = sectionRefs.current[id];

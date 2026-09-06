@@ -1,17 +1,16 @@
 'use client';
 
 import { useStore } from '@/context/StoreContext';
-import { DRINKS } from '@/data/menu';
 
 export default function DrinkUpsellModal() {
-  const { isDrinkUpsellOpen, setDrinkUpsellOpen, continueFromUpsell, addDrinkToCart } = useStore();
+  const { isDrinkUpsellOpen, setDrinkUpsellOpen, continueFromUpsell, addDrinkToCart, drinks } = useStore();
 
   const closeToHome = () => {
     setDrinkUpsellOpen(false);
     if (typeof window !== 'undefined') window.history.pushState({}, '', '/');
   };
 
-  const featured = DRINKS.slice(0, 2);
+  const featured = drinks.slice(0, 2);
 
   const pick = (drink) => {
     addDrinkToCart(drink);

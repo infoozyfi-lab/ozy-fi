@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useStore } from '@/context/StoreContext';
-import { DRINKS, DIP_CUPS, SNACKS } from '@/data/menu';
 
 const EMPTY = { name: '', address: '', email: '', phone: '', notes: '' };
 
@@ -12,12 +11,6 @@ function isValidFinnishPhone(raw) {
   return /^(\+358[1-9]\d{6,9}|0[1-9]\d{6,9})$/.test(cleaned);
 }
 const STEP_LABELS = ['Cart', 'Details', 'Payment'];
-
-const EXTRA_SECTIONS = {
-  drinks: { label: 'All drinks', items: DRINKS },
-  dips: { label: 'Dip the edges', items: DIP_CUPS },
-  snacks: { label: 'Snacks', items: SNACKS },
-};
 
 function StepIndicator({ step }) {
   return (
@@ -74,7 +67,15 @@ export default function CheckoutModal() {
   const {
     cart, cartTotal, isCheckoutOpen, closeCheckout, placeOrder,
     removeFromCart, updateCartQty, addDrinkToCart,
+    drinks, dipCups, snacks,
   } = useStore();
+
+  const EXTRA_SECTIONS = {
+    drinks: { label: 'All drinks', items: drinks },
+    dips: { label: 'Dip the edges', items: dipCups },
+    snacks: { label: 'Snacks', items: snacks },
+  };
+
   const [step, setStep] = useState(1);
   const [customer, setCustomer] = useState(EMPTY);
   const [errors, setErrors] = useState({});
@@ -190,7 +191,7 @@ export default function CheckoutModal() {
 
               <p className="pp-label" style={{ marginTop: 24 }}>A cold drink on the side?</p>
               <div className="drink-upsell-row">
-                {DRINKS.map((d) => {
+                {drinks.map((d) => {
                   const line = cart.find((l) => l.drinkId === d.id);
                   return (
                     <button type="button" className="drink-tile" key={d.id} onClick={() => addDrinkToCart(d)}>
