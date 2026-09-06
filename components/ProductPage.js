@@ -142,10 +142,14 @@ function CurrentFillings({ fillings, onSetQty }) {
             const item = ALL_FILLINGS.find((f) => f.id === id);
             if (!item) return null;
             return (
-              <div className="pp-filling-row" key={id}>
-                <span className="fname">
+              <div className="pp-filling-row active" key={id}>
+                <button
+                  type="button"
+                  className="fname"
+                  onClick={() => onSetQty(id, qty + 1)}
+                >
                   {item.label}{qty > 1 ? <span className="fqty-badge"> x {qty}</span> : null}
-                </span>
+                </button>
                 <QtyStepper
                   qty={qty}
                   onDec={() => onSetQty(id, qty - 1)}
@@ -174,7 +178,7 @@ function MoreFillingsCategory({ category, fillings, onSetQty, open, onToggle }) 
           {category.items.map((item) => {
             const qty = fillings[item.id] || 0;
             return (
-              <div className="pp-filling-row" key={item.id}>
+              <div className={`pp-filling-row${qty > 0 ? ' active' : ''}`} key={item.id}>
                 <button
                   type="button"
                   className="fname"
