@@ -4,7 +4,13 @@ import { useState } from 'react';
 import { useStore } from '@/context/StoreContext';
 import { DRINKS, DIP_CUPS, SNACKS } from '@/data/menu';
 
-const EMPTY = { name: '', email: '', phone: '', notes: '' };
+const EMPTY = { name: '', address: '', email: '', phone: '', notes: '' };
+
+// Accepts +358401234567, 0401234567, +358 40 123 4567, 040-123-4567, etc.
+function isValidFinnishPhone(raw) {
+  const cleaned = raw.replace(/[\s-]/g, '');
+  return /^(\+358[1-9]\d{6,9}|0[1-9]\d{6,9})$/.test(cleaned);
+}
 const STEP_LABELS = ['Cart', 'Details', 'Payment'];
 
 const EXTRA_SECTIONS = {
@@ -98,11 +104,12 @@ export default function CheckoutModal() {
   const validateDetails = () => {
     const next = {};
     if (!customer.name.trim()) next.name = 'Please enter your full name.';
+    if (!customer.address.trim()) next.address = 'Please enter your delivery address.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email.trim())) {
       next.email = 'Please enter a valid email address.';
     }
-    if (customer.phone.replace(/\D/g, '').length < 6) {
-      next.phone = 'Please enter a valid phone number.';
+    if (!isValidFinnishPhone(customer.phone.trim())) {
+      next.phone = 'Please enter a valid Finnish phone number (e.g. 040 123 4567).';
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -219,14 +226,19 @@ export default function CheckoutModal() {
                 <input type="text" value={customer.name} onChange={onField('name')} />
                 {errors.name && <span className="field-error">{errors.name}</span>}
               </label>
+              <label className={errors.address ? 'has-error' : ''}>
+                Delivery address
+                <input type="text" value={customer.address} onChange={onField('address')} placeholder="Street, house number, city" />
+                {errors.address && <span className="field-error">{errors.address}</span>}
+              </label>
               <label className={errors.email ? 'has-error' : ''}>
                 Email address
-                <input type="email" value={customer.email} onChange={onField('email')} />
+                <input type="email" value={customer.email} onChange={onField('email')} placeholder="you@example.com" />
                 {errors.email && <span className="field-error">{errors.email}</span>}
               </label>
               <label className={errors.phone ? 'has-error' : ''}>
                 Phone
-                <input type="tel" value={customer.phone} onChange={onField('phone')} />
+                <input type="tel" value={customer.phone} onChange={onField('phone')} placeholder="040 123 4567" />
                 {errors.phone && <span className="field-error">{errors.phone}</span>}
               </label>
               <label>
