@@ -135,7 +135,7 @@ export default function CheckoutModal() {
   return (
     <div className={`checkout-page${isCheckoutOpen ? ' open' : ''}`}>
       <div className="pp-topbar">
-        <button className="pp-back" type="button" aria-label="Close" onClick={close}>←</button>
+        <button className="pp-back" type="button" aria-label={step > 1 ? 'Back' : 'Close'} onClick={() => (step > 1 ? setStep(step - 1) : close())}>←</button>
         <span className="pp-topbar-title">Your order</span>
         <span style={{ width: 28 }} />
       </div>
@@ -278,14 +278,12 @@ export default function CheckoutModal() {
 
       {step === 2 && (
         <div className="checkout-footer">
-          <button type="button" className="btn-secondary" onClick={() => setStep(1)}>Back</button>
           <button type="submit" form="checkoutForm" className="btn-primary" style={{ flex: 1 }}>Continue</button>
         </div>
       )}
 
       {step === 3 && (
         <div className="checkout-footer">
-          <button type="button" className="btn-secondary" onClick={() => setStep(2)} disabled={submitting}>Back</button>
           <button
             type="submit"
             form="paymentForm"
