@@ -160,6 +160,7 @@ async function getMenu(request, env) {
     groups,
     options,
     addons,
+    settingsRows,
   ] = await Promise.all([
     env.DB.prepare(
       'SELECT * FROM categories ORDER BY sort_order'
@@ -180,6 +181,14 @@ async function getMenu(request, env) {
     env.DB.prepare(
       'SELECT * FROM addons WHERE active = 1 ORDER BY sort_order'
     ).all(),
+
+    // Only pricing constants live in this table (never secrets — the
+    // admin login is checked against Cloudflare Secrets, not this
+    // table), so it's safe to expose here for the storefront to price
+    // orders (e.g. the large-size upcharge).
+    env.DB.prepare(
+      'SELECT key, value FROM admin_settings'
+    ).all(),
   ]);
 
   const optionsByGroup = {};
@@ -193,11 +202,18 @@ async function getMenu(request, env) {
     options: optionsByGroup[g.id] || [],
   }));
 
+  const settings = {};
+
+  for (const row of settingsRows.results) {
+    settings[row.key] = row.value;
+  }
+
   return json({
     categories: categories.results,
     products: products.results,
     optionGroups,
     addons: addons.results,
+    settings,
   });
 }
 
