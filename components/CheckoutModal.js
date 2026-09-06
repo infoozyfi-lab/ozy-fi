@@ -79,6 +79,7 @@ export default function CheckoutModal() {
   const [customer, setCustomer] = useState(EMPTY);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [orderError, setOrderError] = useState('');
   const [openSection, setOpenSection] = useState(null);
   const [justAddedId, setJustAddedId] = useState(null);
 
@@ -94,6 +95,7 @@ export default function CheckoutModal() {
     setStep(1);
     setOpenSection(null);
     setErrors({});
+    setOrderError('');
   };
 
   const onField = (key) => (e) => {
@@ -120,16 +122,20 @@ export default function CheckoutModal() {
     if (validateDetails()) setStep(3);
   };
 
-  const submitOrder = (e) => {
+  const submitOrder = async (e) => {
     e.preventDefault();
     if (submitting) return;
     setSubmitting(true);
-    window.setTimeout(() => {
-      placeOrder(customer);
-      setSubmitting(false);
+    setOrderError('');
+    try {
+      await placeOrder(customer);
       setStep(1);
       setCustomer(EMPTY);
-    }, 900);
+    } catch (err) {
+      setOrderError(err.message || 'Could not place order. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -263,6 +269,8 @@ export default function CheckoutModal() {
                   <input type="radio" name="payment" value="cod" checked readOnly />
                 </label>
               </div>
+
+              {orderError && <p className="field-error" style={{ marginTop: 12 }}>{orderError}</p>}
             </form>
           )}
         </div>
