@@ -31,7 +31,7 @@ function slugify(text) {
 function emptySlot(kind) {
   return kind === 'fixed'
     ? { kind: 'fixed', label: '', productId: '', qty: 1 }
-    : { kind: 'choice', label: '', categoryId: '', qty: 1 };
+    : { kind: 'choice', label: '', categoryIds: [], qty: 1 };
 }
 
 export default function BundleManager({ token, categories, products, onChanged }) {
@@ -65,6 +65,13 @@ export default function BundleManager({ token, categories, products, onChanged }
   const startEdit = (row) => {
     let slots = [];
     try { slots = JSON.parse(row.slots || '[]'); } catch { slots = []; }
+    // Older bundles stored a single `categoryId` per choice slot — migrate
+    // it to the new `categoryIds` array so multi-category picking works.
+    slots = slots.map((s) => (
+      s.kind === 'choice'
+        ? { ...s, categoryIds: s.categoryIds || (s.categoryId ? [s.categoryId] : []) }
+        : s
+    ));
     setForm({
       id: row.id, title: row.title || '', description: row.description || '',
       image: row.image || '', price: String(row.price ?? ''), active: Boolean(row.active),
@@ -85,6 +92,17 @@ export default function BundleManager({ token, categories, products, onChanged }
   const setSlotField = (idx, key, value) => setForm((f) => ({
     ...f,
     slots: f.slots.map((s, i) => (i === idx ? { ...s, [key]: value } : s)),
+  }));
+  const toggleSlotCategory = (idx, catId) => setForm((f) => ({
+    ...f,
+    slots: f.slots.map((s, i) => {
+      if (i !== idx) return s;
+      const current = s.categoryIds || [];
+      const next = current.includes(catId)
+        ? current.filter((c) => c !== catId)
+        : [...current, catId];
+      return { ...s, categoryIds: next };
+    }),
   }));
 
   const uploadImage = async (file) => {
@@ -119,7 +137,7 @@ export default function BundleManager({ token, categories, products, onChanged }
         price: form.price === '' ? 0 : Number(form.price),
         active: form.active ? 1 : 0,
         sort_order: Number(form.sort_order) || 0,
-        slots: JSON.stringify(form.slots),
+        slots: JSON.stringify(form.slots.map((s) => ({ ...s, qty: Number(s.qty) >= 1 ? Number(s.qty) : 1 }))),
       };
       let res;
       if (editingId === 'new') {
@@ -220,12 +238,23 @@ export default function BundleManager({ token, categories, products, onChanged }
                 <input style={inputStyle} value={slot.label} onChange={(e) => setSlotField(idx, 'label', e.target.value)} placeholder={slot.kind === 'fixed' ? 'Lemonade 1.5L' : 'Choose any Pizza'} />
               </label>
               {slot.kind === 'choice' ? (
-                <label>
-                  Category
-                  <select style={inputStyle} value={slot.categoryId || ''} onChange={(e) => setSlotField(idx, 'categoryId', e.target.value)}>
-                    <option value="">Select…</option>
-                    {(categories || []).map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
-                  </select>
+                <label style={{ gridColumn: '1 / -1' }}>
+                  Categories (customer can pick from any of these — tick all that apply)
+                  <div style={{
+                    display: 'flex', flexWrap: 'wrap', gap: '8px 16px', marginTop: 6,
+                    padding: 10, border: '1px solid var(--line)', borderRadius: 8, background: 'var(--bg)',
+                  }}>
+                    {(categories || []).map((c) => (
+                      <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 400 }}>
+                        <input
+                          type="checkbox"
+                          checked={(slot.categoryIds || []).includes(c.id)}
+                          onChange={() => toggleSlotCategory(idx, c.id)}
+                        />
+                        {c.title}
+                      </label>
+                    ))}
+                  </div>
                 </label>
               ) : (
                 <label>
@@ -238,7 +267,20 @@ export default function BundleManager({ token, categories, products, onChanged }
               )}
               <label>
                 Quantity
-                <input style={inputStyle} type="number" min="1" value={slot.qty} onChange={(e) => setSlotField(idx, 'qty', Number(e.target.value) || 1)} />
+                <input
+                  style={inputStyle}
+                  type="number"
+                  min="1"
+                  value={slot.qty}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    setSlotField(idx, 'qty', raw === '' ? '' : Number(raw));
+                  }}
+                  onBlur={(e) => {
+                    const n = Number(e.target.value);
+                    setSlotField(idx, 'qty', n >= 1 ? n : 1);
+                  }}
+                />
               </label>
               <div style={{ alignSelf: 'end' }}>
                 <button type="button" style={btnDanger} onClick={() => removeSlot(idx)}>Remove slot</button>
