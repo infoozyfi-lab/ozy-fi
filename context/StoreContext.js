@@ -170,6 +170,25 @@ export function StoreProvider({ children }) {
     loadMenu();
   }, []);
 
+  // Make the phone/browser back button close whatever panel is open
+  // (product page, cart, checkout, drink upsell, confirmation) instead of
+  // leaving the site. Every navigation in this app pushes a fake URL via
+  // pushState for a nicer address bar, but none of those are real Next.js
+  // routes — so without this listener, pressing back does nothing useful
+  // and a second press exits the site entirely.
+  useEffect(() => {
+    const handlePopState = () => {
+      setProductPageOpen(false);
+      setCartOpen(false);
+      setCheckoutOpen(false);
+      setDrinkUpsellOpen(false);
+      setConfirmedOrder(null);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   const fillingsTotal = useCallback(
     (fillings) =>
       Object.entries(fillings || {}).reduce((sum, [id, qty]) => {
