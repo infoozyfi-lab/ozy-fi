@@ -14,11 +14,11 @@ export default function BundleModal() {
     isBundleModalOpen,
     closeBundleModal,
     removeBundleSlotItem,
+    addBundleSlotItem,
     bundleReady,
     bundleTotal,
     addBundleToCart,
     products,
-    openProduct,
   } = useStore();
 
   const [pickerSlotIndex, setPickerSlotIndex] = useState(null);
@@ -35,6 +35,16 @@ export default function BundleModal() {
     : [];
   const pickerProducts = pickerSlot ? products.filter((p) => pickerCategoryIds.includes(p.cat)) : [];
 
+  const pickItem = (product) => {
+    if (pickerSlotIndex == null || !pickerSlot) return;
+    addBundleSlotItem(pickerSlotIndex, product);
+    // Auto-return to the bundle view once this slot's quota is filled;
+    // otherwise stay here so the customer can keep picking.
+    if (pickerSlot.filled.length + 1 >= (pickerSlot.qty || 1)) {
+      setPickerSlotIndex(null);
+    }
+  };
+
   return (
     <div className={`bundle-modal${isBundleModalOpen ? ' open' : ''}`}>
       <div className="pp-topbar">
@@ -49,26 +59,31 @@ export default function BundleModal() {
             <button type="button" className="change-btn" onClick={() => setPickerSlotIndex(null)}>
               ← back to bundle
             </button>
-            <p className="pp-heading">{pickerSlot.label || 'Choose an item'}</p>
-            {pickerProducts.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                className="menu-item"
-                onClick={() => {
-                  setPickerSlotIndex(null);
-                  openProduct(p, pickerSlotIndex);
-                }}
-              >
-                <span className="menu-item-info">
-                  <span className="name-row"><h3>{p.name}</h3></span>
-                  <span className="price">{p.price.toFixed(2)} €</span>
-                </span>
-                <span className="menu-item-thumb">
-                  <img src={p.image} alt={p.name} loading="lazy" />
-                </span>
-              </button>
-            ))}
+            <p className="pp-heading">
+              {pickerSlot.label || 'Choose an item'} ({pickerSlot.filled.length}/{pickerSlot.qty || 1})
+            </p>
+            {pickerProducts.map((p) => {
+              const timesPicked = pickerSlot.filled.filter((f) => f.productId === p.id).length;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={`menu-item${timesPicked > 0 ? ' active' : ''}`}
+                  onClick={() => pickItem(p)}
+                >
+                  <span className="menu-item-info">
+                    <span className="name-row">
+                      <h3>{p.name}</h3>
+                      {timesPicked > 0 && <span className="tag">✓ added{timesPicked > 1 ? ` ×${timesPicked}` : ''}</span>}
+                    </span>
+                    <span className="price">{p.price.toFixed(2)} €</span>
+                  </span>
+                  <span className="menu-item-thumb">
+                    <img src={p.image} alt={p.name} loading="lazy" />
+                  </span>
+                </button>
+              );
+            })}
           </div>
         ) : (
           <>
