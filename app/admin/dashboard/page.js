@@ -514,7 +514,7 @@ function MenuTabs({ token }) {
     { key: 'id', label: 'ID (slug)', type: 'text', required: true, placeholder: 'e.g. pizzat' },
     { key: 'title', label: 'Title', type: 'text', required: true },
     { key: 'sub', label: 'Subtitle', type: 'text' },
-    { key: 'image', label: 'Image URL', type: 'text' },
+    { key: 'image', label: 'Image', type: 'image' },
     { key: 'sort_order', label: 'Sort order', type: 'number', default: 0 },
   ];
 
@@ -549,7 +549,7 @@ function MenuTabs({ token }) {
     { key: 'description', label: 'Description', type: 'textarea' },
     { key: 'price', label: 'Price (€)', type: 'number', step: '0.1', required: true },
     { key: 'offer_price', label: 'Offer price (€, optional)', type: 'number', step: '0.1' },
-    { key: 'image', label: 'Image URL', type: 'text' },
+    { key: 'image', label: 'Image', type: 'image' },
     { key: 'tag', label: 'Tag (optional, e.g. Spicy)', type: 'text' },
     { key: 'has_toppings', label: 'Customizable (pizza-style toppings)', type: 'checkbox' },
     { key: 'sort_order', label: 'Sort order', type: 'number', default: 0 },
@@ -561,7 +561,7 @@ function MenuTabs({ token }) {
     { key: 'type', label: 'Type', type: 'select', required: true, options: [{ value: 'drink', label: 'Drink' }, { value: 'dip', label: 'Dip' }, { value: 'snack', label: 'Snack' }] },
     { key: 'name', label: 'Name', type: 'text', required: true },
     { key: 'price', label: 'Price (€)', type: 'number', step: '0.1', required: true },
-    { key: 'image', label: 'Image URL', type: 'text' },
+    { key: 'image', label: 'Image', type: 'image' },
     { key: 'active', label: 'Active', type: 'checkbox', default: true },
     { key: 'sort_order', label: 'Sort order', type: 'number', default: 0 },
   ];
