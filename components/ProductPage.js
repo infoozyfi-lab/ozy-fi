@@ -253,6 +253,8 @@ export default function ProductPage() {
     return <div className="product-page" aria-hidden="true" />;
   }
 
+  const isBundleSlot = selection.bundleSlotIndex != null;
+
   const [intPart, decPart] = unitPrice.toFixed(2).split('.');
 
   return (
@@ -364,13 +366,19 @@ export default function ProductPage() {
       </div>
 
       <div className="pp-footer">
-        <div className="pp-qty">
-          <button type="button" onClick={() => setQty((q) => q - 1)}>−</button>
-          <span>{selection.qty}</span>
-          <button type="button" onClick={() => setQty((q) => q + 1)}>+</button>
-        </div>
+        {!isBundleSlot && (
+          <div className="pp-qty">
+            <button type="button" onClick={() => setQty((q) => q - 1)}>−</button>
+            <span>{selection.qty}</span>
+            <button type="button" onClick={() => setQty((q) => q + 1)}>+</button>
+          </div>
+        )}
         <button className="btn-primary pp-add-btn" type="button" onClick={addToCart}>
-          Add to order — {money(lineTotal)}
+          {isBundleSlot
+            ? unitPrice > activeProduct.basePrice
+              ? `Add to bundle — +${money(unitPrice - activeProduct.basePrice)}`
+              : 'Add to bundle'
+            : `Add to order — ${money(lineTotal)}`}
         </button>
       </div>
     </div>
