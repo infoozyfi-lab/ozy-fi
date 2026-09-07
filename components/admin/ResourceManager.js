@@ -60,6 +60,32 @@ function rowToForm(row, fields) {
   return out;
 }
 
+// Downscales/re-encodes an image in the browser before it ever leaves the
+// phone, so uploads are small and fast on mobile data. GIFs are left alone
+// (canvas re-encoding would kill animation).
+async function compressImage(file, maxDim = 1600, quality = 0.82) {
+  if (!file.type || !file.type.startsWith('image/') || file.type === 'image/gif') {
+    return file;
+  }
+  try {
+    const bitmap = await createImageBitmap(file);
+    let { width, height } = bitmap;
+    if (width > maxDim || height > maxDim) {
+      const scale = maxDim / Math.max(width, height);
+      width = Math.round(width * scale);
+      height = Math.round(height * scale);
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+    return blob || file;
+  } catch {
+    return file;
+  }
+}
+
 function formToBody(form, fields) {
   const body = {};
   fields.forEach((f) => {
@@ -82,6 +108,7 @@ export default function ResourceManager({ token, table, title, fields, displayCo
   const [editingId, setEditingId] = useState(null); // null = not editing, 'new' = creating
   const [form, setForm] = useState(emptyForm(fields));
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState({});
 
   const authHeaders = {
     'Content-Type': 'application/json',
@@ -121,6 +148,28 @@ export default function ResourceManager({ token, table, title, fields, displayCo
   };
 
   const setField = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+
+  const uploadImage = async (key, file) => {
+    setUploading((u) => ({ ...u, [key]: true }));
+    setError('');
+    try {
+      const processed = await compressImage(file);
+      const body = new FormData();
+      body.append('file', processed, file.name || 'upload.jpg');
+      const res = await fetch('/api/admin/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Upload failed.');
+      setField(key, data.url);
+    } catch (err) {
+      setError(err.message || 'Upload failed.');
+    } finally {
+      setUploading((u) => ({ ...u, [key]: false }));
+    }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -232,6 +281,43 @@ export default function ResourceManager({ token, table, title, fields, displayCo
                       onChange={(e) => setField(f.key, e.target.checked)}
                     />
                     {f.label}
+                  </label>
+                );
+              }
+              if (f.type === 'image') {
+                return (
+                  <label key={f.key} style={{ gridColumn: '1 / -1' }}>
+                    {f.label}
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
+                      {form[f.key] ? (
+                        <img
+                          src={form[f.key]}
+                          alt=""
+                          style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--line)', flexShrink: 0 }}
+                        />
+                      ) : null}
+                      <input
+                        style={{ ...inputStyle, flex: 1, minWidth: 160 }}
+                        type="text"
+                        placeholder="Upload below, or paste an image URL"
+                        value={form[f.key]}
+                        onChange={(e) => setField(f.key, e.target.value)}
+                      />
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ marginTop: 8, color: 'var(--cream)' }}
+                      disabled={!!uploading[f.key]}
+                      onChange={(e) => {
+                        const file = e.target.files && e.target.files[0];
+                        if (file) uploadImage(f.key, file);
+                        e.target.value = '';
+                      }}
+                    />
+                    {uploading[f.key] && (
+                      <p style={{ fontSize: 12, color: 'var(--muted)', margin: '4px 0 0' }}>Uploading…</p>
+                    )}
                   </label>
                 );
               }
