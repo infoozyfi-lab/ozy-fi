@@ -3,12 +3,14 @@
 import { StoreProvider } from '@/context/StoreContext';
 import Header from '@/components/Header';
 import Hero from '@/components/Hero';
+import FeaturedCard from '@/components/FeaturedCard';
 import Story from '@/components/Story';
 import MenuSection from '@/components/MenuSection';
 import Visit from '@/components/Visit';
 import CtaStrip from '@/components/CtaStrip';
 import Footer from '@/components/Footer';
 import ProductPage from '@/components/ProductPage';
+import BundleModal from '@/components/BundleModal';
 import DrinkUpsellModal from '@/components/DrinkUpsellModal';
 import CheckoutModal from '@/components/CheckoutModal';
 import ConfirmModal from '@/components/ConfirmModal';
@@ -20,6 +22,7 @@ export default function Home() {
       <div id="top" />
       <Header />
       <Hero />
+      <FeaturedCard />
       <Story />
       <MenuSection />
       <Visit />
@@ -27,6 +30,7 @@ export default function Home() {
       <Footer />
 
       <ProductPage />
+      <BundleModal />
       <DrinkUpsellModal />
       <CheckoutModal />
       <ConfirmModal />
