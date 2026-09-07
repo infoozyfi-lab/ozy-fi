@@ -250,7 +250,7 @@ async function getMenu(request, env, ctx) {
       // purgeMenuCache); short browser-side max-age so a customer's own
       // tab still re-checks periodically rather than holding a full-hour
       // stale copy locally.
-      'Cache-Control': 'public, max-age=60, s-maxage=3600',
+      'Cache-Control': 'public, max-age=60, s-maxage=90',
     },
   });
 
