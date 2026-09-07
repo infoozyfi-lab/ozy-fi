@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 // still serves this route on production; this copy only runs on the
 // SSR preview branch/deployment until it's verified and swapped in.
 export async function GET(request) {
-  const { env, ctx } = getCloudflareContext();
+  const { env, ctx } = await getCloudflareContext({ async: true });
 
   const cache = caches.default;
   const cacheKey = new Request(request.url, { method: 'GET' });
