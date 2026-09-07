@@ -1,9 +1,10 @@
 {
   "name": "ozyfi",
-  "compatibility_date": "2025-01-01",
-  "main": "./worker/index.js",
+  "compatibility_date": "2025-05-05",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": ".open-next/worker.js",
   "assets": {
-    "directory": "./out",
+    "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
   "d1_databases": [
