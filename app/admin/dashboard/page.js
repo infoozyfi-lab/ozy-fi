@@ -446,6 +446,21 @@ function SettingsTab({ token }) {
     setSaved(false);
   };
 
+  let popularIds = [];
+  try { popularIds = JSON.parse(values.popular_product_ids || '[]'); } catch { popularIds = []; }
+
+  const togglePopular = (id) => {
+    const has = popularIds.includes(id);
+    let next;
+    if (has) {
+      next = popularIds.filter((p) => p !== id);
+    } else {
+      if (popularIds.length >= 3) return; // cap at 3 — matches the homepage grid
+      next = [...popularIds, id];
+    }
+    setField('popular_product_ids', JSON.stringify(next));
+  };
+
   const uploadBannerImage = async (file) => {
     setUploading(true);
     setUploadError('');
@@ -549,6 +564,26 @@ function SettingsTab({ token }) {
               </label>
             </>
           )}
+        </div>
+
+        <h3 style={{ marginBottom: 4 }}>Popular right now</h3>
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: -2, marginBottom: 14 }}>
+          Shown on the homepage, right below the category shortcuts. Pick up to 3 products.
+        </p>
+        <div style={{
+          display: 'flex', flexWrap: 'wrap', gap: '8px 16px', marginBottom: 24,
+          padding: 12, border: '1px solid var(--line)', borderRadius: 8, background: 'var(--bg-alt)',
+        }}>
+          {products.map((p) => {
+            const checked = popularIds.includes(p.id);
+            const disabled = !checked && popularIds.length >= 3;
+            return (
+              <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, opacity: disabled ? 0.5 : 1 }}>
+                <input type="checkbox" checked={checked} disabled={disabled} onChange={() => togglePopular(p.id)} />
+                {p.name}
+              </label>
+            );
+          })}
         </div>
 
         <h3 style={{ marginBottom: 4 }}>Restaurant info</h3>
