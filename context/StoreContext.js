@@ -47,6 +47,15 @@ export function StoreProvider({ children }) {
   const [dipCups, setDipCups] = useState([]);
   const [snacks, setSnacks] = useState([]);
 
+  // ---- Bundles/combos (e.g. "3 Pizza + 1.5L Lemonade — €45"). ----
+  const [bundles, setBundles] = useState([]);
+  const [featured, setFeatured] = useState({ type: 'none' });
+
+  // ---- Bundle-building flow (filling a bundle's slots one item at a time). ----
+  const [activeBundle, setActiveBundle] = useState(null);
+  const [bundleSlots, setBundleSlots] = useState([]); // [{ ...slotDef, filled: [{ key, name, details, extra }] }]
+  const [isBundleModalOpen, setBundleModalOpen] = useState(false);
+
   const allFillings = useMemo(
     () => fillingCategories.flatMap((c) => c.items),
     [fillingCategories]
@@ -157,8 +166,35 @@ export function StoreProvider({ children }) {
             .map((a) => ({ id: a.id, name: a.name, price: Number(a.price) || 0, image: a.image }))
         );
 
+        setBundles(
+          (data.bundles || []).map((b) => {
+            let slots = [];
+            try {
+              slots = JSON.parse(b.slots || '[]');
+            } catch {
+              slots = [];
+            }
+            return {
+              id: b.id,
+              title: b.title,
+              description: b.description,
+              image: b.image,
+              price: Number(b.price) || 0,
+              slots,
+            };
+          })
+        );
+
         const settings = data.settings || {};
         setSizeLargeUpcharge(Number(settings.size_large_upcharge) || 0);
+        setFeatured({
+          type: settings.featured_type || 'none', // 'banner' | 'product' | 'bundle'
+          bannerImage: settings.featured_banner_image || '',
+          bannerTitle: settings.featured_banner_title || '',
+          bannerPrice: settings.featured_banner_price || '',
+          productId: settings.featured_product_id || '',
+          bundleId: settings.featured_bundle_id || '',
+        });
       } catch (err) {
         console.error('Menu loading error:', err);
         setMenuError('Unable to load menu. Please try again.');
@@ -183,6 +219,9 @@ export function StoreProvider({ children }) {
       setCheckoutOpen(false);
       setDrinkUpsellOpen(false);
       setConfirmedOrder(null);
+      setBundleModalOpen(false);
+      setActiveBundle(null);
+      setBundleSlots([]);
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -219,8 +258,10 @@ export function StoreProvider({ children }) {
     [sizeLargeUpcharge, toppings, baseOptions, sauceOptions, cheeseOptions, sauceStripeOptions, dipOptions, fillingsTotal]
   );
 
+  // bundleSlotIndex: when set, this ProductPage visit is filling one item of
+  // a bundle slot (see openBundle below) instead of a normal cart add.
   const openProduct = useCallback(
-    (item) => {
+    (item, bundleSlotIndex = null) => {
       setActiveProduct(item);
       setSelection({
         basePrice: item.price,
@@ -234,17 +275,23 @@ export function StoreProvider({ children }) {
         fillings: {},
         sauceStripe: sauceStripeOptions[0]?.id,
         dip: dipOptions[0]?.id,
+        bundleSlotIndex,
       });
       setProductPageOpen(true);
-      setUrl(`/product/${slugify(item.name)}`);
+      if (bundleSlotIndex == null) setUrl(`/product/${slugify(item.name)}`);
     },
     [baseOptions, sauceOptions, cheeseOptions, sauceStripeOptions, dipOptions]
   );
 
   const closeProduct = useCallback(() => {
     setProductPageOpen(false);
+    if (selection?.bundleSlotIndex != null) {
+      // Was filling a bundle slot — go back to the bundle modal, not home.
+      setBundleModalOpen(true);
+      return;
+    }
     setUrl('/');
-  }, []);
+  }, [selection]);
 
   const toggleTopping = useCallback((topping) => {
     setSelection((s) => {
@@ -299,6 +346,31 @@ export function StoreProvider({ children }) {
       const dipOpt = dipOptions.find((o) => o.id === selection.dip);
       if (dipOpt && dipOpt.id !== dipOptions[0]?.id) details.push(dipOpt.label);
     }
+
+    if (selection.bundleSlotIndex != null) {
+      // Filling a bundle slot: only the customization *extra* (over the
+      // product's base price) adds to the bundle total — the base price
+      // is already covered by the bundle's flat price. Qty isn't used
+      // here; each bundle slot unit is added one at a time.
+      const extra = unitPrice - activeProduct.basePrice;
+      setBundleSlots((slots) => {
+        const next = [...slots];
+        const slot = next[selection.bundleSlotIndex];
+        if (!slot) return slots;
+        next[selection.bundleSlotIndex] = {
+          ...slot,
+          filled: [
+            ...slot.filled,
+            { key: `${activeProduct.id}-${Date.now()}`, name: activeProduct.name, details, extra },
+          ],
+        };
+        return next;
+      });
+      setProductPageOpen(false);
+      setBundleModalOpen(true);
+      return;
+    }
+
     setCart((c) => [
       ...c,
       {
@@ -413,6 +485,88 @@ export function StoreProvider({ children }) {
     setUrl('/order-confirmed');
   }, [cart, cartTotal]);
 
+  /* ---- Bundle building (e.g. "3 Pizza + 1.5L Lemonade — €45"). ---- */
+
+  const openBundle = useCallback(
+    (bundle) => {
+      const slots = (bundle.slots || []).map((s) => {
+        if (s.kind === 'fixed') {
+          // Fixed slots are included as-is — no customer choice needed,
+          // so they're pre-filled immediately.
+          const product = products.find((p) => p.id === s.productId);
+          return {
+            ...s,
+            filled: Array.from({ length: s.qty || 1 }, (_, i) => ({
+              key: `${s.productId}-fixed-${i}`,
+              name: product?.name || s.label || s.productId,
+              details: [],
+              extra: 0,
+            })),
+          };
+        }
+        return { ...s, filled: [] };
+      });
+      setActiveBundle(bundle);
+      setBundleSlots(slots);
+      setBundleModalOpen(true);
+      setUrl('/bundle');
+    },
+    [products]
+  );
+
+  const closeBundleModal = useCallback(() => {
+    setBundleModalOpen(false);
+    setActiveBundle(null);
+    setBundleSlots([]);
+    setUrl('/');
+  }, []);
+
+  const removeBundleSlotItem = useCallback((slotIndex, itemKey) => {
+    setBundleSlots((slots) => {
+      const next = [...slots];
+      const slot = next[slotIndex];
+      if (!slot) return slots;
+      next[slotIndex] = { ...slot, filled: slot.filled.filter((it) => it.key !== itemKey) };
+      return next;
+    });
+  }, []);
+
+  const bundleReady = useMemo(
+    () => bundleSlots.length > 0 && bundleSlots.every((s) => s.filled.length >= (s.qty || 1)),
+    [bundleSlots]
+  );
+
+  const bundleExtrasTotal = useMemo(
+    () => bundleSlots.reduce((sum, s) => sum + s.filled.reduce((a, it) => a + (it.extra || 0), 0), 0),
+    [bundleSlots]
+  );
+
+  const bundleTotal = useMemo(
+    () => (activeBundle ? activeBundle.price + bundleExtrasTotal : 0),
+    [activeBundle, bundleExtrasTotal]
+  );
+
+  const addBundleToCart = useCallback(() => {
+    if (!activeBundle || !bundleReady) return;
+    const details = bundleSlots.flatMap((s) =>
+      s.filled.map((it) => (it.details.length ? `${it.name} (${it.details.join(', ')})` : it.name))
+    );
+    setCart((c) => [
+      ...c,
+      {
+        key: `bundle-${activeBundle.id}-${Date.now()}`,
+        productId: activeBundle.id,
+        name: activeBundle.title,
+        image: activeBundle.image,
+        details,
+        qty: 1,
+        unitPrice: bundleTotal,
+        lineTotal: bundleTotal,
+      },
+    ]);
+    closeBundleModal();
+  }, [activeBundle, bundleReady, bundleSlots, bundleTotal, closeBundleModal]);
+
   const closeConfirm = useCallback(() => {
     setConfirmedOrder(null);
     setUrl('/');
@@ -469,6 +623,20 @@ export function StoreProvider({ children }) {
     drinks,
     dipCups,
     snacks,
+
+    // Bundles/combos + featured-card settings.
+    bundles,
+    featured,
+    activeBundle,
+    bundleSlots,
+    isBundleModalOpen,
+    openBundle,
+    closeBundleModal,
+    removeBundleSlotItem,
+    bundleReady,
+    bundleExtrasTotal,
+    bundleTotal,
+    addBundleToCart,
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
