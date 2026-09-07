@@ -1,9 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+const QUICK_CATEGORIES = [
+  { id: 'pizzat', label: 'Pizza', icon: '🍕' },
+  { id: 'kebab', label: 'Kebab', icon: '🥙' },
+  { id: 'burgerit', label: 'Burgers', icon: '🍔' },
+];
 
 export default function Hero() {
-  const [orderMode, setOrderMode] = useState('delivery');
+  const goToCategory = (id) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   return (
     <section className="hero">
@@ -12,22 +18,30 @@ export default function Hero() {
         <h1 className="hero-title display">
           Start your <em>order</em>
         </h1>
-        <p className="hero-sub">
-          Fresh dough, made to order, always hot. Pick how you&apos;d like it, then browse the full menu.
+        <p className="hero-meta">
+          <span className="stars">★ 4.8</span>
+          <span>· 320+ reviews</span>
+          <span className="sep">|</span>
+          <span className="open">● Open now</span>
+          <span className="sep">|</span>
+          <span>25-35 min</span>
         </p>
-        <div className="order-box">
-          <div className="order-tabs">
-            {['delivery', 'pickup', 'eatin'].map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                className={`order-tab${orderMode === mode ? ' active' : ''}`}
-                onClick={() => setOrderMode(mode)}
-              >
-                {mode === 'delivery' ? 'Delivery' : mode === 'pickup' ? 'Pickup' : 'Eat in'}
-              </button>
-            ))}
-          </div>
+        <p className="hero-sub">
+          Fresh dough, made to order, always hot. Pick a category or browse the full menu —
+          delivery or pickup at checkout.
+        </p>
+        <div className="hero-cats">
+          {QUICK_CATEGORIES.map((cat) => (
+            <button
+              key={cat.id}
+              type="button"
+              className="hero-cat"
+              onClick={() => goToCategory(cat.id)}
+            >
+              <div className="hero-cat-icon">{cat.icon}</div>
+              <div className="hero-cat-label">{cat.label}</div>
+            </button>
+          ))}
         </div>
       </div>
     </section>

@@ -179,6 +179,7 @@ export default function MenuSection() {
         {categories.map((cat) => (
           <div
             key={cat.id}
+            id={cat.id}
             className="menu-category"
             ref={(el) =>
               (sectionRefs.current[cat.id] = el)
