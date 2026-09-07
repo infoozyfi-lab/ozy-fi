@@ -32,6 +32,21 @@ function slugify(text) {
     .replace(/(^-|-$)/g, '');
 }
 
+// Clears the edge-cached /api/menu response for this datacenter so admin
+// edits show up on the next request instead of waiting out the cache TTL.
+// Note: Cloudflare's Cache API is per-datacenter, not global — this makes
+// changes appear instantly for anyone routed through the same (or nearby)
+// edge node as the admin, which covers the common case for a single-city
+// restaurant; a visitor hitting a distant datacenter could still see the
+// old menu for up to the remaining TTL.
+async function purgeMenuCache(request, ctx) {
+  const origin = new URL(request.url).origin;
+  const cacheKey = new Request(`${origin}/api/menu`, { method: 'GET' });
+  const del = caches.default.delete(cacheKey);
+  if (ctx && ctx.waitUntil) ctx.waitUntil(del);
+  else await del;
+}
+
 /* -------------------------------------------------------
    ADMIN AUTH
 ------------------------------------------------------- */
@@ -153,7 +168,18 @@ function requireAdmin(handler) {
    PUBLIC: MENU
 ------------------------------------------------------- */
 
-async function getMenu(request, env) {
+async function getMenu(request, env, ctx) {
+  // Edge-cache the menu for a short window so most visitors get an
+  // instant response instead of a D1 round-trip on every page load —
+  // this is the main thing slowing down "browse → order" for customers.
+  // Cloudflare's per-datacenter cache; a short TTL keeps admin edits
+  // showing up quickly without needing a purge mechanism.
+  const cache = caches.default;
+  const cacheKey = new Request(request.url, { method: 'GET' });
+
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+
   const [
     categories,
     products,
@@ -208,13 +234,33 @@ async function getMenu(request, env) {
     settings[row.key] = row.value;
   }
 
-  return json({
+  const payload = JSON.stringify({
     categories: categories.results,
     products: products.results,
     optionGroups,
     addons: addons.results,
     settings,
   });
+
+  const response = new Response(payload, {
+    status: 200,
+    headers: {
+      'content-type': 'application/json;charset=UTF-8',
+      // Edge cache for 1 hour (purged instantly on any admin save via
+      // purgeMenuCache); short browser-side max-age so a customer's own
+      // tab still re-checks periodically rather than holding a full-hour
+      // stale copy locally.
+      'Cache-Control': 'public, max-age=60, s-maxage=3600',
+    },
+  });
+
+  if (ctx && ctx.waitUntil) {
+    ctx.waitUntil(cache.put(cacheKey, response.clone()));
+  } else {
+    await cache.put(cacheKey, response.clone());
+  }
+
+  return response;
 }
 
 /* -------------------------------------------------------
@@ -490,6 +536,8 @@ async function adminCreate(
     .bind(...values)
     .run();
 
+  await purgeMenuCache(request, ctx);
+
   return json(
     {
       ok: true,
@@ -548,6 +596,8 @@ async function adminUpdate(
     )
     .run();
 
+  await purgeMenuCache(request, ctx);
+
   return json({ ok: true });
 }
 
@@ -571,6 +621,8 @@ async function adminDelete(
   )
     .bind(params.id)
     .run();
+
+  await purgeMenuCache(request, ctx);
 
   return json({ ok: true });
 }
@@ -693,7 +745,8 @@ async function adminGetSettings(
 
 async function adminUpdateSettings(
   request,
-  env
+  env,
+  ctx
 ) {
   const body = await request
     .json()
@@ -724,6 +777,8 @@ async function adminUpdateSettings(
   if (stmts.length) {
     await env.DB.batch(stmts);
   }
+
+  await purgeMenuCache(request, ctx);
 
   return json({ ok: true });
 }
