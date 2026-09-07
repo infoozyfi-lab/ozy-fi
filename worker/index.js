@@ -389,19 +389,36 @@ async function createOrder(request, env) {
   );
 }
 
+// Last-6-digits comparison tolerates the different phone formats the
+// checkout form itself accepts (+358401234567 vs 0401234567 vs spaced/
+// dashed variants) without needing to fully normalize to E.164.
+function phoneMatches(a, b) {
+  const da = String(a || '').replace(/\D/g, '');
+  const db = String(b || '').replace(/\D/g, '');
+  if (da.length < 6 || db.length < 6) return false;
+  return da.slice(-6) === db.slice(-6);
+}
+
 async function trackOrder(
   request,
   env,
   ctx,
   params
 ) {
+  const url = new URL(request.url);
+  const phone = url.searchParams.get('phone') || '';
+
   const order = await env.DB.prepare(
     'SELECT * FROM orders WHERE order_num = ?'
   )
     .bind(params.orderNum)
     .first();
 
-  if (!order) {
+  // Order number alone isn't secret enough to hand back a stranger's name,
+  // address and phone on request — also require the phone number used at
+  // checkout. Same generic error either way, so a guesser can't tell
+  // whether the order number or the phone was the part that was wrong.
+  if (!order || !phoneMatches(order.phone, phone)) {
     return json(
       { error: 'Order not found' },
       404
@@ -811,6 +828,127 @@ async function adminUpdateOrderStatus(
 }
 
 /* -------------------------------------------------------
+   ADMIN: ANALYTICS (dashboard KPIs, trends, best sellers)
+------------------------------------------------------- */
+
+// One conditional-aggregation pass over `orders` for every headline KPI +
+// period-over-period comparison the dashboard needs (today vs yesterday,
+// last 7 days vs the 7 before that, last 30 days vs the 30 before that).
+// Rolling windows rather than calendar day/week/month — avoids a Monday
+// looking artificially "down" against a full previous week.
+async function loadSummary(env) {
+  const row = await env.DB.prepare(
+    `SELECT
+      SUM(CASE WHEN date(created_at) = date('now') AND status != 'cancelled' THEN total ELSE 0 END) AS today_revenue,
+      SUM(CASE WHEN date(created_at) = date('now') THEN 1 ELSE 0 END) AS today_orders,
+      SUM(CASE WHEN date(created_at) = date('now','-1 day') AND status != 'cancelled' THEN total ELSE 0 END) AS yesterday_revenue,
+      SUM(CASE WHEN date(created_at) = date('now','-1 day') THEN 1 ELSE 0 END) AS yesterday_orders,
+      SUM(CASE WHEN created_at >= datetime('now','-7 days') AND status != 'cancelled' THEN total ELSE 0 END) AS last7_revenue,
+      SUM(CASE WHEN created_at >= datetime('now','-7 days') THEN 1 ELSE 0 END) AS last7_orders,
+      SUM(CASE WHEN created_at >= datetime('now','-14 days') AND created_at < datetime('now','-7 days') AND status != 'cancelled' THEN total ELSE 0 END) AS prev7_revenue,
+      SUM(CASE WHEN created_at >= datetime('now','-14 days') AND created_at < datetime('now','-7 days') THEN 1 ELSE 0 END) AS prev7_orders,
+      SUM(CASE WHEN created_at >= datetime('now','-30 days') AND status != 'cancelled' THEN total ELSE 0 END) AS last30_revenue,
+      SUM(CASE WHEN created_at >= datetime('now','-30 days') THEN 1 ELSE 0 END) AS last30_orders,
+      SUM(CASE WHEN created_at >= datetime('now','-60 days') AND created_at < datetime('now','-30 days') AND status != 'cancelled' THEN total ELSE 0 END) AS prev30_revenue,
+      SUM(CASE WHEN created_at >= datetime('now','-60 days') AND created_at < datetime('now','-30 days') THEN 1 ELSE 0 END) AS prev30_orders,
+      SUM(CASE WHEN status != 'cancelled' THEN total ELSE 0 END) AS total_revenue,
+      COUNT(*) AS total_orders,
+      SUM(CASE WHEN status IN ('received','preparing','on_the_way') THEN 1 ELSE 0 END) AS pending_orders,
+      SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) AS completed_orders,
+      SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_orders
+    FROM orders`
+  ).first();
+
+  const n = (v) => Number(v || 0);
+
+  return {
+    today: { revenue: n(row.today_revenue), orders: n(row.today_orders) },
+    yesterday: { revenue: n(row.yesterday_revenue), orders: n(row.yesterday_orders) },
+    last7Days: { revenue: n(row.last7_revenue), orders: n(row.last7_orders) },
+    prev7Days: { revenue: n(row.prev7_revenue), orders: n(row.prev7_orders) },
+    last30Days: { revenue: n(row.last30_revenue), orders: n(row.last30_orders) },
+    prev30Days: { revenue: n(row.prev30_revenue), orders: n(row.prev30_orders) },
+    totalRevenue: n(row.total_revenue),
+    totalOrders: n(row.total_orders),
+    avgOrderValue: n(row.total_orders) ? n(row.total_revenue) / n(row.total_orders) : 0,
+    pendingOrders: n(row.pending_orders),
+    completedOrders: n(row.completed_orders),
+    cancelledOrders: n(row.cancelled_orders),
+  };
+}
+
+async function adminAnalytics(request, env) {
+  const [summary, revenueByDayRows, bestSellersRows, categoryRows, statusRows, hourlyRows] = await Promise.all([
+    loadSummary(env),
+
+    // Daily revenue + order count for the last 30 days (chart fills gaps client-side).
+    env.DB.prepare(
+      `SELECT date(created_at) AS day,
+              SUM(CASE WHEN status != 'cancelled' THEN total ELSE 0 END) AS revenue,
+              COUNT(*) AS orders
+       FROM orders
+       WHERE created_at >= datetime('now','-30 days')
+       GROUP BY day
+       ORDER BY day ASC`
+    ).all(),
+
+    // Best-selling products by quantity, aggregated straight from order_items
+    // (works even for items whose product was later edited/deleted, since
+    // name/qty/line_total are snapshotted onto the order at checkout time).
+    env.DB.prepare(
+      `SELECT oi.name AS name, SUM(oi.qty) AS qty, SUM(oi.line_total) AS revenue
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       WHERE o.status != 'cancelled'
+       GROUP BY oi.name
+       ORDER BY qty DESC
+       LIMIT 8`
+    ).all(),
+
+    // Revenue by category (join through products; anything whose product
+    // was deleted, or that isn't tied to a category, buckets into "Other").
+    env.DB.prepare(
+      `SELECT COALESCE(c.title, 'Other') AS category,
+              SUM(oi.line_total) AS revenue,
+              SUM(oi.qty) AS qty
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       LEFT JOIN products p ON p.id = oi.product_id
+       LEFT JOIN categories c ON c.id = p.category_id
+       WHERE o.status != 'cancelled'
+       GROUP BY category
+       ORDER BY revenue DESC`
+    ).all(),
+
+    // Order status mix over the last 30 days (donut on the dashboard).
+    env.DB.prepare(
+      `SELECT status, COUNT(*) AS count
+       FROM orders
+       WHERE created_at >= datetime('now','-30 days')
+       GROUP BY status`
+    ).all(),
+
+    // Orders by hour of day over the last 30 days — spots peak service hours.
+    env.DB.prepare(
+      `SELECT CAST(strftime('%H', created_at) AS INTEGER) AS hour, COUNT(*) AS count
+       FROM orders
+       WHERE created_at >= datetime('now','-30 days')
+       GROUP BY hour
+       ORDER BY hour ASC`
+    ).all(),
+  ]);
+
+  return json({
+    summary,
+    revenueByDay: revenueByDayRows.results.map((r) => ({ day: r.day, revenue: Number(r.revenue || 0), orders: Number(r.orders || 0) })),
+    bestSellers: bestSellersRows.results.map((r) => ({ name: r.name, qty: Number(r.qty || 0), revenue: Number(r.revenue || 0) })),
+    categoryBreakdown: categoryRows.results.map((r) => ({ category: r.category, revenue: Number(r.revenue || 0), qty: Number(r.qty || 0) })),
+    statusBreakdown: statusRows.results.map((r) => ({ status: r.status, count: Number(r.count || 0) })),
+    hourlyDistribution: hourlyRows.results.map((r) => ({ hour: Number(r.hour), count: Number(r.count || 0) })),
+  });
+}
+
+/* -------------------------------------------------------
    ADMIN: SETTINGS
 ------------------------------------------------------- */
 
@@ -944,6 +1082,12 @@ const routes = [
     'PATCH',
     /^\/api\/admin\/orders\/(?<id>\d+)$/,
     requireAdmin(adminUpdateOrderStatus),
+  ],
+
+  [
+    'GET',
+    /^\/api\/admin\/analytics$/,
+    requireAdmin(adminAnalytics),
   ],
 
   [
