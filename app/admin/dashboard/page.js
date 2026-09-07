@@ -427,6 +427,8 @@ function SettingsTab({ token }) {
   const [saved, setSaved] = useState(false);
   const [products, setProducts] = useState([]);
   const [bundles, setBundles] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   useEffect(() => {
     const headers = { Authorization: `Bearer ${token}` };
@@ -442,6 +444,25 @@ function SettingsTab({ token }) {
   const setField = (key, val) => {
     setValues((v) => ({ ...v, [key]: val }));
     setSaved(false);
+  };
+
+  const uploadBannerImage = async (file) => {
+    setUploading(true);
+    setUploadError('');
+    try {
+      const body = new FormData();
+      body.append('file', file, file.name || 'upload.jpg');
+      const res = await fetch('/api/admin/upload', {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Upload failed.');
+      setField('featured_banner_image', data.url);
+    } catch (err) {
+      setUploadError(err.message || 'Upload failed.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const save = async (e) => {
@@ -507,7 +528,35 @@ function SettingsTab({ token }) {
             <>
               <label>Banner title<input style={inputStyle} value={values.featured_banner_title || ''} onChange={(e) => setField('featured_banner_title', e.target.value)} /></label>
               <label>Banner price text (optional)<input style={inputStyle} value={values.featured_banner_price || ''} onChange={(e) => setField('featured_banner_price', e.target.value)} placeholder="e.g. From €9.90" /></label>
-              <label style={{ gridColumn: '1 / -1' }}>Banner image URL<input style={inputStyle} value={values.featured_banner_image || ''} onChange={(e) => setField('featured_banner_image', e.target.value)} /></label>
+              <label style={{ gridColumn: '1 / -1' }}>
+                Banner image
+                <input
+                  style={inputStyle}
+                  value={values.featured_banner_image || ''}
+                  onChange={(e) => setField('featured_banner_image', e.target.value)}
+                  placeholder="Upload below, or paste an image URL"
+                />
+                <input
+                  type="file"
+                  accept="image/*"
+                  style={{ marginTop: 8, color: 'var(--cream)' }}
+                  disabled={uploading}
+                  onChange={(e) => {
+                    const f = e.target.files && e.target.files[0];
+                    if (f) uploadBannerImage(f);
+                    e.target.value = '';
+                  }}
+                />
+                {uploading && <p style={{ fontSize: 12, color: 'var(--muted)', margin: '4px 0 0' }}>Uploading…</p>}
+                {uploadError && <p style={{ fontSize: 12, color: '#FF8A75', margin: '4px 0 0' }}>{uploadError}</p>}
+                {values.featured_banner_image && (
+                  <img
+                    src={values.featured_banner_image}
+                    alt="Banner preview"
+                    style={{ marginTop: 8, maxWidth: 200, borderRadius: 8, border: '1px solid var(--line)' }}
+                  />
+                )}
+              </label>
             </>
           )}
         </div>
