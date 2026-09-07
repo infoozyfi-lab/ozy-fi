@@ -5,6 +5,7 @@ import Header from '@/components/Header';
 import Hero from '@/components/Hero';
 import FeaturedCard from '@/components/FeaturedCard';
 import Story from '@/components/Story';
+import Bundles from '@/components/Bundles';
 import MenuSection from '@/components/MenuSection';
 import Visit from '@/components/Visit';
 import CtaStrip from '@/components/CtaStrip';
@@ -24,6 +25,7 @@ export default function Home() {
       <Hero />
       <FeaturedCard />
       <Story />
+      <Bundles />
       <MenuSection />
       <Visit />
       <CtaStrip />
