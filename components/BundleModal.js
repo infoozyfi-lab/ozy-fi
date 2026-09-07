@@ -28,7 +28,12 @@ export default function BundleModal() {
   }
 
   const pickerSlot = pickerSlotIndex != null ? bundleSlots[pickerSlotIndex] : null;
-  const pickerProducts = pickerSlot ? products.filter((p) => p.cat === pickerSlot.categoryId) : [];
+  const pickerCategoryIds = pickerSlot
+    ? (pickerSlot.categoryIds && pickerSlot.categoryIds.length
+      ? pickerSlot.categoryIds
+      : (pickerSlot.categoryId ? [pickerSlot.categoryId] : []))
+    : [];
+  const pickerProducts = pickerSlot ? products.filter((p) => pickerCategoryIds.includes(p.cat)) : [];
 
   return (
     <div className={`bundle-modal${isBundleModalOpen ? ' open' : ''}`}>
