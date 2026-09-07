@@ -5,11 +5,6 @@ import { useState } from 'react';
 export default function Hero() {
   const [orderMode, setOrderMode] = useState('delivery');
 
-  const goToMenu = (e) => {
-    e.preventDefault();
-    document.getElementById('menu')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
   return (
     <section className="hero">
       <div className="wrap">
@@ -33,9 +28,6 @@ export default function Hero() {
               </button>
             ))}
           </div>
-          <a href="#menu" className="order-go" onClick={goToMenu}>
-            Browse the menu
-          </a>
         </div>
       </div>
     </section>
