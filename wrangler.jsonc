@@ -12,5 +12,11 @@
       "database_name": "ozyfi-db",
       "database_id": "6b037686-f0b6-4733-b229-266681fa0a8b"
     }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "IMAGES",
+      "bucket_name": "ozyfi-images"
+    }
   ]
 }
