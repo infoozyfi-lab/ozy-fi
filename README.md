@@ -12,13 +12,29 @@ menu, orders, and the admin panel.
   hardcoded in the frontend anymore.
 - ✅ **Checkout** really saves orders: `POST /api/orders` writes to `orders` /
   `order_items` and returns a real order number.
-- ✅ **Admin panel** (`/admin` → `/admin/dashboard`) has two tabs:
-  - **Orders** — view every order and change its status (received →
-    preparing → on the way → delivered / cancelled) from a dropdown.
+- ✅ **Admin panel** (`/admin` → `/admin/dashboard`) has six tabs:
+  - **Dashboard** — the home screen: KPI tiles (today's sales/orders vs.
+    yesterday, last-7-days sales vs. the prior 7 days, pending orders,
+    average order value, total products) with trend arrows, a 30-day
+    revenue chart, best-sellers and revenue-by-category bar charts, an
+    order-status mix bar, a peak-ordering-hours chart, and a recent-orders
+    table. Everything on it is computed live from the database by a single
+    `GET /api/admin/analytics` endpoint — no hardcoded numbers.
+  - **Orders** — view every order (filterable by status) and change its
+    status (received → preparing → on the way → delivered / cancelled)
+    from a dropdown.
   - **Menu & Pricing** — add, edit, and delete Categories, Products, Option
     Groups + Options (base, sauce, cheese, toppings, fillings, sauce
     stripe, dip), and Add-ons (drinks/dips/snacks) — no code changes or
     redeploys needed for everyday menu/price updates.
+  - **Customers** — a customer list derived from order history (name,
+    contact info, order count, lifetime spend, last order).
+  - **Reports** — the table-view companion to the Dashboard's charts:
+    rolling 7/30-day KPI comparisons plus full best-sellers, revenue-by-
+    category, and order-status tables.
+  - **Settings** — restaurant info, delivery fee/minimum order, the
+    homepage featured card, and which 3 products show in "Popular right
+    now" on the homepage.
 - `data/menu.js` is now only used to (re)generate `worker/seed.sql` for the
   initial database load — the live site never reads it directly.
 
@@ -105,8 +121,20 @@ npx wrangler deploy
   whenever you have real photography.
 - **Checkout**: cash on delivery only, two-step flow (delivery details →
   payment/review).
-- **Order tracking**: `GET /api/orders/:orderNum` returns an order's status
-  and items — not yet wired to a page in the frontend.
+- ✅ **Order tracking** (`/track`, linked from the header and footer):
+  customers enter their order number plus the phone number they checked out
+  with, and see a live status timeline (received → preparing → on the way →
+  delivered), their items, and total. `GET /api/orders/:orderNum` now
+  requires a matching `?phone=` query param (last-6-digits match, tolerant
+  of `+358…` vs `0…` formatting) — an order number alone is not enough to
+  pull up a stranger's name/address/phone. The order-confirmation popup
+  also links to this page so customers know it exists.
+- **Dashboard analytics**: `GET /api/admin/analytics` (admin-auth required)
+  returns everything the Dashboard and Reports tabs render — headline KPIs
+  with rolling period-over-period comparisons, 30-day daily revenue, top 8
+  best-sellers, revenue by category, order-status mix, and orders-by-hour —
+  computed in a handful of SQL aggregate queries against `orders` /
+  `order_items`, so it stays fast even as order history grows.
 - **Pricing constants** (large-size upcharge) live in the `admin_settings`
   table and are exposed publicly via `/api/menu` for the storefront to
   price orders — no secrets are ever stored in that table.
