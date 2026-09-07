@@ -490,8 +490,9 @@ function SettingsTab({ token }) {
       <form onSubmit={save}>
         <h3 style={{ marginBottom: 4 }}>Homepage featured card</h3>
         <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
-          Shown on the homepage, right below the hero. Pick a real product or bundle — its
-          photo/name/price stay in sync automatically — or a custom banner.
+          Shown on the homepage, right below the hero. Pick a real product — its
+          photo/name/price stay in sync automatically — or a custom banner. (Bundles have
+          their own &quot;Combo deals&quot; section further down, so they&apos;re not offered here.)
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 24 }}>
           <label>
@@ -499,7 +500,6 @@ function SettingsTab({ token }) {
             <select style={inputStyle} value={featuredType} onChange={(e) => setField('featured_type', e.target.value)}>
               <option value="none">None (hidden)</option>
               <option value="product">Real product</option>
-              <option value="bundle">Bundle / combo deal</option>
               <option value="banner">Custom banner</option>
             </select>
           </label>
@@ -510,16 +510,6 @@ function SettingsTab({ token }) {
               <select style={inputStyle} value={values.featured_product_id || ''} onChange={(e) => setField('featured_product_id', e.target.value)}>
                 <option value="">Select…</option>
                 {products.map((p) => <option key={p.id} value={p.id}>{p.name} · €{Number(p.price).toFixed(2)}</option>)}
-              </select>
-            </label>
-          )}
-
-          {featuredType === 'bundle' && (
-            <label>
-              Featured bundle
-              <select style={inputStyle} value={values.featured_bundle_id || ''} onChange={(e) => setField('featured_bundle_id', e.target.value)}>
-                <option value="">Select…</option>
-                {bundles.map((b) => <option key={b.id} value={b.id}>{b.title} · €{Number(b.price).toFixed(2)}</option>)}
               </select>
             </label>
           )}
