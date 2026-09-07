@@ -1,12 +1,25 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function AdminPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [checking, setChecking] = useState(true);
+
+  // If a valid session already exists (e.g. the user hit the browser
+  // "back" button from the dashboard), skip the login form instead of
+  // making it look like they got logged out.
+  useEffect(() => {
+    const t = sessionStorage.getItem('ozy_admin_token');
+    if (t) {
+      window.location.href = '/admin/dashboard';
+      return;
+    }
+    setChecking(false);
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -55,6 +68,7 @@ export default function AdminPage() {
         background: '#f7f7f7',
       }}
     >
+      {checking ? null : (
       <div
         style={{
           width: '100%',
@@ -147,6 +161,7 @@ export default function AdminPage() {
           </button>
         </form>
       </div>
+      )}
     </main>
   );
 }
