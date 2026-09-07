@@ -3,6 +3,13 @@
 import { useEffect, useMemo, useState, Fragment } from 'react';
 import ResourceManager from '@/components/admin/ResourceManager';
 import BundleManager from '@/components/admin/BundleManager';
+import StatTile from '@/components/admin/charts/StatTile';
+import AreaTrendChart from '@/components/admin/charts/AreaTrendChart';
+import BarChart from '@/components/admin/charts/BarChart';
+import ColumnChart from '@/components/admin/charts/ColumnChart';
+import StatusMixBar from '@/components/admin/charts/StatusMixBar';
+import StatusPill, { STATUS_LABELS as STATUS_LABELS_LOCAL } from '@/components/admin/charts/StatusPill';
+import { CATEGORICAL, BRAND, GOLD, formatCurrency, formatCompactCurrency, formatNumber, percentChange } from '@/components/admin/charts/colors';
 
 const ORDER_STATUSES = ['received', 'preparing', 'on_the_way', 'delivered', 'cancelled'];
 const STATUS_LABELS = {
@@ -16,11 +23,21 @@ const STATUS_LABELS = {
 const box = {
   background: 'var(--bg-card)',
   padding: '24px',
-  borderRadius: '12px',
+  borderRadius: '14px',
   border: '1px solid var(--line)',
   marginBottom: '24px',
   color: 'var(--cream)',
 };
+
+const card = {
+  background: 'var(--bg-card)',
+  padding: '20px 22px',
+  borderRadius: '14px',
+  border: '1px solid var(--line)',
+  color: 'var(--cream)',
+};
+
+const cardTitle = { margin: '0 0 16px', fontSize: 16, fontWeight: 700, color: 'var(--cream)' };
 
 const tabBtn = (active) => ({
   padding: '10px 18px',
@@ -57,14 +74,10 @@ const btn = {
 };
 const btnPrimary = { ...btn, background: 'var(--ember)', color: '#1A0D06', border: 'none', fontWeight: 700 };
 
-function statCard(label, value) {
-  return (
-    <div style={box}>
-      <h3 style={{ marginTop: 0, color: 'var(--muted)', fontSize: 14 }}>{label}</h3>
-      <strong style={{ fontSize: '30px' }}>{value}</strong>
-    </div>
-  );
-}
+const th = { textAlign: 'left', padding: '10px', color: 'var(--muted)', fontSize: 12.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' };
+const td = { padding: '12px 10px', borderTop: '1px solid var(--line)', fontSize: 13.5 };
+
+/* ---------------- Shared data hooks ---------------- */
 
 function useOrders(token) {
   const [orders, setOrders] = useState([]);
@@ -84,10 +97,61 @@ function useOrders(token) {
   return { orders, setOrders, loading, reload: load };
 }
 
-/* ---------------- Overview ---------------- */
+// Single fetch backing every chart & KPI on Overview + Reports — one
+// server-side aggregation pass instead of each tab pulling the full order
+// list and re-computing it in the browser.
+function useAnalytics(token) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-function OverviewTab({ token }) {
-  const { orders, loading } = useOrders(token);
+  const load = () => {
+    if (!token) return; // not signed in yet — the real fetch fires once the token lands
+    setLoading(true);
+    setError('');
+    fetch('/api/admin/analytics', { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => {
+        if (!res.ok) throw new Error('Could not load analytics.');
+        return res.json();
+      })
+      .then(setData)
+      .catch(() => setError('Could not load analytics.'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, [token]);
+
+  return { data, loading, error, reload: load };
+}
+
+// Fills gaps in the server's day-grouped revenue rows so the trend chart
+// always draws a full, evenly-spaced 30-day line instead of skipping
+// zero-order days.
+function fillDailyRevenue(rows, days = 30) {
+  const byDay = {};
+  (rows || []).forEach((r) => { byDay[r.day] = r; });
+  const out = [];
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    out.push(byDay[key] || { day: key, revenue: 0, orders: 0 });
+  }
+  return out;
+}
+
+const HOUR_LABELS = Array.from({ length: 24 }, (_, h) => `${h}`.padStart(2, '0'));
+
+function fillHourly(rows) {
+  const byHour = {};
+  (rows || []).forEach((r) => { byHour[r.hour] = r.count; });
+  return HOUR_LABELS.map((label, h) => ({ label, value: byHour[h] || 0 }));
+}
+
+/* ---------------- Overview (Dashboard home) ---------------- */
+
+function OverviewTab({ token, analytics, analyticsLoading, reloadAnalytics }) {
+  const { orders, loading: ordersLoading } = useOrders(token);
   const [productCount, setProductCount] = useState(null);
 
   useEffect(() => {
@@ -97,49 +161,103 @@ function OverviewTab({ token }) {
       .catch(() => {});
   }, [token]);
 
-  const stats = useMemo(() => {
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const todaysOrders = orders.filter((o) => (o.created_at || '').slice(0, 10) === todayStr);
-    const todaysSales = todaysOrders.reduce((s, o) => s + Number(o.total || 0), 0);
-    const pending = orders.filter((o) => o.status === 'received' || o.status === 'preparing' || o.status === 'on_the_way').length;
-    const completed = orders.filter((o) => o.status === 'delivered').length;
-    return { todaysOrders: todaysOrders.length, todaysSales, pending, completed };
-  }, [orders]);
+  if (analyticsLoading || !analytics) return <p>Loading dashboard…</p>;
 
-  if (loading) return <p>Loading…</p>;
+  const { summary, revenueByDay, bestSellers, categoryBreakdown, statusBreakdown, hourlyDistribution } = analytics;
+
+  const revenueTrend = fillDailyRevenue(revenueByDay, 30);
+  const last7Sparkline = revenueTrend.slice(-7).map((d) => d.revenue);
+  const hourlyData = fillHourly(hourlyDistribution);
+  const statusCounts = Object.fromEntries((statusBreakdown || []).map((s) => [s.status, s.count]));
+
+  const revenueDelta = percentChange(summary.today.revenue, summary.yesterday.revenue);
+  const ordersDelta = percentChange(summary.today.orders, summary.yesterday.orders);
+  const weekDelta = percentChange(summary.last7Days.revenue, summary.prev7Days.revenue);
 
   return (
     <>
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 8 }}>
-        {statCard("Today's Orders", stats.todaysOrders)}
-        {statCard("Today's Sales", `€${stats.todaysSales.toFixed(2)}`)}
-        {statCard('Pending Orders', stats.pending)}
-        {statCard('Completed Orders', stats.completed)}
-        {statCard('Total Products', productCount === null ? '…' : productCount)}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+        <p style={{ margin: 0, color: 'var(--muted)', fontSize: 13.5 }}>Last 30 days, updated live from your orders.</p>
+        <button type="button" style={btn} onClick={reloadAnalytics}>Refresh</button>
+      </div>
+
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 16, marginBottom: 20 }}>
+        <StatTile
+          label="Today's Sales"
+          value={formatCurrency(summary.today.revenue)}
+          delta={revenueDelta}
+          deltaLabel="vs yesterday"
+          accent={BRAND}
+          sparkline={last7Sparkline}
+        />
+        <StatTile label="Today's Orders" value={formatNumber(summary.today.orders)} delta={ordersDelta} deltaLabel="vs yesterday" accent={GOLD} />
+        <StatTile label="Sales, Last 7 Days" value={formatCurrency(summary.last7Days.revenue)} delta={weekDelta} deltaLabel="vs prior 7 days" accent={CATEGORICAL[0]} />
+        <StatTile label="Pending Orders" value={formatNumber(summary.pendingOrders)} sublabel="in the kitchen or on the way" goodDirection="down" />
+        <StatTile label="Avg Order Value" value={formatCurrency(summary.avgOrderValue)} sublabel="all-time" />
+        <StatTile label="Total Products" value={productCount === null ? '…' : formatNumber(productCount)} sublabel="active in menu" />
       </section>
+
+      <div style={{ ...card, marginBottom: 20 }}>
+        <h2 style={cardTitle}>Revenue — last 30 days</h2>
+        <AreaTrendChart data={revenueTrend} color={BRAND} />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, marginBottom: 20 }}>
+        <div style={card}>
+          <h2 style={cardTitle}>Best sellers</h2>
+          <BarChart
+            items={bestSellers.map((p) => ({ label: p.name, value: p.qty, sublabel: formatCurrency(p.revenue) }))}
+            color={BRAND}
+            valueFormatter={(v) => `${formatNumber(v)}×`}
+            emptyMessage="No items sold yet."
+          />
+        </div>
+        <div style={card}>
+          <h2 style={cardTitle}>Revenue by category</h2>
+          <BarChart
+            items={categoryBreakdown.slice(0, 8).map((c) => ({ label: c.category, value: c.revenue, sublabel: `${formatNumber(c.qty)} sold` }))}
+            color={(i) => CATEGORICAL[i % CATEGORICAL.length]}
+            valueFormatter={formatCompactCurrency}
+            emptyMessage="No sales yet."
+          />
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, marginBottom: 20 }}>
+        <div style={card}>
+          <h2 style={cardTitle}>Order status mix (30d)</h2>
+          <StatusMixBar counts={statusCounts} />
+        </div>
+        <div style={card}>
+          <h2 style={cardTitle}>Peak ordering hours (30d)</h2>
+          <ColumnChart data={hourlyData} color={BRAND} />
+        </div>
+      </div>
 
       <div style={box}>
         <h2 style={{ marginTop: 0 }}>Recent Orders</h2>
-        {orders.length === 0 ? (
+        {ordersLoading ? (
+          <p>Loading…</p>
+        ) : orders.length === 0 ? (
           <p>No orders yet.</p>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'left', padding: 10, color: 'var(--muted)' }}>Order</th>
-                  <th style={{ textAlign: 'left', padding: 10, color: 'var(--muted)' }}>Customer</th>
-                  <th style={{ textAlign: 'left', padding: 10, color: 'var(--muted)' }}>Total</th>
-                  <th style={{ textAlign: 'left', padding: 10, color: 'var(--muted)' }}>Status</th>
+                  <th style={th}>Order</th>
+                  <th style={th}>Customer</th>
+                  <th style={th}>Total</th>
+                  <th style={th}>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {orders.slice(0, 8).map((o) => (
                   <tr key={o.id}>
-                    <td style={{ padding: 10, borderTop: '1px solid var(--line)' }}>{o.order_num}</td>
-                    <td style={{ padding: 10, borderTop: '1px solid var(--line)' }}>{o.customer_name}</td>
-                    <td style={{ padding: 10, borderTop: '1px solid var(--line)' }}>€{Number(o.total || 0).toFixed(2)}</td>
-                    <td style={{ padding: 10, borderTop: '1px solid var(--line)' }}>{STATUS_LABELS[o.status] || o.status}</td>
+                    <td style={td}>{o.order_num}</td>
+                    <td style={td}>{o.customer_name}</td>
+                    <td style={td}>{formatCurrency(o.total)}</td>
+                    <td style={td}><StatusPill status={o.status} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -191,7 +309,7 @@ function OrderDetailRow({ token, order }) {
               <p style={{ margin: '0 0 4px', color: 'var(--muted)', fontSize: 13 }}>Items</p>
               {(detail.items || []).map((item) => (
                 <div key={item.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
-                  <strong>{item.qty}× {item.name}</strong> — €{Number(item.line_total).toFixed(2)}
+                  <strong>{item.qty}× {item.name}</strong> — {formatCurrency(item.line_total)}
                   {item.details && (() => {
                     try {
                       const d = JSON.parse(item.details);
@@ -214,6 +332,7 @@ function OrdersTab({ token }) {
   const { orders, setOrders, loading, reload } = useOrders(token);
   const [updatingId, setUpdatingId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const changeStatus = async (order, status) => {
     setUpdatingId(order.id);
@@ -229,36 +348,44 @@ function OrdersTab({ token }) {
     }
   };
 
+  const visibleOrders = statusFilter === 'all' ? orders : orders.filter((o) => o.status === statusFilter);
+
   return (
     <div style={box}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <h2 style={{ margin: 0 }}>Orders</h2>
-        <button type="button" style={btn} onClick={reload}>Refresh</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ ...inputStyle, width: 'auto', marginTop: 0, padding: '8px 10px' }}>
+            <option value="all">All statuses</option>
+            {ORDER_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+          </select>
+          <button type="button" style={btn} onClick={reload}>Refresh</button>
+        </div>
       </div>
       {loading ? (
         <p>Loading orders...</p>
-      ) : orders.length === 0 ? (
-        <p>No orders yet.</p>
+      ) : visibleOrders.length === 0 ? (
+        <p>No orders {statusFilter === 'all' ? 'yet' : `with status "${STATUS_LABELS[statusFilter]}"`}.</p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                <th style={{ textAlign: 'left', padding: 10, color: 'var(--muted)' }}>Order</th>
-                <th style={{ textAlign: 'left', padding: 10, color: 'var(--muted)' }}>Customer</th>
-                <th style={{ textAlign: 'left', padding: 10, color: 'var(--muted)' }}>Total</th>
-                <th style={{ textAlign: 'left', padding: 10, color: 'var(--muted)' }}>Status</th>
-                <th style={{ textAlign: 'left', padding: 10, color: 'var(--muted)' }}></th>
+                <th style={th}>Order</th>
+                <th style={th}>Customer</th>
+                <th style={th}>Total</th>
+                <th style={th}>Status</th>
+                <th style={th}></th>
               </tr>
             </thead>
             <tbody>
-              {orders.map((order) => (
+              {visibleOrders.map((order) => (
                 <Fragment key={order.id}>
                   <tr>
-                    <td style={{ padding: 10, borderTop: '1px solid var(--line)' }}>{order.order_num}</td>
-                    <td style={{ padding: 10, borderTop: '1px solid var(--line)' }}>{order.customer_name}</td>
-                    <td style={{ padding: 10, borderTop: '1px solid var(--line)' }}>€{Number(order.total || 0).toFixed(2)}</td>
-                    <td style={{ padding: 10, borderTop: '1px solid var(--line)' }}>
+                    <td style={td}>{order.order_num}</td>
+                    <td style={td}>{order.customer_name}</td>
+                    <td style={td}>{formatCurrency(order.total)}</td>
+                    <td style={td}>
                       <select
                         value={order.status}
                         disabled={updatingId === order.id}
@@ -270,7 +397,7 @@ function OrdersTab({ token }) {
                         ))}
                       </select>
                     </td>
-                    <td style={{ padding: 10, borderTop: '1px solid var(--line)' }}>
+                    <td style={td}>
                       <button type="button" style={btn} onClick={() => setExpandedId(expandedId === order.id ? null : order.id)}>
                         {expandedId === order.id ? 'Hide' : 'Details'}
                       </button>
@@ -327,23 +454,23 @@ function CustomersTab({ token }) {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                <th style={{ textAlign: 'left', padding: 10, color: 'var(--muted)' }}>Name</th>
-                <th style={{ textAlign: 'left', padding: 10, color: 'var(--muted)' }}>Phone</th>
-                <th style={{ textAlign: 'left', padding: 10, color: 'var(--muted)' }}>Email</th>
-                <th style={{ textAlign: 'left', padding: 10, color: 'var(--muted)' }}>Orders</th>
-                <th style={{ textAlign: 'left', padding: 10, color: 'var(--muted)' }}>Total spent</th>
-                <th style={{ textAlign: 'left', padding: 10, color: 'var(--muted)' }}>Last order</th>
+                <th style={th}>Name</th>
+                <th style={th}>Phone</th>
+                <th style={th}>Email</th>
+                <th style={th}>Orders</th>
+                <th style={th}>Total spent</th>
+                <th style={th}>Last order</th>
               </tr>
             </thead>
             <tbody>
               {customers.map((c, i) => (
                 <tr key={i}>
-                  <td style={{ padding: 10, borderTop: '1px solid var(--line)' }}>{c.name}</td>
-                  <td style={{ padding: 10, borderTop: '1px solid var(--line)' }}>{c.phone}</td>
-                  <td style={{ padding: 10, borderTop: '1px solid var(--line)' }}>{c.email}</td>
-                  <td style={{ padding: 10, borderTop: '1px solid var(--line)' }}>{c.totalOrders}</td>
-                  <td style={{ padding: 10, borderTop: '1px solid var(--line)' }}>€{c.totalSpent.toFixed(2)}</td>
-                  <td style={{ padding: 10, borderTop: '1px solid var(--line)' }}>{c.lastOrder}</td>
+                  <td style={td}>{c.name}</td>
+                  <td style={td}>{c.phone}</td>
+                  <td style={td}>{c.email}</td>
+                  <td style={td}>{c.totalOrders}</td>
+                  <td style={td}>{formatCurrency(c.totalSpent)}</td>
+                  <td style={td}>{c.lastOrder}</td>
                 </tr>
               ))}
             </tbody>
@@ -354,55 +481,106 @@ function CustomersTab({ token }) {
   );
 }
 
-/* ---------------- Reports ---------------- */
+/* ---------------- Reports (KPI comparisons + table view) ---------------- */
 
-function ReportsTab({ token }) {
-  const { orders, loading } = useOrders(token);
+function ReportsTab({ analytics, loading }) {
+  if (loading || !analytics) return <p>Loading…</p>;
 
-  const report = useMemo(() => {
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfWeek = new Date(startOfDay);
-    startOfWeek.setDate(startOfDay.getDate() - startOfDay.getDay());
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const { summary, bestSellers, categoryBreakdown, statusBreakdown } = analytics;
+  const totalCategoryRevenue = categoryBreakdown.reduce((s, c) => s + c.revenue, 0) || 1;
+  const totalStatusCount = statusBreakdown.reduce((s, st) => s + st.count, 0) || 1;
 
-    const sumSince = (since) =>
-      orders
-        .filter((o) => new Date(o.created_at) >= since)
-        .reduce((s, o) => s + Number(o.total || 0), 0);
-
-    const countSince = (since) => orders.filter((o) => new Date(o.created_at) >= since).length;
-
-    const totalRevenue = orders.reduce((s, o) => s + Number(o.total || 0), 0);
-    const avgOrder = orders.length ? totalRevenue / orders.length : 0;
-
-    return {
-      daily: sumSince(startOfDay),
-      weekly: sumSince(startOfWeek),
-      monthly: sumSince(startOfMonth),
-      dailyCount: countSince(startOfDay),
-      weeklyCount: countSince(startOfWeek),
-      monthlyCount: countSince(startOfMonth),
-      avgOrder,
-      totalOrders: orders.length,
-    };
-  }, [orders]);
-
-  if (loading) return <p>Loading…</p>;
+  const weekDelta = percentChange(summary.last7Days.revenue, summary.prev7Days.revenue);
+  const monthDelta = percentChange(summary.last30Days.revenue, summary.prev30Days.revenue);
 
   return (
     <>
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-        {statCard('Sales Today', `€${report.daily.toFixed(2)}`)}
-        {statCard('Sales This Week', `€${report.weekly.toFixed(2)}`)}
-        {statCard('Sales This Month', `€${report.monthly.toFixed(2)}`)}
-        {statCard('Total Orders', report.totalOrders)}
-        {statCard('Average Order Value', `€${report.avgOrder.toFixed(2)}`)}
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
+        <StatTile label="Sales, Last 7 Days" value={formatCurrency(summary.last7Days.revenue)} delta={weekDelta} deltaLabel="vs the 7 days before" accent={BRAND} />
+        <StatTile label="Sales, Last 30 Days" value={formatCurrency(summary.last30Days.revenue)} delta={monthDelta} deltaLabel="vs the 30 days before" accent={GOLD} />
+        <StatTile label="All-Time Revenue" value={formatCurrency(summary.totalRevenue)} sublabel={`${formatNumber(summary.totalOrders)} orders`} />
+        <StatTile label="Average Order Value" value={formatCurrency(summary.avgOrderValue)} sublabel="all-time" />
+        <StatTile label="Cancelled Orders" value={formatNumber(summary.cancelledOrders)} sublabel="all-time" goodDirection="down" />
       </section>
-      <div style={{ ...box, marginTop: 8 }}>
-        <p style={{ margin: 0, color: 'var(--muted)', fontSize: 13 }}>
-          Best-selling products &amp; category breakdowns aren't available yet — that needs per-order item aggregation, planned for a later update.
-        </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 20 }}>
+        <div style={card}>
+          <h2 style={cardTitle}>Best sellers — table view</h2>
+          {bestSellers.length === 0 ? (
+            <p style={{ color: 'var(--muted)' }}>No items sold yet.</p>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={th}>Item</th>
+                  <th style={th}>Qty sold</th>
+                  <th style={th}>Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bestSellers.map((p) => (
+                  <tr key={p.name}>
+                    <td style={td}>{p.name}</td>
+                    <td style={td}>{formatNumber(p.qty)}</td>
+                    <td style={td}>{formatCurrency(p.revenue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div style={card}>
+          <h2 style={cardTitle}>Revenue by category — table view</h2>
+          {categoryBreakdown.length === 0 ? (
+            <p style={{ color: 'var(--muted)' }}>No sales yet.</p>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={th}>Category</th>
+                  <th style={th}>Revenue</th>
+                  <th style={th}>Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {categoryBreakdown.map((c) => (
+                  <tr key={c.category}>
+                    <td style={td}>{c.category}</td>
+                    <td style={td}>{formatCurrency(c.revenue)}</td>
+                    <td style={td}>{((c.revenue / totalCategoryRevenue) * 100).toFixed(1)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div style={card}>
+          <h2 style={cardTitle}>Order status — last 30 days</h2>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={th}>Status</th>
+                <th style={th}>Orders</th>
+                <th style={th}>Share</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ORDER_STATUSES.map((s) => {
+                const row = statusBreakdown.find((st) => st.status === s);
+                const count = row ? row.count : 0;
+                return (
+                  <tr key={s}>
+                    <td style={td}><StatusPill status={s} /></td>
+                    <td style={td}>{formatNumber(count)}</td>
+                    <td style={td}>{((count / totalStatusCount) * 100).toFixed(1)}%</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );
@@ -524,7 +702,7 @@ function SettingsTab({ token }) {
               Featured product
               <select style={inputStyle} value={values.featured_product_id || ''} onChange={(e) => setField('featured_product_id', e.target.value)}>
                 <option value="">Select…</option>
-                {products.map((p) => <option key={p.id} value={p.id}>{p.name} · €{Number(p.price).toFixed(2)}</option>)}
+                {products.map((p) => <option key={p.id} value={p.id}>{p.name} · {formatCurrency(p.price)}</option>)}
               </select>
             </label>
           )}
@@ -757,6 +935,8 @@ export default function AdminDashboard() {
     setReady(true);
   }, []);
 
+  const { data: analytics, loading: analyticsLoading, reload: reloadAnalytics } = useAnalytics(token || null);
+
   const logout = () => {
     sessionStorage.removeItem('ozy_admin_token');
     sessionStorage.removeItem('ozy_admin_email');
@@ -765,9 +945,11 @@ export default function AdminDashboard() {
 
   if (!ready) return null;
 
+  const pendingCount = analytics ? analytics.summary.pendingOrders : null;
+
   const TOP_TABS = [
     { id: 'overview', label: '🏠 Dashboard' },
-    { id: 'orders', label: '📦 Orders' },
+    { id: 'orders', label: '📦 Orders', badge: pendingCount },
     { id: 'menu', label: '🍕 Menu & Pricing' },
     { id: 'customers', label: '👥 Customers' },
     { id: 'reports', label: '📊 Reports' },
@@ -787,15 +969,34 @@ export default function AdminDashboard() {
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
           {TOP_TABS.map((t) => (
-            <button key={t.id} type="button" style={tabBtn(tab === t.id)} onClick={() => setTab(t.id)}>{t.label}</button>
+            <button key={t.id} type="button" style={tabBtn(tab === t.id)} onClick={() => setTab(t.id)}>
+              {t.label}
+              {!!t.badge && (
+                <span
+                  style={{
+                    marginLeft: 8,
+                    background: 'var(--ember)',
+                    color: '#1A0D06',
+                    borderRadius: 999,
+                    padding: '1px 7px',
+                    fontSize: 11.5,
+                    fontWeight: 800,
+                  }}
+                >
+                  {t.badge}
+                </span>
+              )}
+            </button>
           ))}
         </div>
 
-        {tab === 'overview' && <OverviewTab token={token} />}
+        {tab === 'overview' && (
+          <OverviewTab token={token} analytics={analytics} analyticsLoading={analyticsLoading} reloadAnalytics={reloadAnalytics} />
+        )}
         {tab === 'orders' && <OrdersTab token={token} />}
         {tab === 'menu' && <MenuTabs token={token} />}
         {tab === 'customers' && <CustomersTab token={token} />}
-        {tab === 'reports' && <ReportsTab token={token} />}
+        {tab === 'reports' && <ReportsTab analytics={analytics} loading={analyticsLoading} />}
         {tab === 'settings' && <SettingsTab token={token} />}
       </div>
     </main>
