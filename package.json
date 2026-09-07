@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "[ -n \"$OPENNEXT_BUILD\" ] && next build || OPENNEXT_BUILD=1 npx @opennextjs/cloudflare build --dangerouslyUseUnsupportedNextVersion",
     "start": "next start",
     "lint": "next lint",
     "generate-seed": "node scripts/generate-seed.mjs"
