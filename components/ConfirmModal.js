@@ -21,6 +21,10 @@ export default function ConfirmModal() {
               <span style={{ fontSize: '1.3rem' }}>💵</span>
               <span>Pay <b>{confirmedOrder.total.toFixed(2)} €</b> by cash on delivery when your order arrives.</span>
             </div>
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginTop: 14 }}>
+              Save your order number — you can check its status anytime on our{' '}
+              <a href="/track" style={{ color: 'var(--ember)', textDecoration: 'underline' }}>Track order</a> page.
+            </p>
             <button type="button" className="btn-primary" onClick={closeConfirm}>
               Continue shopping
             </button>

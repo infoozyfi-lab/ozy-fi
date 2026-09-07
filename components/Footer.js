@@ -23,6 +23,7 @@ export default function Footer() {
             <a href="#menu" onClick={scrollTo('menu')}>Menu</a>
             <a href="#story" onClick={scrollTo('story')}>Our story</a>
             <a href="#visit" onClick={scrollTo('visit')}>Find us</a>
+            <a href="/track">Track order</a>
           </div>
           <div>
             <h4>Contact</h4>

@@ -31,6 +31,7 @@ export default function Header() {
           <li><a href="#menu" onClick={scrollTo('menu')}>Menu</a></li>
           <li><a href="#story" onClick={scrollTo('story')}>Offers</a></li>
           <li><a href="#visit" onClick={scrollTo('visit')}>Gift cards</a></li>
+          <li><a href="/track">Track order</a></li>
         </ul>
         <div className="nav-order">
           <button className="cart-icon-btn" type="button" aria-label="Cart" onClick={goToCheckout}>
@@ -65,6 +66,7 @@ export default function Header() {
           <a href="#menu" onClick={scrollTo('menu')}>Menu</a>
           <a href="#story" onClick={scrollTo('story')}>Offers</a>
           <a href="#visit" onClick={scrollTo('visit')}>Gift cards</a>
+          <a href="/track">Track order</a>
         </div>
       </nav>
     </header>
