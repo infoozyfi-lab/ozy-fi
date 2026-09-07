@@ -361,7 +361,7 @@ export function StoreProvider({ children }) {
           ...slot,
           filled: [
             ...slot.filled,
-            { key: `${activeProduct.id}-${Date.now()}`, name: activeProduct.name, details, extra },
+            { key: `${activeProduct.id}-${Date.now()}`, productId: activeProduct.id, name: activeProduct.name, details, extra },
           ],
         };
         return next;
@@ -498,6 +498,7 @@ export function StoreProvider({ children }) {
             ...s,
             filled: Array.from({ length: s.qty || 1 }, (_, i) => ({
               key: `${s.productId}-fixed-${i}`,
+              productId: s.productId,
               name: product?.name || s.label || s.productId,
               details: [],
               extra: 0,
@@ -527,6 +528,25 @@ export function StoreProvider({ children }) {
       const slot = next[slotIndex];
       if (!slot) return slots;
       next[slotIndex] = { ...slot, filled: slot.filled.filter((it) => it.key !== itemKey) };
+      return next;
+    });
+  }, []);
+
+  // Quick-pick for a choice slot: adds the product as-is (default topping/
+  // size, no extra charge) without detouring through the full product
+  // customization page — a single tap fills one unit of the slot.
+  const addBundleSlotItem = useCallback((slotIndex, product) => {
+    setBundleSlots((slots) => {
+      const next = [...slots];
+      const slot = next[slotIndex];
+      if (!slot) return slots;
+      next[slotIndex] = {
+        ...slot,
+        filled: [
+          ...slot.filled,
+          { key: `${product.id}-${Date.now()}`, productId: product.id, name: product.name, details: [], extra: 0 },
+        ],
+      };
       return next;
     });
   }, []);
@@ -633,6 +653,7 @@ export function StoreProvider({ children }) {
     openBundle,
     closeBundleModal,
     removeBundleSlotItem,
+    addBundleSlotItem,
     bundleReady,
     bundleExtrasTotal,
     bundleTotal,
