@@ -58,7 +58,7 @@ export function StoreProvider({ children }) {
         setMenuLoading(true);
         setMenuError('');
 
-        const res = await fetch('/api/menu', { cache: 'no-store' });
+        const res = await fetch('/api/menu');
         if (!res.ok) throw new Error('Failed to load menu');
         const data = await res.json();
 
