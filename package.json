@@ -4,13 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npx @opennextjs/cloudflare build",
+    "next:build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "generate-seed": "node scripts/generate-seed.mjs",
-    "ssr:build": "opennextjs-cloudflare build --config open-next.config.mjs",
-    "ssr:preview": "opennextjs-cloudflare build --config open-next.config.mjs && wrangler dev --config wrangler.ssr-preview.jsonc",
-    "ssr:deploy": "opennextjs-cloudflare build --config open-next.config.mjs && wrangler deploy --config wrangler.ssr-preview.jsonc"
+    "generate-seed": "node scripts/generate-seed.mjs"
   },
   "dependencies": {
     "next": "14.2.5",
