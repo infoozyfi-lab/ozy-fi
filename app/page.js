@@ -4,8 +4,8 @@ import { StoreProvider } from '@/context/StoreContext';
 import Header from '@/components/Header';
 import Hero from '@/components/Hero';
 import FeaturedCard from '@/components/FeaturedCard';
+import MenuTeaser from '@/components/MenuTeaser';
 import Story from '@/components/Story';
-import Bundles from '@/components/Bundles';
 import MenuSection from '@/components/MenuSection';
 import Visit from '@/components/Visit';
 import CtaStrip from '@/components/CtaStrip';
@@ -24,8 +24,8 @@ export default function Home() {
       <Header />
       <Hero />
       <FeaturedCard />
+      <MenuTeaser />
       <Story />
-      <Bundles />
       <MenuSection />
       <Visit />
       <CtaStrip />
