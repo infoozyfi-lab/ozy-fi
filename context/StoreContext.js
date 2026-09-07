@@ -50,6 +50,7 @@ export function StoreProvider({ children }) {
   // ---- Bundles/combos (e.g. "3 Pizza + 1.5L Lemonade — €45"). ----
   const [bundles, setBundles] = useState([]);
   const [featured, setFeatured] = useState({ type: 'none' });
+  const [popularProductIds, setPopularProductIds] = useState([]);
 
   // ---- Bundle-building flow (filling a bundle's slots one item at a time). ----
   const [activeBundle, setActiveBundle] = useState(null);
@@ -195,6 +196,11 @@ export function StoreProvider({ children }) {
           productId: settings.featured_product_id || '',
           bundleId: settings.featured_bundle_id || '',
         });
+        try {
+          setPopularProductIds(JSON.parse(settings.popular_product_ids || '[]'));
+        } catch {
+          setPopularProductIds([]);
+        }
       } catch (err) {
         console.error('Menu loading error:', err);
         setMenuError('Unable to load menu. Please try again.');
@@ -647,6 +653,7 @@ export function StoreProvider({ children }) {
     // Bundles/combos + featured-card settings.
     bundles,
     featured,
+    popularProductIds,
     activeBundle,
     bundleSlots,
     isBundleModalOpen,
