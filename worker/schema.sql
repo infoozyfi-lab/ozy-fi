@@ -10,6 +10,7 @@ DROP TABLE IF EXISTS addons;
 DROP TABLE IF EXISTS orders;
 DROP TABLE IF EXISTS order_items;
 DROP TABLE IF EXISTS admin_settings;
+DROP TABLE IF EXISTS bundles;
 
 CREATE TABLE categories (
   id         TEXT PRIMARY KEY,
@@ -89,6 +90,25 @@ CREATE TABLE order_items (
 CREATE TABLE admin_settings (
   key   TEXT PRIMARY KEY,
   value TEXT
+);
+
+-- Bundles/combos, e.g. "3 Pizza + 1.5L Lemonade — €45".
+-- `slots` is a JSON array describing what goes in the bundle:
+--   { "kind": "choice", "categoryId": "pizza", "qty": 3, "label": "Choose any Pizza" }
+--   { "kind": "fixed",  "productId": "lemonade-15l", "qty": 1, "label": "Lemonade 1.5L" }
+-- Choice slots let the customer pick+customize any product from that
+-- category (base price already covered by `price`; only customization
+-- extras — toppings, size, base/sauce/cheese — add to the total).
+-- Fixed slots are included as-is, no customer choice.
+CREATE TABLE bundles (
+  id          TEXT PRIMARY KEY,
+  title       TEXT NOT NULL,
+  description TEXT,
+  image       TEXT,
+  price       REAL NOT NULL DEFAULT 0,
+  slots       TEXT NOT NULL DEFAULT '[]',
+  active      INTEGER NOT NULL DEFAULT 1,
+  sort_order  INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_products_category ON products(category_id);

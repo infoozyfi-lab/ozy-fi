@@ -13,6 +13,7 @@ const ADMIN_TABLES = {
   option_groups: { cols: ['id', 'title', 'kind', 'icon', 'sort_order'] },
   options: { cols: ['id', 'group_id', 'label', 'price_delta', 'color', 'sort_order'] },
   addons: { cols: ['id', 'type', 'name', 'price', 'image', 'active', 'sort_order'] },
+  bundles: { cols: ['id', 'title', 'description', 'image', 'price', 'slots', 'active', 'sort_order'] },
 };
 
 function json(data, status = 200) {
@@ -186,6 +187,7 @@ async function getMenu(request, env, ctx) {
     groups,
     options,
     addons,
+    bundles,
     settingsRows,
   ] = await Promise.all([
     env.DB.prepare(
@@ -208,10 +210,17 @@ async function getMenu(request, env, ctx) {
       'SELECT * FROM addons WHERE active = 1 ORDER BY sort_order'
     ).all(),
 
+    // Bundles/combos (e.g. "3 Pizza + 1.5L Lemonade — €45"). `slots` is
+    // stored as a JSON string; the frontend parses it.
+    env.DB.prepare(
+      'SELECT * FROM bundles WHERE active = 1 ORDER BY sort_order'
+    ).all(),
+
     // Only pricing constants live in this table (never secrets — the
     // admin login is checked against Cloudflare Secrets, not this
     // table), so it's safe to expose here for the storefront to price
-    // orders (e.g. the large-size upcharge).
+    // orders (e.g. the large-size upcharge, or which product/bundle is
+    // featured on the homepage).
     env.DB.prepare(
       'SELECT key, value FROM admin_settings'
     ).all(),
@@ -239,6 +248,7 @@ async function getMenu(request, env, ctx) {
     products: products.results,
     optionGroups,
     addons: addons.results,
+    bundles: bundles.results,
     settings,
   });
 
