@@ -1,5 +1,9 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 
+// This route reads live data from D1 on every request — it must never be
+// statically prerendered at build time.
+export const dynamic = 'force-dynamic';
+
 // Ported 1:1 from worker/index.js's getMenu() — same D1 queries, same
 // response shape, same edge-cache behavior. The old hand-written Worker
 // still serves this route on production; this copy only runs on the
