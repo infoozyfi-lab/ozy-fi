@@ -3,38 +3,42 @@
 import { useEffect, useState } from 'react';
 
 const box = {
-  background: '#fff',
+  background: 'var(--bg-card)',
   padding: '24px',
   borderRadius: '12px',
-  border: '1px solid #ddd',
+  border: '1px solid var(--line)',
   marginBottom: '24px',
+  color: 'var(--cream)',
 };
 
-const th = { textAlign: 'left', padding: '10px', borderBottom: '2px solid #eee', fontSize: 13, color: '#666' };
-const td = { padding: '10px', borderBottom: '1px solid #f0f0f0', fontSize: 14 };
+const th = { textAlign: 'left', padding: '10px', borderBottom: '2px solid var(--line)', fontSize: 13, color: 'var(--muted)' };
+const td = { padding: '10px', borderBottom: '1px solid var(--line)', fontSize: 14, color: 'var(--cream)' };
 
 const inputStyle = {
   width: '100%',
   padding: '10px',
   marginTop: '4px',
   boxSizing: 'border-box',
-  border: '1px solid #ccc',
+  border: '1px solid var(--line)',
   borderRadius: '8px',
   fontSize: 14,
+  background: 'var(--bg-alt)',
+  color: 'var(--cream)',
 };
 
 const btn = {
   padding: '8px 14px',
-  border: '1px solid #ccc',
+  border: '1px solid var(--line)',
   borderRadius: '8px',
-  background: '#fff',
+  background: 'var(--bg-alt)',
+  color: 'var(--cream)',
   cursor: 'pointer',
   fontSize: 13,
   marginRight: 8,
 };
 
-const btnPrimary = { ...btn, background: '#111', color: '#fff', border: 'none' };
-const btnDanger = { ...btn, color: '#b00020', borderColor: '#f0c0c0' };
+const btnPrimary = { ...btn, background: 'var(--ember)', color: '#1A0D06', border: 'none', fontWeight: 700 };
+const btnDanger = { ...btn, color: '#FF8A75', borderColor: '#5A2A1F' };
 
 function emptyForm(fields) {
   const out = {};
@@ -183,13 +187,13 @@ export default function ResourceManager({ token, table, title, fields, displayCo
       </div>
 
       {error && (
-        <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: '#ffe5e5', color: '#b00020' }}>
+        <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: '#3A1712', color: '#FF8A75', border: '1px solid #5A2A1F' }}>
           {error}
         </div>
       )}
 
       {editingId !== null && (
-        <form onSubmit={submit} style={{ marginBottom: 24, padding: 16, background: '#fafafa', borderRadius: 10, border: '1px solid #eee' }}>
+        <form onSubmit={submit} style={{ marginBottom: 24, padding: 16, background: 'var(--bg-alt)', borderRadius: 10, border: '1px solid var(--line)' }}>
           <h3 style={{ marginTop: 0 }}>{editingId === 'new' ? 'New' : `Edit "${editingId}"`}</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
             {fields.map((f) => {
@@ -197,7 +201,7 @@ export default function ResourceManager({ token, table, title, fields, displayCo
                 return (
                   <label key={f.key}>
                     ID
-                    <input style={{ ...inputStyle, background: '#eee' }} value={form.id} disabled />
+                    <input style={{ ...inputStyle, background: 'var(--bg)', color: 'var(--muted)' }} value={form.id} disabled />
                   </label>
                 );
               }
