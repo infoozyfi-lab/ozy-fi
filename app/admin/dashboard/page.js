@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, Fragment } from 'react';
 import ResourceManager from '@/components/admin/ResourceManager';
+import BundleManager from '@/components/admin/BundleManager';
 
 const ORDER_STATUSES = ['received', 'preparing', 'on_the_way', 'delivered', 'cancelled'];
 const STATUS_LABELS = {
@@ -424,13 +425,18 @@ function SettingsTab({ token }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [products, setProducts] = useState([]);
+  const [bundles, setBundles] = useState([]);
 
   useEffect(() => {
-    fetch('/api/admin/settings', { headers: { Authorization: `Bearer ${token}` } })
+    const headers = { Authorization: `Bearer ${token}` };
+    fetch('/api/admin/settings', { headers })
       .then((r) => r.json())
       .then((d) => setValues(d || {}))
       .catch(() => {})
       .finally(() => setLoading(false));
+    fetch('/api/admin/products', { headers }).then((r) => r.json()).then((d) => setProducts(Array.isArray(d) ? d : [])).catch(() => {});
+    fetch('/api/admin/bundles', { headers }).then((r) => r.json()).then((d) => setBundles(Array.isArray(d) ? d : [])).catch(() => {});
   }, [token]);
 
   const setField = (key, val) => {
@@ -455,10 +461,58 @@ function SettingsTab({ token }) {
 
   if (loading) return <p>Loading…</p>;
 
+  const featuredType = values.featured_type || 'none';
+
   return (
     <div style={box}>
       <h2 style={{ marginTop: 0 }}>Restaurant Settings</h2>
       <form onSubmit={save}>
+        <h3 style={{ marginBottom: 4 }}>Homepage featured card</h3>
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
+          Shown on the homepage, right below the hero. Pick a real product or bundle — its
+          photo/name/price stay in sync automatically — or a custom banner.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 24 }}>
+          <label>
+            Card type
+            <select style={inputStyle} value={featuredType} onChange={(e) => setField('featured_type', e.target.value)}>
+              <option value="none">None (hidden)</option>
+              <option value="product">Real product</option>
+              <option value="bundle">Bundle / combo deal</option>
+              <option value="banner">Custom banner</option>
+            </select>
+          </label>
+
+          {featuredType === 'product' && (
+            <label>
+              Featured product
+              <select style={inputStyle} value={values.featured_product_id || ''} onChange={(e) => setField('featured_product_id', e.target.value)}>
+                <option value="">Select…</option>
+                {products.map((p) => <option key={p.id} value={p.id}>{p.name} · €{Number(p.price).toFixed(2)}</option>)}
+              </select>
+            </label>
+          )}
+
+          {featuredType === 'bundle' && (
+            <label>
+              Featured bundle
+              <select style={inputStyle} value={values.featured_bundle_id || ''} onChange={(e) => setField('featured_bundle_id', e.target.value)}>
+                <option value="">Select…</option>
+                {bundles.map((b) => <option key={b.id} value={b.id}>{b.title} · €{Number(b.price).toFixed(2)}</option>)}
+              </select>
+            </label>
+          )}
+
+          {featuredType === 'banner' && (
+            <>
+              <label>Banner title<input style={inputStyle} value={values.featured_banner_title || ''} onChange={(e) => setField('featured_banner_title', e.target.value)} /></label>
+              <label>Banner price text (optional)<input style={inputStyle} value={values.featured_banner_price || ''} onChange={(e) => setField('featured_banner_price', e.target.value)} placeholder="e.g. From €9.90" /></label>
+              <label style={{ gridColumn: '1 / -1' }}>Banner image URL<input style={inputStyle} value={values.featured_banner_image || ''} onChange={(e) => setField('featured_banner_image', e.target.value)} /></label>
+            </>
+          )}
+        </div>
+
+        <h3 style={{ marginBottom: 4 }}>Restaurant info</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
           {SETTINGS_FIELDS.map((f) => (
             <label key={f.key} style={f.textarea ? { gridColumn: '1 / -1' } : undefined}>
@@ -498,12 +552,14 @@ function SettingsTab({ token }) {
 function MenuTabs({ token }) {
   const [categories, setCategories] = useState([]);
   const [optionGroups, setOptionGroups] = useState([]);
+  const [products, setProducts] = useState([]);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const loadRefs = () => {
     const headers = { Authorization: `Bearer ${token}` };
     fetch('/api/admin/categories', { headers }).then((r) => r.json()).then((d) => setCategories(Array.isArray(d) ? d : [])).catch(() => {});
     fetch('/api/admin/option_groups', { headers }).then((r) => r.json()).then((d) => setOptionGroups(Array.isArray(d) ? d : [])).catch(() => {});
+    fetch('/api/admin/products', { headers }).then((r) => r.json()).then((d) => setProducts(Array.isArray(d) ? d : [])).catch(() => {});
   };
 
   useEffect(loadRefs, [token, refreshKey]);
@@ -571,6 +627,7 @@ function MenuTabs({ token }) {
     { id: 'products', label: 'Products' },
     { id: 'options', label: 'Options' },
     { id: 'addons', label: 'Add-ons' },
+    { id: 'bundles', label: 'Bundles' },
   ];
 
   return (
@@ -598,6 +655,9 @@ function MenuTabs({ token }) {
       )}
       {tab === 'addons' && (
         <ResourceManager token={token} table="addons" title="Add-ons (drinks, dips, snacks)" fields={addonFields} displayCols={['id', 'type', 'name', 'price', 'active']} onChanged={bump} />
+      )}
+      {tab === 'bundles' && (
+        <BundleManager token={token} categories={categories} products={products} onChanged={bump} />
       )}
     </div>
   );
