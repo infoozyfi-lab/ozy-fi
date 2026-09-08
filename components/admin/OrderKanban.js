@@ -154,12 +154,71 @@ function OrderDetailModal({ token, order, onClose, onAdvance, onCancel, movingId
   );
 }
 
+function EtaPromptModal({ order, onConfirm, onClose }) {
+  const [custom, setCustom] = useState('');
+  const presets = [15, 20, 25, 30, 45];
+
+  return (
+    <div
+      role="dialog"
+      aria-label="How long will this take?"
+      style={{ position: 'fixed', inset: 0, zIndex: 950, background: 'rgba(10,6,4,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--line)', borderRadius: 14, padding: 22, width: '100%', maxWidth: 380 }}
+      >
+        <h3 style={{ margin: '0 0 4px' }}>Accept {order.order_num}</h3>
+        <p style={{ margin: '0 0 16px', color: 'var(--muted)', fontSize: 14 }}>How long will this take?</p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 14 }}>
+          {presets.map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => onConfirm(m)}
+              style={{ background: 'var(--bg-alt)', color: 'var(--cream)', border: '1px solid var(--line)', borderRadius: 8, padding: '12px 6px', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}
+            >
+              {m} min
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="number"
+            min="1"
+            placeholder="Custom minutes"
+            value={custom}
+            onChange={(e) => setCustom(e.target.value)}
+            style={{ flex: 1, padding: 12, border: '1px solid var(--line)', borderRadius: 8, background: 'var(--bg-alt)', color: 'var(--cream)', fontSize: 15 }}
+          />
+          <button
+            type="button"
+            disabled={!custom || Number(custom) <= 0}
+            onClick={() => onConfirm(Number(custom))}
+            style={{ background: 'var(--ember)', color: '#1A0D06', border: 'none', borderRadius: 8, padding: '12px 18px', fontWeight: 700, cursor: 'pointer' }}
+          >
+            Confirm
+          </button>
+        </div>
+
+        <button type="button" onClick={onClose} style={{ marginTop: 14, background: 'none', border: 'none', color: 'var(--muted)', textDecoration: 'underline', fontSize: 13, cursor: 'pointer', padding: 0 }}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function OrderKanban({ token, size = 'normal' }) {
   const large = size === 'large';
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [movingId, setMovingId] = useState(null);
   const [viewingOrder, setViewingOrder] = useState(null);
+  const [etaOrder, setEtaOrder] = useState(null); // order currently being accepted (ETA prompt open)
   const [soundOn, setSoundOn] = useState(true);
   const [flash, setFlash] = useState(false);
   const [, forceTick] = useState(0);
@@ -194,13 +253,6 @@ export default function OrderKanban({ token, size = 'normal' }) {
             seenIds.current = new Set(data.map((o) => o.id));
             setFlash(true);
             setTimeout(() => setFlash(false), 4000);
-            if (soundOn && audioRef.current) {
-              audioRef.current.currentTime = 0;
-              audioRef.current.play().catch(() => {
-                // Autoplay blocked until the admin interacts with the page
-                // at least once — the visual flash still gets their attention.
-              });
-            }
           }
         }
 
@@ -219,20 +271,52 @@ export default function OrderKanban({ token, size = 'normal' }) {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [token, soundOn]);
+  }, [token]);
 
-  const advance = async (order, nextStatus) => {
+  // Sound keeps looping for as long as there's at least one order sitting
+  // in "New" (unaccepted) — not just a one-off ping — so a busy kitchen
+  // can't miss it. Stops the moment every new order has been accepted.
+  const pendingCount = orders.filter((o) => o.status === 'received').length;
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.loop = true;
+    if (soundOn && pendingCount > 0) {
+      audio.currentTime = 0;
+      audio.play().catch(() => {
+        // Autoplay blocked until the admin interacts with the page at
+        // least once — the visual flash still gets their attention.
+      });
+    } else {
+      audio.pause();
+    }
+  }, [soundOn, pendingCount]);
+
+  const advance = async (order, nextStatus, etaMinutes) => {
     setMovingId(order.id);
     try {
+      const body = { status: nextStatus };
+      if (etaMinutes) body.estimated_minutes = etaMinutes;
       await fetch(`/api/admin/orders/${order.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ status: nextStatus }),
+        body: JSON.stringify(body),
       });
       setOrders((list) => list.map((o) => (o.id === order.id ? { ...o, status: nextStatus } : o)));
       if (seenIds.current) seenIds.current.add(order.id);
     } finally {
       setMovingId(null);
+    }
+  };
+
+  // "Start preparing" on a brand-new order means accepting it — ask for an
+  // ETA first instead of advancing immediately, so the customer can see it
+  // on /track. Any other column's "next" action advances right away.
+  const handleAdvanceClick = (order, nextStatus) => {
+    if (order.status === 'received' && nextStatus === 'preparing') {
+      setEtaOrder(order);
+    } else {
+      advance(order, nextStatus);
     }
   };
 
@@ -327,7 +411,7 @@ export default function OrderKanban({ token, size = 'normal' }) {
                               <button
                                 type="button"
                                 disabled={movingId === order.id}
-                                onClick={() => advance(order, col.next)}
+                                onClick={() => handleAdvanceClick(order, col.next)}
                                 style={{
                                   flex: 1, minWidth: large ? 140 : 100, background: 'var(--ember)', color: '#1A0D06', border: 'none',
                                   borderRadius: 6, padding: large ? '14px 10px' : '7px 8px', fontSize: large ? 16 : 12, fontWeight: 700, cursor: 'pointer',
@@ -367,6 +451,17 @@ export default function OrderKanban({ token, size = 'normal' }) {
         </>
       )}
 
+      {etaOrder && (
+        <EtaPromptModal
+          order={etaOrder}
+          onClose={() => setEtaOrder(null)}
+          onConfirm={(minutes) => {
+            advance(etaOrder, 'preparing', minutes);
+            setEtaOrder(null);
+          }}
+        />
+      )}
+
       {viewingOrder && (
         <OrderDetailModal
           token={token}
@@ -374,8 +469,8 @@ export default function OrderKanban({ token, size = 'normal' }) {
           movingId={movingId}
           onClose={() => setViewingOrder(null)}
           onAdvance={async (order, next) => {
-            await advance(order, next);
             setViewingOrder(null);
+            handleAdvanceClick(order, next);
           }}
           onCancel={async (order) => {
             await cancelOrder(order);
