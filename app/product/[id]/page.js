@@ -20,6 +20,9 @@ export async function generateMetadata({ params }) {
   return {
     title: `${product.name} — ozy.fi`,
     description: product.description || `Order ${product.name} online for delivery or pickup from ozy.fi.`,
+    alternates: {
+      canonical: `/product/${params.id}`,
+    },
     openGraph: {
       title: `${product.name} — ozy.fi`,
       description: product.description || undefined,
