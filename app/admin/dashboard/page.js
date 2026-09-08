@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, Fragment } from 'react';
 import ResourceManager from '@/components/admin/ResourceManager';
 import BundleManager from '@/components/admin/BundleManager';
+import OrderKanban from '@/components/admin/OrderKanban';
 import StatTile from '@/components/admin/charts/StatTile';
 import AreaTrendChart from '@/components/admin/charts/AreaTrendChart';
 import BarChart from '@/components/admin/charts/BarChart';
@@ -333,6 +334,7 @@ function OrdersTab({ token }) {
   const [updatingId, setUpdatingId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [view, setView] = useState('board');
 
   const changeStatus = async (order, status) => {
     setUpdatingId(order.id);
@@ -350,11 +352,23 @@ function OrdersTab({ token }) {
 
   const visibleOrders = statusFilter === 'all' ? orders : orders.filter((o) => o.status === statusFilter);
 
+  if (view === 'board') {
+    return (
+      <div style={box}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+          <button type="button" style={btn} onClick={() => setView('list')}>Switch to list view</button>
+        </div>
+        <OrderKanban token={token} onOpenOrder={(order) => { setView('list'); setExpandedId(order.id); }} />
+      </div>
+    );
+  }
+
   return (
     <div style={box}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <h2 style={{ margin: 0 }}>Orders</h2>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button type="button" style={btn} onClick={() => setView('board')}>Switch to board view</button>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ ...inputStyle, width: 'auto', marginTop: 0, padding: '8px 10px' }}>
             <option value="all">All statuses</option>
             {ORDER_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
