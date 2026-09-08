@@ -355,7 +355,15 @@ function OrdersTab({ token }) {
   if (view === 'board') {
     return (
       <div style={box}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+          <a
+            href="/admin/kitchen"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ ...btnPrimary, textDecoration: 'none', display: 'inline-block' }}
+          >
+            Open Kitchen Display ↗
+          </a>
           <button type="button" style={btn} onClick={() => setView('list')}>Switch to list view</button>
         </div>
         <OrderKanban token={token} />
