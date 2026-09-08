@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useStore } from '@/context/StoreContext';
 
 const TOPPING_EMOJI = {
@@ -261,7 +262,7 @@ export default function ProductPage() {
     <div className={`product-page${isProductPageOpen ? ' open' : ''}`}>
       <div className="pp-topbar">
         <button className="pp-back" type="button" aria-label="Back" onClick={closeProduct}>←</button>
-        <span className="pp-topbar-title">ozy<span>.fi</span></span>
+        <Link href="/" className="pp-topbar-title">ozy<span>.fi</span></Link>
         <button
           className="pp-cart"
           type="button"
