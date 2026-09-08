@@ -20,6 +20,9 @@ export async function generateMetadata({ params }) {
   return {
     title: `${category.title} Menu — ozy.fi`,
     description: category.sub || `Browse our ${category.title} menu and order online for delivery or pickup.`,
+    alternates: {
+      canonical: `/menu/${params.category}`,
+    },
   };
 }
 
