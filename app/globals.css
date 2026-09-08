@@ -776,6 +776,21 @@ footer{ padding: 56px 0 32px; }
 .track-form input:focus{ border-color: var(--ember); outline:none; }
 
 .track-result{ background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
+.track-recent{ margin-bottom: 20px; padding: 14px; background: var(--bg-card); border: 1px solid var(--line); border-radius: 10px; }
+.track-recent-title{ margin: 0 0 8px; font-size: 0.84rem; color: var(--muted); }
+.track-recent-btn{
+  display:flex; justify-content:space-between; align-items:center; width:100%;
+  background: var(--bg-alt); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 14px; margin-bottom: 8px; color: var(--cream); font-weight: 700; cursor:pointer; text-align:left;
+}
+.track-recent-btn:last-child{ margin-bottom:0; }
+.track-recent-btn span{ color: var(--ember); font-weight: 700; }
+.track-recent-meta{ color: var(--muted) !important; font-weight: 400 !important; font-size: 0.82rem; }
+.track-lost-link{ background:none; border:none; color: var(--muted); text-decoration: underline; font-size: 0.85rem; cursor:pointer; padding: 12px 0 0; }
+.track-eta{
+  margin: 0 0 6px; padding: 10px 14px; background: rgba(255,106,61,0.12); border: 1px solid var(--ember-dim);
+  border-radius: 8px; color: var(--cream); font-size: 0.92rem;
+}
 .track-result-head{ display:flex; justify-content:space-between; align-items:flex-start; gap: 12px; flex-wrap:wrap; }
 .track-order-num{ font-family:'Anton', sans-serif; color: var(--ember); font-size: 1.4rem; }
 .track-placed-at{ color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
