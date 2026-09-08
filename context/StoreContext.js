@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 const StoreContext = createContext(null);
 
@@ -16,25 +17,28 @@ function setUrl(path) {
   window.history.pushState({}, '', path);
 }
 
-// Used by every "close this overlay" action (product page, checkout,
-// bundle builder, order confirmation). Real browser "back" correctly
-// returns to whatever page the customer actually came from — homepage,
-// /menu, /menu/pizza, /product/xyz — instead of a cosmetic-only "/" URL
-// that leaves them stranded on a bare page shell.
-function goBack() {
-  if (typeof window === 'undefined') return;
-  if (window.history.length > 1) {
-    window.history.back();
-  } else {
-    setUrl('/');
-  }
-}
-
 // Fallback single-option lists used only until /api/menu has loaded, so the
 // UI never crashes on first paint. Real values always come from the DB.
 const FALLBACK_OPTION = [{ id: 'default', label: 'Default', delta: 0 }];
 
 export function StoreProvider({ children }) {
+  const router = useRouter();
+
+  // Used by every "close this overlay" action (product page, checkout,
+  // bundle builder, order confirmation). Real browser "back" correctly
+  // returns to whatever page the customer actually came from — homepage,
+  // /menu, /menu/pizza, /product/xyz. If there's nowhere to go back to
+  // (e.g. they landed straight on a product page from Google, with no
+  // in-app history), a real Next.js navigation to the homepage instead of
+  // a cosmetic-only "/" URL that would leave them stranded on a bare page.
+  const goBack = useCallback(() => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      window.history.back();
+    } else {
+      router.push('/');
+    }
+  }, [router]);
+
   const [cart, setCart] = useState([]);
 
   // Persist the cart across page navigations (/, /menu, /product/...) and
@@ -338,7 +342,7 @@ export function StoreProvider({ children }) {
     // actually came from (homepage, /menu, /menu/pizza, ...) instead of
     // always landing on "/".
     goBack();
-  }, [selection]);
+  }, [selection, goBack]);
 
   const toggleTopping = useCallback((topping) => {
     setSelection((s) => {
@@ -437,7 +441,7 @@ export function StoreProvider({ children }) {
     goBack();
   }, [
     activeProduct, selection, unitPrice, lineTotal, sizeLargeUpcharge,
-    baseOptions, sauceOptions, cheeseOptions, sauceStripeOptions, dipOptions, allFillings,
+    baseOptions, sauceOptions, cheeseOptions, sauceStripeOptions, dipOptions, allFillings, goBack,
   ]);
 
   const removeFromCart = useCallback((key) => {
@@ -494,7 +498,7 @@ export function StoreProvider({ children }) {
   const closeCheckout = useCallback(() => {
     setCheckoutOpen(false);
     goBack();
-  }, []);
+  }, [goBack]);
 
   const continueFromUpsell = useCallback(() => {
     setDrinkUpsellOpen(false);
@@ -569,7 +573,7 @@ export function StoreProvider({ children }) {
     setActiveBundle(null);
     setBundleSlots([]);
     goBack();
-  }, []);
+  }, [goBack]);
 
   const removeBundleSlotItem = useCallback((slotIndex, itemKey) => {
     setBundleSlots((slots) => {
@@ -639,7 +643,7 @@ export function StoreProvider({ children }) {
   const closeConfirm = useCallback(() => {
     setConfirmedOrder(null);
     goBack();
-  }, []);
+  }, [goBack]);
 
   const value = {
     cart,
