@@ -1,11 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useStore } from '@/context/StoreContext';
 
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { goToCheckout, cart } = useStore();
+  const pathname = usePathname();
   const itemCount = cart.reduce((sum, line) => sum + line.qty, 0);
 
   const scrollTo = (id) => (e) => {
@@ -24,13 +27,29 @@ export default function Header() {
   return (
     <header>
       <nav className="nav wrap">
-        <button className="logo" onClick={scrollTop} type="button">
-          ozy<span>.fi</span>
-        </button>
+        {pathname === '/' ? (
+          <button className="logo" onClick={scrollTop} type="button">
+            ozy<span>.fi</span>
+          </button>
+        ) : (
+          <Link className="logo" href="/" onClick={() => setMobileOpen(false)}>
+            ozy<span>.fi</span>
+          </Link>
+        )}
         <ul className="nav-links">
-          <li><a href="#menu" onClick={scrollTo('menu')}>Menu</a></li>
-          <li><a href="#story" onClick={scrollTo('story')}>Offers</a></li>
-          <li><a href="#visit" onClick={scrollTo('visit')}>Gift cards</a></li>
+          {pathname === '/' ? (
+            <>
+              <li><a href="#menu" onClick={scrollTo('menu')}>Menu</a></li>
+              <li><a href="#story" onClick={scrollTo('story')}>Offers</a></li>
+              <li><a href="#visit" onClick={scrollTo('visit')}>Gift cards</a></li>
+            </>
+          ) : (
+            <>
+              <li><Link href="/menu">Menu</Link></li>
+              <li><Link href="/#story">Offers</Link></li>
+              <li><Link href="/#visit">Gift cards</Link></li>
+            </>
+          )}
           <li><a href="/track">Track order</a></li>
         </ul>
         <div className="nav-order">
@@ -63,9 +82,19 @@ export default function Header() {
           <span></span><span></span><span></span>
         </button>
         <div className={`mobile-nav${mobileOpen ? ' open' : ''}`}>
-          <a href="#menu" onClick={scrollTo('menu')}>Menu</a>
-          <a href="#story" onClick={scrollTo('story')}>Offers</a>
-          <a href="#visit" onClick={scrollTo('visit')}>Gift cards</a>
+          {pathname === '/' ? (
+            <>
+              <a href="#menu" onClick={scrollTo('menu')}>Menu</a>
+              <a href="#story" onClick={scrollTo('story')}>Offers</a>
+              <a href="#visit" onClick={scrollTo('visit')}>Gift cards</a>
+            </>
+          ) : (
+            <>
+              <Link href="/menu" onClick={() => setMobileOpen(false)}>Menu</Link>
+              <Link href="/#story" onClick={() => setMobileOpen(false)}>Offers</Link>
+              <Link href="/#visit" onClick={() => setMobileOpen(false)}>Gift cards</Link>
+            </>
+          )}
           <a href="/track">Track order</a>
         </div>
       </nav>
