@@ -1,8 +1,12 @@
 import './globals.css';
 
 export const metadata = {
+  metadataBase: new URL('https://ozy.fi'),
   title: 'ozy.fi — Pizza, kebab & burgers',
   description: 'ozy.fi — order pizza, kebab or burgers for delivery, pickup or eat-in.',
+  alternates: {
+    canonical: '/',
+  },
 };
 
 export const viewport = {
