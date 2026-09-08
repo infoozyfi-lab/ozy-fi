@@ -70,32 +70,63 @@ function formatDate(iso) {
   return d.toLocaleString('en-IE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-function TrackForm() {
-  const [orderNum, setOrderNum] = useState('');
+function formatTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso.includes('T') ? iso : `${iso.replace(' ', 'T')}Z`);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('en-IE', { hour: '2-digit', minute: '2-digit' });
+}
+
+function RecentOrderShortcut({ onPick }) {
+  const [recent, setRecent] = useState([]);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('ozy_recent_orders') || '[]');
+      setRecent(Array.isArray(saved) ? saved.slice(0, 3) : []);
+    } catch {
+      setRecent([]);
+    }
+  }, []);
+
+  if (recent.length === 0) return null;
+
+  return (
+    <div className="track-recent">
+      <p className="track-recent-title">Order from this device recently?</p>
+      {recent.map((o) => (
+        <button key={o.orderNum} type="button" className="track-recent-btn" onClick={() => onPick(o)}>
+          {o.orderNum} <span>→</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PhoneLookup({ onFound }) {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [order, setOrder] = useState(null);
+  const [matches, setMatches] = useState(null);
 
-  const submit = async (e) => {
+  const search = async (e) => {
     e.preventDefault();
-    if (!orderNum.trim() || !phone.trim()) {
-      setError('Please enter both your order number and phone number.');
-      return;
-    }
+    if (!phone.trim()) return;
     setLoading(true);
     setError('');
-    setOrder(null);
+    setMatches(null);
     try {
-      const res = await fetch(
-        `/api/orders/${encodeURIComponent(orderNum.trim())}?phone=${encodeURIComponent(phone.trim())}`
-      );
+      const res = await fetch(`/api/orders/by-phone?phone=${encodeURIComponent(phone.trim())}`);
+      const data = await res.json();
       if (!res.ok) {
-        setError("We couldn't find an order matching that number and phone. Double-check both and try again.");
+        setError(data.error || 'Something went wrong.');
         return;
       }
-      const data = await res.json();
-      setOrder(data);
+      if (!data.orders || data.orders.length === 0) {
+        setError("We couldn't find any recent orders for that phone number.");
+        return;
+      }
+      setMatches(data.orders);
     } catch {
       setError('Something went wrong. Please try again in a moment.');
     } finally {
@@ -104,18 +135,8 @@ function TrackForm() {
   };
 
   return (
-    <>
-      <form className="track-form" onSubmit={submit}>
-        <label>
-          Order number
-          <input
-            type="text"
-            value={orderNum}
-            onChange={(e) => setOrderNum(e.target.value)}
-            placeholder="e.g. OZY-AB123456"
-            autoCapitalize="characters"
-          />
-        </label>
+    <div className="track-phone-lookup">
+      <form onSubmit={search} className="track-form" style={{ marginBottom: matches ? 16 : 0 }}>
         <label>
           Phone number
           <input
@@ -126,10 +147,118 @@ function TrackForm() {
           />
         </label>
         <button type="submit" className={`btn-primary${loading ? ' is-loading' : ''}`} disabled={loading}>
-          {loading ? 'Looking up your order…' : 'Track order'}
+          {loading ? 'Searching…' : 'Find my orders'}
         </button>
         {error && <span className="field-error">{error}</span>}
       </form>
+
+      {matches && (
+        <div className="track-recent">
+          <p className="track-recent-title">Recent orders for this number</p>
+          {matches.map((o) => (
+            <button
+              key={o.orderNum}
+              type="button"
+              className="track-recent-btn"
+              onClick={() => onFound(o.orderNum, phone.trim())}
+            >
+              {o.orderNum} <span className="track-recent-meta">{formatDate(o.createdAt)}</span> <span>→</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TrackForm() {
+  const [orderNum, setOrderNum] = useState('');
+  const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [order, setOrder] = useState(null);
+  const [lostOrderNum, setLostOrderNum] = useState(false);
+
+  const lookup = async (num, ph) => {
+    setLoading(true);
+    setError('');
+    setOrder(null);
+    try {
+      const res = await fetch(
+        `/api/orders/${encodeURIComponent(num.trim())}?phone=${encodeURIComponent(ph.trim())}`
+      );
+      if (!res.ok) {
+        setError("We couldn't find an order matching that number and phone. Double-check both and try again.");
+        return;
+      }
+      const data = await res.json();
+      setOrder(data);
+      setOrderNum(num);
+      setPhone(ph);
+      setLostOrderNum(false);
+    } catch {
+      setError('Something went wrong. Please try again in a moment.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!orderNum.trim() || !phone.trim()) {
+      setError('Please enter both your order number and phone number.');
+      return;
+    }
+    lookup(orderNum, phone);
+  };
+
+  return (
+    <>
+      {!order && !lostOrderNum && (
+        <RecentOrderShortcut onPick={(o) => lookup(o.orderNum, o.phone)} />
+      )}
+
+      {!order && !lostOrderNum && (
+        <>
+          <form className="track-form" onSubmit={submit}>
+            <label>
+              Order number
+              <input
+                type="text"
+                value={orderNum}
+                onChange={(e) => setOrderNum(e.target.value)}
+                placeholder="e.g. OZY-AB123456"
+                autoCapitalize="characters"
+              />
+            </label>
+            <label>
+              Phone number
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="The number you used at checkout"
+              />
+            </label>
+            <button type="submit" className={`btn-primary${loading ? ' is-loading' : ''}`} disabled={loading}>
+              {loading ? 'Looking up your order…' : 'Track order'}
+            </button>
+            {error && <span className="field-error">{error}</span>}
+          </form>
+          <button type="button" className="track-lost-link" onClick={() => { setLostOrderNum(true); setError(''); }}>
+            Don&apos;t have your order number?
+          </button>
+        </>
+      )}
+
+      {!order && lostOrderNum && (
+        <>
+          <PhoneLookup onFound={(num, ph) => lookup(num, ph)} />
+          <button type="button" className="track-lost-link" onClick={() => { setLostOrderNum(false); setError(''); }}>
+            ← I have my order number
+          </button>
+        </>
+      )}
 
       {order && (
         <div className="track-result">
@@ -139,6 +268,12 @@ function TrackForm() {
               <div className="track-placed-at">Placed {formatDate(order.created_at)}</div>
             </div>
           </div>
+
+          {order.estimated_ready_at && ['preparing', 'on_the_way'].includes(order.status) && (
+            <p className="track-eta">
+              ⏱ Estimated ready by <strong>{formatTime(order.estimated_ready_at)}</strong>
+            </p>
+          )}
 
           <OrderTimeline status={order.status} />
 
@@ -164,6 +299,10 @@ function TrackForm() {
           <p className="track-address">
             Delivering to {order.address} · {order.payment_method === 'cod' ? 'Cash on delivery' : order.payment_method}
           </p>
+
+          <button type="button" className="track-lost-link" onClick={() => setOrder(null)}>
+            ← Track a different order
+          </button>
         </div>
       )}
     </>
