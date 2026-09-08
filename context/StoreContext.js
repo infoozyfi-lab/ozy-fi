@@ -16,6 +16,20 @@ function setUrl(path) {
   window.history.pushState({}, '', path);
 }
 
+// Used by every "close this overlay" action (product page, checkout,
+// bundle builder, order confirmation). Real browser "back" correctly
+// returns to whatever page the customer actually came from — homepage,
+// /menu, /menu/pizza, /product/xyz — instead of a cosmetic-only "/" URL
+// that leaves them stranded on a bare page shell.
+function goBack() {
+  if (typeof window === 'undefined') return;
+  if (window.history.length > 1) {
+    window.history.back();
+  } else {
+    setUrl('/');
+  }
+}
+
 // Fallback single-option lists used only until /api/menu has loaded, so the
 // UI never crashes on first paint. Real values always come from the DB.
 const FALLBACK_OPTION = [{ id: 'default', label: 'Default', delta: 0 }];
@@ -287,8 +301,11 @@ export function StoreProvider({ children }) {
 
   // bundleSlotIndex: when set, this ProductPage visit is filling one item of
   // a bundle slot (see openBundle below) instead of a normal cart add.
+  // skipUrlPush: set by the standalone /product/[id] page, which already
+  // did a real Next.js navigation to get here — pushing another cosmetic
+  // URL on top would break the browser back button.
   const openProduct = useCallback(
-    (item, bundleSlotIndex = null) => {
+    (item, bundleSlotIndex = null, { skipUrlPush = false } = {}) => {
       setActiveProduct(item);
       setSelection({
         basePrice: item.price,
@@ -305,7 +322,7 @@ export function StoreProvider({ children }) {
         bundleSlotIndex,
       });
       setProductPageOpen(true);
-      if (bundleSlotIndex == null) setUrl(`/product/${slugify(item.name)}`);
+      if (bundleSlotIndex == null && !skipUrlPush) setUrl(`/product/${slugify(item.name)}`);
     },
     [baseOptions, sauceOptions, cheeseOptions, sauceStripeOptions, dipOptions]
   );
@@ -317,7 +334,10 @@ export function StoreProvider({ children }) {
       setBundleModalOpen(true);
       return;
     }
-    setUrl('/');
+    // Real browser "back" — correctly returns to wherever the customer
+    // actually came from (homepage, /menu, /menu/pizza, ...) instead of
+    // always landing on "/".
+    goBack();
   }, [selection]);
 
   const toggleTopping = useCallback((topping) => {
@@ -412,7 +432,9 @@ export function StoreProvider({ children }) {
       },
     ]);
     setProductPageOpen(false);
-    setUrl('/');
+    // Same real-navigation fix as closeProduct: return to wherever the
+    // customer actually came from instead of a cosmetic-only "/" URL.
+    goBack();
   }, [
     activeProduct, selection, unitPrice, lineTotal, sizeLargeUpcharge,
     baseOptions, sauceOptions, cheeseOptions, sauceStripeOptions, dipOptions, allFillings,
@@ -471,7 +493,7 @@ export function StoreProvider({ children }) {
 
   const closeCheckout = useCallback(() => {
     setCheckoutOpen(false);
-    setUrl('/');
+    goBack();
   }, []);
 
   const continueFromUpsell = useCallback(() => {
@@ -546,7 +568,7 @@ export function StoreProvider({ children }) {
     setBundleModalOpen(false);
     setActiveBundle(null);
     setBundleSlots([]);
-    setUrl('/');
+    goBack();
   }, []);
 
   const removeBundleSlotItem = useCallback((slotIndex, itemKey) => {
@@ -616,7 +638,7 @@ export function StoreProvider({ children }) {
 
   const closeConfirm = useCallback(() => {
     setConfirmedOrder(null);
-    setUrl('/');
+    goBack();
   }, []);
 
   const value = {
