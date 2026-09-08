@@ -154,7 +154,8 @@ function OrderDetailModal({ token, order, onClose, onAdvance, onCancel, movingId
   );
 }
 
-export default function OrderKanban({ token }) {
+export default function OrderKanban({ token, size = 'normal' }) {
+  const large = size === 'large';
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [movingId, setMovingId] = useState(null);
@@ -258,10 +259,10 @@ export default function OrderKanban({ token }) {
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <audio ref={audioRef} src="/notification.wav" preload="auto" />
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
-        <h2 style={{ margin: 0 }}>Orders {flash && <span style={{ color: '#FF6A3D' }}>● New!</span>}</h2>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--muted)' }}>
-          <input type="checkbox" checked={soundOn} onChange={(e) => setSoundOn(e.target.checked)} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: large ? 20 : 14, flexWrap: 'wrap', gap: 10 }}>
+        <h2 style={{ margin: 0, fontSize: large ? 28 : undefined }}>Orders {flash && <span style={{ color: '#FF6A3D' }}>● New!</span>}</h2>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: large ? 16 : 13, color: 'var(--muted)' }}>
+          <input type="checkbox" checked={soundOn} onChange={(e) => setSoundOn(e.target.checked)} style={large ? { width: 20, height: 20 } : undefined} />
           Sound alert for new orders
         </label>
       </div>
@@ -270,32 +271,32 @@ export default function OrderKanban({ token }) {
         <p>Loading orders…</p>
       ) : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(${large ? 280 : 240}px, 1fr))`, gap: large ? 18 : 14 }}>
             {COLUMNS.map((col) => {
               const colOrders = activeOrders
                 .filter((o) => o.status === col.status)
                 .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
               return (
-                <div key={col.status} style={{ background: 'var(--bg-alt)', borderRadius: 10, border: '1px solid var(--line)', padding: 12, minHeight: 120 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <strong style={{ fontSize: 14 }}>{col.title}</strong>
-                    <span style={{ fontSize: 12, color: 'var(--muted)', background: 'var(--bg)', borderRadius: 999, padding: '2px 8px' }}>
+                <div key={col.status} style={{ background: 'var(--bg-alt)', borderRadius: 10, border: '1px solid var(--line)', padding: large ? 16 : 12, minHeight: 120 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: large ? 14 : 10 }}>
+                    <strong style={{ fontSize: large ? 20 : 14 }}>{col.title}</strong>
+                    <span style={{ fontSize: large ? 16 : 12, color: 'var(--muted)', background: 'var(--bg)', borderRadius: 999, padding: large ? '4px 12px' : '2px 8px' }}>
                       {colOrders.length}
                     </span>
                   </div>
 
                   {colOrders.length === 0 && (
-                    <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0 }}>Nothing here.</p>
+                    <p style={{ fontSize: large ? 16 : 13, color: 'var(--muted)', margin: 0 }}>Nothing here.</p>
                   )}
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: large ? 12 : 8 }}>
                     {colOrders.map((order) => {
                       const mins = minutesAgo(order.created_at);
                       return (
                         <div
                           key={order.id}
-                          style={{ background: 'var(--bg-card)', border: '1px solid var(--line)', borderRadius: 8, padding: 10 }}
+                          style={{ background: 'var(--bg-card)', border: '1px solid var(--line)', borderRadius: 8, padding: large ? 16 : 10 }}
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                             <button
@@ -303,21 +304,21 @@ export default function OrderKanban({ token }) {
                               onClick={() => setViewingOrder(order)}
                               style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', color: 'var(--cream)' }}
                             >
-                              <strong style={{ fontSize: 13 }}>{order.order_num}</strong>
-                              <div style={{ fontSize: 12, color: 'var(--muted)' }}>{order.customer_name}</div>
+                              <strong style={{ fontSize: large ? 20 : 13 }}>{order.order_num}</strong>
+                              <div style={{ fontSize: large ? 17 : 12, color: 'var(--muted)' }}>{order.customer_name}</div>
                             </button>
                             <span
                               title={`${mins} min ago`}
                               style={{
-                                fontSize: 11, fontWeight: 700, color: '#1A0D06', background: ageColor(mins),
-                                borderRadius: 999, padding: '2px 7px', flexShrink: 0,
+                                fontSize: large ? 15 : 11, fontWeight: 700, color: '#1A0D06', background: ageColor(mins),
+                                borderRadius: 999, padding: large ? '4px 10px' : '2px 7px', flexShrink: 0,
                               }}
                             >
                               {mins}m
                             </span>
                           </div>
 
-                          <div style={{ fontSize: 13, fontWeight: 700, margin: '6px 0' }}>
+                          <div style={{ fontSize: large ? 19 : 13, fontWeight: 700, margin: large ? '10px 0' : '6px 0' }}>
                             {formatCurrency(order.total)}
                           </div>
 
@@ -328,8 +329,8 @@ export default function OrderKanban({ token }) {
                                 disabled={movingId === order.id}
                                 onClick={() => advance(order, col.next)}
                                 style={{
-                                  flex: 1, minWidth: 100, background: 'var(--ember)', color: '#1A0D06', border: 'none',
-                                  borderRadius: 6, padding: '7px 8px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                                  flex: 1, minWidth: large ? 140 : 100, background: 'var(--ember)', color: '#1A0D06', border: 'none',
+                                  borderRadius: 6, padding: large ? '14px 10px' : '7px 8px', fontSize: large ? 16 : 12, fontWeight: 700, cursor: 'pointer',
                                 }}
                               >
                                 {movingId === order.id ? '…' : col.nextLabel}
@@ -342,7 +343,7 @@ export default function OrderKanban({ token }) {
                                 onClick={() => cancelOrder(order)}
                                 style={{
                                   background: 'none', color: '#FF8A75', border: '1px solid #5A2A1F',
-                                  borderRadius: 6, padding: '7px 8px', fontSize: 12, cursor: 'pointer',
+                                  borderRadius: 6, padding: large ? '14px 12px' : '7px 8px', fontSize: large ? 15 : 12, cursor: 'pointer',
                                 }}
                               >
                                 Cancel
