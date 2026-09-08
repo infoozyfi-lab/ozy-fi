@@ -1,28 +1,29 @@
 'use client';
 
+import Link from 'next/link';
 import { useStore } from '@/context/StoreContext';
 
 export default function FeaturedCard() {
-  const { featured, products, bundles, openProduct, openBundle } = useStore();
+  const { featured, products, bundles, openBundle } = useStore();
 
   if (!featured || featured.type === 'none') return null;
 
-  return <section className="featured-section"><div className="wrap">{renderCard(featured, { products, bundles, openProduct, openBundle })}</div></section>;
+  return <section className="featured-section"><div className="wrap">{renderCard(featured, { products, bundles, openBundle })}</div></section>;
 }
 
-function renderCard(featured, { products, bundles, openProduct, openBundle }) {
+function renderCard(featured, { products, bundles, openBundle }) {
   if (featured.type === 'product') {
     const product = products.find((p) => p.id === featured.productId);
     if (!product) return null;
     return (
-      <button type="button" className="featured-card" onClick={() => openProduct(product)}>
+      <Link href={`/product/${product.id}`} className="featured-card">
         <span className="featured-badge">NEW</span>
         <img className="featured-img" src={product.image} alt={product.name} />
         <span className="featured-info">
           <span className="featured-name">{product.name}</span>
           <span className="featured-price">{product.price.toFixed(2)} €</span>
         </span>
-      </button>
+      </Link>
     );
   }
 

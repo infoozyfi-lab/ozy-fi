@@ -8,7 +8,6 @@ const SCROLLSPY_OFFSET = 132;
 
 export default function MenuSection({ onlyCategory = null }) {
   const {
-    openProduct,
     categories,
     products: items,
     menuLoading: loading,
@@ -209,11 +208,10 @@ export default function MenuSection({ onlyCategory = null }) {
             {items
               .filter((item) => item.cat === cat.id)
               .map((item) => (
-                <button
+                <Link
                   key={item.id}
-                  type="button"
+                  href={`/product/${item.id}`}
                   className="menu-item"
-                  onClick={() => openProduct(item)}
                 >
                   <span className="menu-item-info">
 
@@ -255,7 +253,7 @@ export default function MenuSection({ onlyCategory = null }) {
                     </span>
 
                   </span>
-                </button>
+                </Link>
               ))}
           </div>
         ))}
