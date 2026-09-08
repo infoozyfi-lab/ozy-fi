@@ -328,15 +328,14 @@ export function StoreProvider({ children }) {
   );
 
   const closeProduct = useCallback(() => {
-    setProductPageOpen(false);
     if (selection?.bundleSlotIndex != null) {
       // Was filling a bundle slot — go back to the bundle modal, not home.
+      setProductPageOpen(false);
       setBundleModalOpen(true);
       return;
     }
-    // Real browser "back" — correctly returns to wherever the customer
-    // actually came from (homepage, /menu, /menu/pizza, ...) instead of
-    // always landing on "/".
+    // Deliberately not closing the overlay before navigating — see the
+    // note in addToCart above.
     goBack();
   }, [selection, goBack]);
 
@@ -431,9 +430,9 @@ export function StoreProvider({ children }) {
         lineTotal,
       },
     ]);
-    setProductPageOpen(false);
-    // Same real-navigation fix as closeProduct: return to wherever the
-    // customer actually came from instead of a cosmetic-only "/" URL.
+    // Deliberately not closing the overlay here — navigating straight to
+    // /menu means the whole page (overlay included) swaps out in one go,
+    // instead of a flash of the bare page underneath first.
     goBack();
   }, [
     activeProduct, selection, unitPrice, lineTotal, sizeLargeUpcharge,
