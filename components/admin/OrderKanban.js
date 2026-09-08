@@ -248,6 +248,7 @@ export default function OrderKanban({ token, size = 'normal' }) {
   const [etaOrder, setEtaOrder] = useState(null); // order currently being accepted (ETA prompt open)
   const [soundOn, setSoundOn] = useState(true);
   const [soundUnlocked, setSoundUnlocked] = useState(false);
+  const [showCancelled, setShowCancelled] = useState(false);
   const [flash, setFlash] = useState(false);
   const [, forceTick] = useState(0);
 
@@ -377,7 +378,10 @@ export default function OrderKanban({ token, size = 'normal' }) {
   };
 
   const activeOrders = orders.filter((o) => o.status !== 'cancelled');
-  const cancelledCount = orders.length - activeOrders.length;
+  const cancelledOrders = orders
+    .filter((o) => o.status === 'cancelled')
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const cancelledCount = cancelledOrders.length;
 
   return (
     <div>
@@ -498,9 +502,41 @@ export default function OrderKanban({ token, size = 'normal' }) {
           </div>
 
           {cancelledCount > 0 && (
-            <p style={{ marginTop: 14, fontSize: 13, color: 'var(--muted)' }}>
-              {cancelledCount} cancelled order{cancelledCount === 1 ? '' : 's'} hidden from the board.
-            </p>
+            <div style={{ marginTop: 20, borderTop: '1px solid var(--line)', paddingTop: 14 }}>
+              <button
+                type="button"
+                onClick={() => setShowCancelled((v) => !v)}
+                style={{
+                  background: 'none', border: 'none', color: 'var(--muted)', fontSize: 13,
+                  cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                {showCancelled ? '▾' : '▸'} {cancelledCount} cancelled order{cancelledCount === 1 ? '' : 's'}
+              </button>
+
+              {showCancelled && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+                  {cancelledOrders.map((order) => (
+                    <button
+                      key={order.id}
+                      type="button"
+                      onClick={() => setViewingOrder(order)}
+                      style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        background: 'var(--bg-alt)', border: '1px solid var(--line)', borderRadius: 8,
+                        padding: '10px 12px', cursor: 'pointer', textAlign: 'left', opacity: 0.75,
+                      }}
+                    >
+                      <span>
+                        <strong style={{ fontSize: 13 }}>{order.order_num}</strong>
+                        <span style={{ color: 'var(--muted)', fontSize: 12, marginLeft: 8 }}>{order.customer_name}</span>
+                      </span>
+                      <span style={{ fontSize: 13, color: 'var(--muted)' }}>{formatCurrency(order.total)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </>
       )}
