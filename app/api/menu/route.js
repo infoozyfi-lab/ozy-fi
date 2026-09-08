@@ -63,12 +63,11 @@ export async function GET(request) {
     headers: {
       'content-type': 'application/json;charset=UTF-8',
       // Cached aggressively (browser + edge) since admin edits already
-      // purge this instantly (see purgeMenuCache) — a long max-age here
+      // purge this instantly (see purgeMenuCache) — a longer max-age here
       // just means repeat visits (e.g. product page → product page)
       // reuse the same response instead of re-downloading the whole
-      // menu every time. stale-while-revalidate lets a slightly-stale
-      // copy serve instantly while a fresh one loads in the background.
-      'Cache-Control': 'public, max-age=300, s-maxage=300, stale-while-revalidate=86400',
+      // menu every time.
+      'Cache-Control': 'public, max-age=300, s-maxage=300',
     },
   });
 
