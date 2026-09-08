@@ -154,9 +154,21 @@ function OrderDetailModal({ token, order, onClose, onAdvance, onCancel, movingId
   );
 }
 
-function EtaPromptModal({ order, onConfirm, onClose }) {
+function EtaPromptModal({ token, order, onConfirm, onClose }) {
   const [custom, setCustom] = useState('');
+  const [items, setItems] = useState(null);
+  const [loadingItems, setLoadingItems] = useState(true);
   const presets = [15, 20, 25, 30, 45];
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/admin/orders/${order.id}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setItems(d.items || []); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoadingItems(false); });
+    return () => { cancelled = true; };
+  }, [token, order.id]);
 
   return (
     <div
@@ -167,9 +179,24 @@ function EtaPromptModal({ order, onConfirm, onClose }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ background: 'var(--bg-card)', border: '1px solid var(--line)', borderRadius: 14, padding: 22, width: '100%', maxWidth: 380 }}
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--line)', borderRadius: 14, padding: 22, width: '100%', maxWidth: 380, maxHeight: '85vh', overflowY: 'auto' }}
       >
         <h3 style={{ margin: '0 0 4px' }}>Accept {order.order_num}</h3>
+
+        <div style={{ margin: '12px 0 16px', padding: 12, background: 'var(--bg-alt)', borderRadius: 8 }}>
+          {loadingItems ? (
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>Loading order items…</p>
+          ) : items && items.length > 0 ? (
+            items.map((item) => (
+              <div key={item.id} style={{ fontSize: 14, padding: '4px 0' }}>
+                <strong>{item.qty}×</strong> {item.name}
+              </div>
+            ))
+          ) : (
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>Could not load items.</p>
+          )}
+        </div>
+
         <p style={{ margin: '0 0 16px', color: 'var(--muted)', fontSize: 14 }}>How long will this take?</p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 14 }}>
@@ -220,6 +247,7 @@ export default function OrderKanban({ token, size = 'normal' }) {
   const [viewingOrder, setViewingOrder] = useState(null);
   const [etaOrder, setEtaOrder] = useState(null); // order currently being accepted (ETA prompt open)
   const [soundOn, setSoundOn] = useState(true);
+  const [soundUnlocked, setSoundUnlocked] = useState(false);
   const [flash, setFlash] = useState(false);
   const [, forceTick] = useState(0);
 
@@ -281,17 +309,30 @@ export default function OrderKanban({ token, size = 'normal' }) {
     const audio = audioRef.current;
     if (!audio) return;
     audio.loop = true;
-    if (soundOn && pendingCount > 0) {
+    if (soundOn && soundUnlocked && pendingCount > 0) {
       audio.currentTime = 0;
       audio.play().catch(() => {
-        // Autoplay blocked until the admin interacts with the page at
-        // least once — the visual flash still gets their attention.
+        // Still blocked for some reason — the visual flash still works.
       });
     } else {
       audio.pause();
     }
-  }, [soundOn, pendingCount]);
+  }, [soundOn, soundUnlocked, pendingCount]);
 
+  // Browsers block audio.play() from firing on its own — it only works
+  // right after a real tap/click. This one-time tap "unlocks" it for the
+  // rest of the session, so the loop above can then start itself freely
+  // whenever a new order actually arrives.
+  const unlockSound = () => {
+    const audio = audioRef.current;
+    if (audio) {
+      audio.play().then(() => {
+        audio.pause();
+        audio.currentTime = 0;
+      }).catch(() => {});
+    }
+    setSoundUnlocked(true);
+  };
   const advance = async (order, nextStatus, etaMinutes) => {
     setMovingId(order.id);
     try {
@@ -345,10 +386,23 @@ export default function OrderKanban({ token, size = 'normal' }) {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: large ? 20 : 14, flexWrap: 'wrap', gap: 10 }}>
         <h2 style={{ margin: 0, fontSize: large ? 28 : undefined }}>Orders {flash && <span style={{ color: '#FF6A3D' }}>● New!</span>}</h2>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: large ? 16 : 13, color: 'var(--muted)' }}>
-          <input type="checkbox" checked={soundOn} onChange={(e) => setSoundOn(e.target.checked)} style={large ? { width: 20, height: 20 } : undefined} />
-          Sound alert for new orders
-        </label>
+        {!soundUnlocked ? (
+          <button
+            type="button"
+            onClick={unlockSound}
+            style={{
+              background: 'var(--ember)', color: '#1A0D06', border: 'none', borderRadius: 8,
+              padding: large ? '12px 18px' : '8px 14px', fontSize: large ? 16 : 13, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            🔔 Tap to enable sound alerts
+          </button>
+        ) : (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: large ? 16 : 13, color: 'var(--muted)' }}>
+            <input type="checkbox" checked={soundOn} onChange={(e) => setSoundOn(e.target.checked)} style={large ? { width: 20, height: 20 } : undefined} />
+            Sound alert for new orders
+          </label>
+        )}
       </div>
 
       {loading ? (
@@ -453,6 +507,7 @@ export default function OrderKanban({ token, size = 'normal' }) {
 
       {etaOrder && (
         <EtaPromptModal
+          token={token}
           order={etaOrder}
           onClose={() => setEtaOrder(null)}
           onConfirm={(minutes) => {
