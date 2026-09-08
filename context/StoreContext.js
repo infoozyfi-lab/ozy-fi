@@ -25,18 +25,14 @@ export function StoreProvider({ children }) {
   const router = useRouter();
 
   // Used by every "close this overlay" action (product page, checkout,
-  // bundle builder, order confirmation). Real browser "back" correctly
-  // returns to whatever page the customer actually came from — homepage,
-  // /menu, /menu/pizza, /product/xyz. If there's nowhere to go back to
-  // (e.g. they landed straight on a product page from Google, with no
-  // in-app history), a real Next.js navigation to the homepage instead of
-  // a cosmetic-only "/" URL that would leave them stranded on a bare page.
+  // bundle builder, order confirmation). Deliberately always a real,
+  // predictable Next.js navigation to the full menu — not a "smart" guess
+  // at browser history, which is unreliable (a tab's history often holds
+  // unrelated earlier pages, not just this app's own flow) and would make
+  // "close" land in a different, confusing place depending on how the
+  // customer arrived.
   const goBack = useCallback(() => {
-    if (typeof window !== 'undefined' && window.history.length > 1) {
-      window.history.back();
-    } else {
-      router.push('/');
-    }
+    router.push('/menu');
   }, [router]);
 
   const [cart, setCart] = useState([]);
