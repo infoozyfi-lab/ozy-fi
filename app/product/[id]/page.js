@@ -38,5 +38,5 @@ export default async function ProductDetailPage({ params }) {
     notFound();
   }
 
-  return <ProductPageStandalone productId={params.id} />;
+  return <ProductPageStandalone productId={params.id} productHint={product} />;
 }
