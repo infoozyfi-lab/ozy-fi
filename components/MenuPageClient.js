@@ -11,12 +11,12 @@ import CheckoutModal from '@/components/CheckoutModal';
 import ConfirmModal from '@/components/ConfirmModal';
 import OrderBar from '@/components/OrderBar';
 
-export default function MenuPageClient() {
+export default function MenuPageClient({ onlyCategory = null }) {
   return (
     <StoreProvider>
       <div id="top" />
       <Header />
-      <MenuSection />
+      <MenuSection onlyCategory={onlyCategory} />
       <Footer />
 
       <ProductPage />

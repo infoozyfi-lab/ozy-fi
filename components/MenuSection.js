@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useStore } from '@/context/StoreContext';
 
 const SCROLLSPY_OFFSET = 132;
 
-export default function MenuSection() {
+export default function MenuSection({ onlyCategory = null }) {
   const {
     openProduct,
     categories,
@@ -158,25 +159,37 @@ export default function MenuSection() {
 
         <div className="cat-tabs">
           {categories.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              ref={(el) =>
-                (tabRefs.current[cat.id] = el)
-              }
-              className={`cat-tab${
-                cat.id === categories[0]?.id
-                  ? ' active'
-                  : ''
-              }`}
-              onClick={() => scrollToCat(cat.id)}
-            >
-              {cat.title}
-            </button>
+            onlyCategory ? (
+              <Link
+                key={cat.id}
+                href={`/menu/${cat.id}`}
+                className={`cat-tab${cat.id === onlyCategory ? ' active' : ''}`}
+              >
+                {cat.title}
+              </Link>
+            ) : (
+              <button
+                key={cat.id}
+                type="button"
+                ref={(el) =>
+                  (tabRefs.current[cat.id] = el)
+                }
+                className={`cat-tab${
+                  cat.id === categories[0]?.id
+                    ? ' active'
+                    : ''
+                }`}
+                onClick={() => scrollToCat(cat.id)}
+              >
+                {cat.title}
+              </button>
+            )
           ))}
         </div>
 
-        {categories.map((cat) => (
+        {categories
+          .filter((cat) => !onlyCategory || cat.id === onlyCategory)
+          .map((cat) => (
           <div
             key={cat.id}
             id={cat.id}
