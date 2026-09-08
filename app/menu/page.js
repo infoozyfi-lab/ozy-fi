@@ -8,4 +8,4 @@ export const metadata = {
 
 export default function MenuPage() {
   return <MenuPageClient />;
-    }
+}
