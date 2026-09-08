@@ -22,6 +22,27 @@ const FALLBACK_OPTION = [{ id: 'default', label: 'Default', delta: 0 }];
 
 export function StoreProvider({ children }) {
   const [cart, setCart] = useState([]);
+
+  // Persist the cart across page navigations (/, /menu, /product/...) and
+  // reloads within the same tab — without this, moving between the new
+  // real URLs would silently empty a customer's cart.
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('ozy_cart');
+      if (saved) setCart(JSON.parse(saved));
+    } catch {
+      // Corrupt or unavailable storage — start with an empty cart.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('ozy_cart', JSON.stringify(cart));
+    } catch {
+      // Storage full/unavailable — cart still works for this page view.
+    }
+  }, [cart]);
+
   const [activeProduct, setActiveProduct] = useState(null);
   const [selection, setSelection] = useState(null);
   const [isProductPageOpen, setProductPageOpen] = useState(false);
