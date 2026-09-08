@@ -26,10 +26,139 @@ function ageColor(mins) {
   return '#7CB86A';
 }
 
-export default function OrderKanban({ token, onOpenOrder }) {
+function OrderDetailModal({ token, order, onClose, onAdvance, onCancel, movingId }) {
+  const [detail, setDetail] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetch(`/api/admin/orders/${order.id}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setDetail(d); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [token, order.id]);
+
+  const col = COLUMNS.find((c) => c.status === order.status);
+  const mins = minutesAgo(order.created_at);
+
+  return (
+    <div
+      role="dialog"
+      aria-label={`Order ${order.order_num}`}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(10,6,4,0.85)',
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'var(--bg-card)', width: '100%', maxWidth: 560, maxHeight: '88vh', overflowY: 'auto',
+          borderRadius: '16px 16px 0 0', border: '1px solid var(--line)', borderBottom: 'none',
+          padding: '20px 18px 28px',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 22 }}>{order.order_num}</h2>
+            <span
+              style={{
+                display: 'inline-block', marginTop: 6, fontSize: 12, fontWeight: 700, color: '#1A0D06',
+                background: ageColor(mins), borderRadius: 999, padding: '3px 10px',
+              }}
+            >
+              {mins} min ago
+            </span>
+          </div>
+          <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 28, lineHeight: 1, cursor: 'pointer', padding: 4 }}>
+            ×
+          </button>
+        </div>
+
+        {loading ? (
+          <p style={{ marginTop: 20 }}>Loading order details…</p>
+        ) : !detail ? (
+          <p style={{ marginTop: 20 }}>Could not load order details.</p>
+        ) : (
+          <>
+            <div style={{ marginTop: 18, padding: 14, background: 'var(--bg-alt)', borderRadius: 10 }}>
+              <p style={{ margin: '0 0 4px', color: 'var(--muted)', fontSize: 12 }}>CUSTOMER</p>
+              <p style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{detail.customer_name}</p>
+              <p style={{ margin: '6px 0 0', fontSize: 16 }}>📞 {detail.phone}</p>
+              <p style={{ margin: '4px 0 0', fontSize: 15, color: 'var(--cream)' }}>📍 {detail.address}</p>
+              {detail.notes && (
+                <p style={{ margin: '10px 0 0', fontSize: 14, color: '#E3A73B' }}>📝 {detail.notes}</p>
+              )}
+            </div>
+
+            <div style={{ marginTop: 18 }}>
+              <p style={{ margin: '0 0 8px', color: 'var(--muted)', fontSize: 12 }}>ITEMS</p>
+              {(detail.items || []).map((item) => (
+                <div key={item.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16 }}>
+                    <strong>{item.qty}× {item.name}</strong>
+                    <span>{formatCurrency(item.line_total)}</span>
+                  </div>
+                  {item.details && (() => {
+                    try {
+                      const d = JSON.parse(item.details);
+                      return d.length ? <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 3 }}>{d.join(', ')}</div> : null;
+                    } catch {
+                      return null;
+                    }
+                  })()}
+                </div>
+              ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 12, fontSize: 18, fontWeight: 700 }}>
+                <span>Total</span>
+                <span>{formatCurrency(order.total)}</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
+              {col && col.next && (
+                <button
+                  type="button"
+                  disabled={movingId === order.id}
+                  onClick={() => onAdvance(order, col.next)}
+                  style={{
+                    flex: 1, background: 'var(--ember)', color: '#1A0D06', border: 'none',
+                    borderRadius: 10, padding: '14px', fontSize: 15, fontWeight: 700, cursor: 'pointer',
+                  }}
+                >
+                  {movingId === order.id ? 'Updating…' : col.nextLabel}
+                </button>
+              )}
+              {order.status !== 'delivered' && order.status !== 'cancelled' && (
+                <button
+                  type="button"
+                  disabled={movingId === order.id}
+                  onClick={() => onCancel(order)}
+                  style={{
+                    background: 'none', color: '#FF8A75', border: '1px solid #5A2A1F',
+                    borderRadius: 10, padding: '14px 16px', fontSize: 14, cursor: 'pointer',
+                  }}
+                >
+                  Cancel order
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function OrderKanban({ token }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [movingId, setMovingId] = useState(null);
+  const [viewingOrder, setViewingOrder] = useState(null);
   const [soundOn, setSoundOn] = useState(true);
   const [flash, setFlash] = useState(false);
   const [, forceTick] = useState(0);
@@ -171,7 +300,7 @@ export default function OrderKanban({ token, onOpenOrder }) {
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                             <button
                               type="button"
-                              onClick={() => onOpenOrder && onOpenOrder(order)}
+                              onClick={() => setViewingOrder(order)}
                               style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', color: 'var(--cream)' }}
                             >
                               <strong style={{ fontSize: 13 }}>{order.order_num}</strong>
@@ -235,6 +364,23 @@ export default function OrderKanban({ token, onOpenOrder }) {
             </p>
           )}
         </>
+      )}
+
+      {viewingOrder && (
+        <OrderDetailModal
+          token={token}
+          order={orders.find((o) => o.id === viewingOrder.id) || viewingOrder}
+          movingId={movingId}
+          onClose={() => setViewingOrder(null)}
+          onAdvance={async (order, next) => {
+            await advance(order, next);
+            setViewingOrder(null);
+          }}
+          onCancel={async (order) => {
+            await cancelOrder(order);
+            setViewingOrder(null);
+          }}
+        />
       )}
     </div>
   );
