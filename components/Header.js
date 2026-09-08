@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useStore } from '@/context/StoreContext';
@@ -9,6 +9,7 @@ export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { goToCheckoutDirect, cart } = useStore();
   const pathname = usePathname();
+  const navRef = useRef(null);
   const itemCount = cart.reduce((sum, line) => sum + line.qty, 0);
 
   // Belt-and-suspenders: whichever link was tapped, once the route
@@ -16,6 +17,20 @@ export default function Header() {
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
+
+  // Tapping anywhere outside the open mobile menu closes it.
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    const handleOutside = (e) => {
+      if (navRef.current && !navRef.current.contains(e.target)) {
+        setMobileOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handleOutside);
+    return () => document.removeEventListener('pointerdown', handleOutside);
+  }, [mobileOpen]);
 
   const scrollTo = (id) => (e) => {
     e.preventDefault();
@@ -32,7 +47,7 @@ export default function Header() {
 
   return (
     <header>
-      <nav className="nav wrap">
+      <nav className="nav wrap" ref={navRef}>
         {pathname === '/' ? (
           <button className="logo" onClick={scrollTop} type="button">
             ozy<span>.fi</span>
