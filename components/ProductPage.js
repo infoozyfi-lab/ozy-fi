@@ -240,7 +240,7 @@ export default function ProductPage() {
   const {
     activeProduct, selection, unitPrice, lineTotal,
     isProductPageOpen, closeProduct, toggleTopping, setSize, setQty, setOption,
-    setFillingQty, addToCart, goToCheckout,
+    setFillingQty, addToCart, goToCheckoutDirect,
     toppings: TOPPINGS, toppingPrice: TOPPING_PRICE, sizeLargeUpcharge: SIZE_LARGE_UPCHARGE,
     baseOptions: BASE_OPTIONS, sauceOptions: SAUCE_OPTIONS, cheeseOptions: CHEESE_OPTIONS,
     fillingCategories: FILLING_CATEGORIES, allFillings: ALL_FILLINGS,
@@ -266,7 +266,7 @@ export default function ProductPage() {
           className="pp-cart"
           type="button"
           aria-label="Cart"
-          onClick={() => { closeProduct(); goToCheckout(); }}
+          onClick={() => { closeProduct(); goToCheckoutDirect(); }}
         >
           🛒
         </button>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useStore } from '@/context/StoreContext';
@@ -10,6 +10,12 @@ export default function Header() {
   const { goToCheckoutDirect, cart } = useStore();
   const pathname = usePathname();
   const itemCount = cart.reduce((sum, line) => sum + line.qty, 0);
+
+  // Belt-and-suspenders: whichever link was tapped, once the route
+  // actually changes, make sure the mobile menu is closed.
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   const scrollTo = (id) => (e) => {
     e.preventDefault();
@@ -95,7 +101,7 @@ export default function Header() {
               <Link href="/#visit" onClick={() => setMobileOpen(false)}>Gift cards</Link>
             </>
           )}
-          <a href="/track">Track order</a>
+          <a href="/track" onClick={() => setMobileOpen(false)}>Track order</a>
         </div>
       </nav>
     </header>
