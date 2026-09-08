@@ -537,6 +537,20 @@ export function StoreProvider({ children }) {
 
     const data = await res.json();
 
+    // Remember this order on the customer's own device — /track can then
+    // offer it as a one-tap shortcut without them needing to note down
+    // the order number themselves.
+    try {
+      const saved = JSON.parse(localStorage.getItem('ozy_recent_orders') || '[]');
+      const next = [
+        { orderNum: data.orderNum, phone: customer.phone, placedAt: new Date().toISOString() },
+        ...saved.filter((o) => o.orderNum !== data.orderNum),
+      ].slice(0, 5);
+      localStorage.setItem('ozy_recent_orders', JSON.stringify(next));
+    } catch {
+      // Non-essential — tracking still works via manual entry either way.
+    }
+
     setConfirmedOrder({ orderNum: `#${data.orderNum}`, customer, total: cartTotal, items: cart });
     setCheckoutOpen(false);
     setCart([]);
