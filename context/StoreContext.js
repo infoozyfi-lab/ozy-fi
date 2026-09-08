@@ -490,6 +490,16 @@ export function StoreProvider({ children }) {
     setUrl('/drinks');
   }, [cart.length]);
 
+  // Header cart icon uses this — skips the drink-upsell step entirely and
+  // goes straight to the checkout form.
+  const goToCheckoutDirect = useCallback(() => {
+    if (cart.length === 0) return;
+    setCartOpen(false);
+    setDrinkUpsellOpen(false);
+    setCheckoutOpen(true);
+    setUrl('/checkout');
+  }, [cart.length]);
+
   const closeCheckout = useCallback(() => {
     setCheckoutOpen(false);
     goBack();
@@ -667,6 +677,7 @@ export function StoreProvider({ children }) {
     updateCartQty,
     setCartOpen,
     goToCheckout,
+    goToCheckoutDirect,
     setCheckoutOpen,
     closeCheckout,
     placeOrder,
