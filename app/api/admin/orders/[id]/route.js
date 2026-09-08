@@ -29,7 +29,18 @@ export async function PATCH(request, { params }) {
     return json({ error: 'Invalid status' }, 400);
   }
 
-  await env.DB.prepare('UPDATE orders SET status = ? WHERE id = ?').bind(body.status, params.id).run();
+  // Optional: when accepting an order (moving it to "preparing"), staff
+  // can attach an ETA. Stored as an absolute timestamp so it stays
+  // correct however long the customer waits before checking /track.
+  const minutes = Number(body.estimated_minutes);
+  if (Number.isFinite(minutes) && minutes > 0) {
+    const eta = new Date(Date.now() + minutes * 60000).toISOString();
+    await env.DB.prepare('UPDATE orders SET status = ?, estimated_ready_at = ? WHERE id = ?')
+      .bind(body.status, eta, params.id)
+      .run();
+  } else {
+    await env.DB.prepare('UPDATE orders SET status = ? WHERE id = ?').bind(body.status, params.id).run();
+  }
 
   return json({ ok: true });
 }
