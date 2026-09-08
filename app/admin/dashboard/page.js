@@ -358,7 +358,7 @@ function OrdersTab({ token }) {
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
           <button type="button" style={btn} onClick={() => setView('list')}>Switch to list view</button>
         </div>
-        <OrderKanban token={token} onOpenOrder={(order) => { setView('list'); setExpandedId(order.id); }} />
+        <OrderKanban token={token} />
       </div>
     );
   }
