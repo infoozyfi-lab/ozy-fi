@@ -1,15 +1,21 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { json, makeOrderNum } from '@/lib/api-helpers';
+import { trackPurchaseServerSide } from '@/lib/server-tracking';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request) {
-  const { env } = await getCloudflareContext({ async: true });
+  const { env, ctx } = await getCloudflareContext({ async: true });
 
   const body = await request.json().catch(() => null);
 
   if (!body || !body.customer || !Array.isArray(body.items) || body.items.length === 0) {
     return json({ error: 'Invalid order payload' }, 400);
+  }
+
+  const closedSetting = await env.DB.prepare("SELECT value FROM admin_settings WHERE key = 'store_closed'").first();
+  if (closedSetting && closedSetting.value === '1') {
+    return json({ error: "We're temporarily closed and not taking orders right now." }, 403);
   }
 
   const { customer, items, total } = body;
@@ -40,6 +46,17 @@ export async function POST(request) {
   if (stmts.length) {
     await env.DB.batch(stmts);
   }
+
+  // Fire-and-forget — doesn't delay the customer's response, and one
+  // platform's failure never blocks another's (see server-tracking.js).
+  // Safely does nothing until the matching ad-account secrets exist.
+  ctx.waitUntil(
+    trackPurchaseServerSide(
+      env,
+      { orderNum, total, email: customer.email, phone: customer.phone, items },
+      request
+    )
+  );
 
   return json({ orderNum, id: orderId, status: 'received' }, 201);
 }
