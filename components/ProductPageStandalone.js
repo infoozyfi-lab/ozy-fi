@@ -55,9 +55,9 @@ function AutoOpenProduct({ productId, productHint }) {
   return null;
 }
 
-export default function ProductPageStandalone({ productId, productHint }) {
+export default function ProductPageStandalone({ productId, productHint, initialData }) {
   return (
-    <StoreProvider>
+    <StoreProvider initialData={initialData}>
       <div id="top" />
       <Header />
       <AutoOpenProduct productId={productId} productHint={productHint} />
