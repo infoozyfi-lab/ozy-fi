@@ -1,0 +1,14 @@
+export default function manifest() {
+  return {
+    name: 'ozy.fi — Pizza, Kebab & Burgers',
+    short_name: 'ozy.fi',
+    description: 'Order pizza, kebab, or burgers online for delivery or pickup.',
+    start_url: '/',
+    display: 'standalone',
+    background_color: '#17110D',
+    theme_color: '#17110D',
+    icons: [
+      { src: '/icon.png', sizes: '512x512', type: 'image/png' },
+    ],
+  };
+}
