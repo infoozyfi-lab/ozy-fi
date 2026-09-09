@@ -11,9 +11,9 @@ import CheckoutModal from '@/components/CheckoutModal';
 import ConfirmModal from '@/components/ConfirmModal';
 import OrderBar from '@/components/OrderBar';
 
-export default function MenuPageClient({ onlyCategory = null }) {
+export default function MenuPageClient({ onlyCategory = null, initialData = null }) {
   return (
-    <StoreProvider>
+    <StoreProvider initialData={initialData}>
       <div id="top" />
       <Header />
       <MenuSection onlyCategory={onlyCategory} />
