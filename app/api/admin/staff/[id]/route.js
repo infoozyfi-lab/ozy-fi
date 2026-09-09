@@ -47,6 +47,18 @@ export async function PATCH(request, { params }) {
     updates.active = body.active ? 1 : 0;
   }
 
+  // Phase 7.9 lockout recovery — not in the original brief, added as a
+  // small, clearly-needed safety valve: without this, a staff member who
+  // loses their authenticator device (phone lost/replaced/factory-reset)
+  // has no way back into their own account, since only they could
+  // previously turn 2FA off (POST /api/admin/2fa/disable, self-service
+  // only). An Owner can force it off here instead. Handled as its own
+  // UPDATE rather than folding into `updates` above, since it's an
+  // action ("clear this account's 2FA") rather than a settable field —
+  // it can be combined with a name/role/active change in the same
+  // request, or sent completely on its own.
+  const disable2fa = body.disable2fa === true;
+
   // Lockout guard: if this row is currently the last active Owner, block
   // anything that would remove that status — demoting its role away from
   // 'owner', or deactivating it — while it's the only one left.
@@ -58,18 +70,29 @@ export async function PATCH(request, { params }) {
     return json({ error: "Can't remove the last remaining Owner account — promote someone else to Owner first." }, 409);
   }
 
-  if (!Object.keys(updates).length) {
+  if (!Object.keys(updates).length && !disable2fa) {
     return json({ error: 'Nothing to update' }, 400);
   }
 
-  const setClause = Object.keys(updates).map((k) => `${k} = ?`).join(', ');
-  const values = Object.values(updates);
-
-  await env.DB.prepare(`UPDATE staff SET ${setClause} WHERE id = ?`).bind(...values, staffId).run();
-
   const session = await getSession(request, env);
-  const changeDesc = Object.entries(updates).map(([k, v]) => `${k}: ${v}`).join(', ');
-  ctx.waitUntil(logActivity(env, session, 'staff.updated', `Updated ${target.name} (${changeDesc})`));
+
+  if (Object.keys(updates).length) {
+    const setClause = Object.keys(updates).map((k) => `${k} = ?`).join(', ');
+    const values = Object.values(updates);
+
+    await env.DB.prepare(`UPDATE staff SET ${setClause} WHERE id = ?`).bind(...values, staffId).run();
+
+    const changeDesc = Object.entries(updates).map(([k, v]) => `${k}: ${v}`).join(', ');
+    ctx.waitUntil(logActivity(env, session, 'staff.updated', `Updated ${target.name} (${changeDesc})`));
+  }
+
+  if (disable2fa) {
+    // Harmless no-op if 2FA wasn't on for this account — still worth the
+    // audit entry either way, since an Owner reaching for this button at
+    // all is itself a signal worth a record (e.g. a device-loss incident).
+    await env.DB.prepare('UPDATE staff SET totp_enabled = 0, totp_secret = NULL WHERE id = ?').bind(staffId).run();
+    ctx.waitUntil(logActivity(env, session, 'staff.2fa_disabled_by_owner', `Force-disabled 2FA on ${target.name}'s account`));
+  }
 
   return json({ ok: true });
 }
