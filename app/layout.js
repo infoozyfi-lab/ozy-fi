@@ -1,5 +1,6 @@
 import './globals.css';
 import CookieBanner from '@/components/CookieBanner';
+import TrackingScripts from '@/components/TrackingScripts';
 
 export const metadata = {
   metadataBase: new URL('https://ozy.fi'),
@@ -28,6 +29,7 @@ export default function RootLayout({ children }) {
       <body>
         {children}
         <CookieBanner />
+        <TrackingScripts />
       </body>
     </html>
   );
