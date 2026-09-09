@@ -25,6 +25,9 @@ export default function CookieBanner() {
     } catch {
       // Nothing to do — worst case it shows again next visit.
     }
+    // Lets TrackingScripts load (or not) immediately, without needing a
+    // page reload, the moment the customer makes a choice.
+    window.dispatchEvent(new Event('ozy-consent-updated'));
   };
 
   if (!visible) return null;
@@ -34,8 +37,8 @@ export default function CookieBanner() {
       <div className="cookie-banner-main">
         <p>
           We use cookies and similar technical storage to run this site and
-          keep items in your cart while you order. We don&apos;t use
-          advertising or tracking cookies. See our{' '}
+          keep items in your cart while you order. With your permission, we
+          may also use cookies to measure traffic and ads. See our{' '}
           <a href="/privacy">Privacy Policy</a> for details.
         </p>
         <div className="cookie-banner-actions">
@@ -68,11 +71,12 @@ export default function CookieBanner() {
             <div>
               <p className="cookie-settings-title">Advertising &amp; analytics</p>
               <p className="cookie-settings-desc">
-                Not used on this site — there is nothing here to enable or
-                disable.
+                Helps us see how the site is used and measure ads (Google
+                Analytics, Meta/TikTok, Microsoft Clarity). Off unless you
+                choose &quot;Accept all&quot; below.
               </p>
             </div>
-            <input type="checkbox" disabled aria-label="Advertising and analytics — not used" />
+            <input type="checkbox" disabled aria-label="Advertising and analytics — off unless Accept all is chosen" />
           </div>
         </div>
       )}
