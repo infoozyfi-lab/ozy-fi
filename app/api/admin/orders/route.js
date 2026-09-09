@@ -1,12 +1,14 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { json } from '@/lib/api-helpers';
-import { requireAdmin } from '@/lib/adminAuth';
+import { requireRole } from '@/lib/adminAuth';
 
 export const dynamic = 'force-dynamic';
 
+// Orders board — every role needs this (it's Kitchen's entire job, and
+// Manager/Owner both see it too).
 export async function GET(request) {
   const { env } = await getCloudflareContext({ async: true });
-  const denied = await requireAdmin(request, env);
+  const denied = await requireRole(request, env, ['kitchen', 'manager', 'owner']);
   if (denied) return denied;
 
   const url = new URL(request.url);
