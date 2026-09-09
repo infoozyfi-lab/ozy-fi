@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { trackViewItem, trackAddToCart, trackBeginCheckout, trackPurchase } from '@/lib/analytics';
 
 const StoreContext = createContext(null);
 
@@ -78,6 +79,8 @@ export function StoreProvider({ children }) {
   const [toppings, setToppings] = useState([]); // [{ id, label, delta }]
   const [fillingCategories, setFillingCategories] = useState([]);
   const [sizeLargeUpcharge, setSizeLargeUpcharge] = useState(0);
+  const [storeClosed, setStoreClosed] = useState(false);
+  const [trackingConfig, setTrackingConfig] = useState({ ga4Id: null, metaPixelId: null, tiktokPixelId: null, clarityId: null });
   const [drinks, setDrinks] = useState([]);
   const [dipCups, setDipCups] = useState([]);
   const [snacks, setSnacks] = useState([]);
@@ -223,6 +226,13 @@ export function StoreProvider({ children }) {
 
         const settings = data.settings || {};
         setSizeLargeUpcharge(Number(settings.size_large_upcharge) || 0);
+        setStoreClosed(settings.store_closed === '1');
+        setTrackingConfig({
+          ga4Id: settings.ga4_measurement_id || null,
+          metaPixelId: settings.meta_pixel_id || null,
+          tiktokPixelId: settings.tiktok_pixel_id || null,
+          clarityId: settings.clarity_id || null,
+        });
         setFeatured({
           type: settings.featured_type || 'none', // 'banner' | 'product' | 'bundle'
           bannerImage: settings.featured_banner_image || '',
@@ -307,6 +317,7 @@ export function StoreProvider({ children }) {
   const openProduct = useCallback(
     (item, bundleSlotIndex = null, { skipUrlPush = false } = {}) => {
       setActiveProduct(item);
+      if (bundleSlotIndex == null) trackViewItem(item);
       setSelection({
         basePrice: item.price,
         toppingsEnabled: item.toppings,
@@ -430,6 +441,7 @@ export function StoreProvider({ children }) {
         lineTotal,
       },
     ]);
+    trackAddToCart({ productId: activeProduct.id, name: activeProduct.name, details, qty: selection.qty, unitPrice, lineTotal });
     // Deliberately not closing the overlay here — navigating straight to
     // /menu means the whole page (overlay included) swaps out in one go,
     // instead of a flash of the bare page underneath first.
@@ -485,20 +497,22 @@ export function StoreProvider({ children }) {
 
   const goToCheckout = useCallback(() => {
     if (cart.length === 0) return;
+    trackBeginCheckout(cart, cartTotal);
     setCartOpen(false);
     setDrinkUpsellOpen(true);
     setUrl('/drinks');
-  }, [cart.length]);
+  }, [cart, cartTotal]);
 
   // Header cart icon uses this — skips the drink-upsell step entirely and
   // goes straight to the checkout form.
   const goToCheckoutDirect = useCallback(() => {
     if (cart.length === 0) return;
+    trackBeginCheckout(cart, cartTotal);
     setCartOpen(false);
     setDrinkUpsellOpen(false);
     setCheckoutOpen(true);
     setUrl('/checkout');
-  }, [cart.length]);
+  }, [cart, cartTotal]);
 
   const closeCheckout = useCallback(() => {
     setCheckoutOpen(false);
@@ -512,6 +526,9 @@ export function StoreProvider({ children }) {
   }, []);
 
   const placeOrder = useCallback(async (customer) => {
+    if (storeClosed) {
+      throw new Error("We're temporarily closed and not taking orders right now. Please check back soon.");
+    }
     const payload = {
       customer,
       total: cartTotal,
@@ -551,11 +568,12 @@ export function StoreProvider({ children }) {
       // Non-essential — tracking still works via manual entry either way.
     }
 
+    trackPurchase(data.orderNum, cart, cartTotal);
     setConfirmedOrder({ orderNum: `#${data.orderNum}`, customer, total: cartTotal, items: cart });
     setCheckoutOpen(false);
     setCart([]);
     setUrl('/order-confirmed');
-  }, [cart, cartTotal]);
+  }, [cart, cartTotal, storeClosed]);
 
   /* ---- Bundle building (e.g. "3 Pizza + 1.5L Lemonade — €45"). ---- */
 
@@ -713,6 +731,8 @@ export function StoreProvider({ children }) {
     fillingCategories,
     allFillings,
     sizeLargeUpcharge,
+    storeClosed,
+    trackingConfig,
     drinks,
     dipCups,
     snacks,
