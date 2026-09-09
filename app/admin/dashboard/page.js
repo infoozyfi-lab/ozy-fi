@@ -1094,7 +1094,7 @@ function MenuTabs({ token }) {
 
   useEffect(loadRefs, [token, refreshKey]);
   const bump = () => setRefreshKey((k) => k + 1);
-  const [tab, setTab] = useState('categories');
+  const [tab, setTab] = useState(null); // null = show the landing page of big option cards
 
   const categoryFields = [
     { key: 'id', label: 'ID (slug)', type: 'text', required: true, placeholder: 'e.g. pizzat' },
@@ -1153,20 +1153,41 @@ function MenuTabs({ token }) {
   ];
 
   const TABS = [
-    { id: 'categories', label: 'Categories' },
-    { id: 'products', label: 'Products' },
-    { id: 'options', label: 'Options' },
-    { id: 'addons', label: 'Add-ons' },
-    { id: 'bundles', label: 'Bundles' },
+    { id: 'products', label: 'Products', icon: '🍕', desc: 'Add, edit, price, and manage every menu item' },
+    { id: 'categories', label: 'Categories', icon: '📁', desc: 'Organize the menu into sections like Pizza, Kebab, Burgers' },
+    { id: 'options', label: 'Options & Toppings', icon: '🧀', desc: 'Bases, sauces, cheese, toppings, and filling choices' },
+    { id: 'addons', label: 'Add-ons', icon: '🥤', desc: 'Drinks, dips, and snacks customers can add to their order' },
+    { id: 'bundles', label: 'Bundles', icon: '🎁', desc: 'Combo deals and multi-item meal bundles' },
   ];
+
+  if (!tab) {
+    return (
+      <div>
+        <h2 style={{ marginTop: 0, marginBottom: 16 }}>Product Management</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              style={{
+                textAlign: 'left', background: 'var(--bg-card)', border: '1px solid var(--line)', borderRadius: 12,
+                padding: 20, cursor: 'pointer', color: 'var(--cream)',
+              }}
+            >
+              <div style={{ fontSize: 28, marginBottom: 8 }}>{t.icon}</div>
+              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{t.label}</div>
+              <div style={{ fontSize: 13, color: 'var(--muted)' }}>{t.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: -1 }}>
-        {TABS.map((t) => (
-          <button key={t.id} type="button" style={tabBtn(tab === t.id)} onClick={() => setTab(t.id)}>{t.label}</button>
-        ))}
-      </div>
+      <button type="button" style={{ ...btn, marginBottom: 16 }} onClick={() => setTab(null)}>← Back to Product Management</button>
 
       {tab === 'categories' && (
         <ResourceManager token={token} table="categories" title="Categories" fields={categoryFields} displayCols={['id', 'title', 'sub', 'sort_order']} onChanged={bump} />
