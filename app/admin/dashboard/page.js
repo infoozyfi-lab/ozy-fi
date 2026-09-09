@@ -87,7 +87,7 @@ function useOrders(token) {
 
   const load = () => {
     setLoading(true);
-    fetch('/api/admin/orders', { headers: { Authorization: `Bearer ${token}` } })
+    fetch('/api/admin/orders')
       .then((res) => res.json())
       .then((data) => setOrders(Array.isArray(data) ? data : []))
       .catch(() => {})
@@ -111,7 +111,7 @@ function useAnalytics(token) {
     if (!token) return; // not signed in yet — the real fetch fires once the token lands
     setLoading(true);
     setError('');
-    fetch('/api/admin/analytics', { headers: { Authorization: `Bearer ${token}` } })
+    fetch('/api/admin/analytics')
       .then((res) => {
         if (!res.ok) throw new Error('Could not load analytics.');
         return res.json();
@@ -157,7 +157,7 @@ function OverviewTab({ token, analytics, analyticsLoading, reloadAnalytics }) {
   const [productCount, setProductCount] = useState(null);
 
   useEffect(() => {
-    fetch('/api/admin/products', { headers: { Authorization: `Bearer ${token}` } })
+    fetch('/api/admin/products')
       .then((r) => r.json())
       .then((d) => setProductCount(Array.isArray(d) ? d.length : null))
       .catch(() => {});
@@ -278,7 +278,7 @@ function OrderDetailRow({ token, order }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/admin/orders/${order.id}`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`/api/admin/orders/${order.id}`)
       .then((r) => r.json())
       .then(setDetail)
       .catch(() => {})
@@ -342,7 +342,7 @@ function OrdersTab({ token }) {
     try {
       await fetch(`/api/admin/orders/${order.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
       });
       setOrders((list) => list.map((o) => (o.id === order.id ? { ...o, status } : o)));
@@ -670,7 +670,7 @@ function useSettingsValues(token) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/admin/settings', { headers: { Authorization: `Bearer ${token}` } })
+    fetch('/api/admin/settings')
       .then((r) => r.json())
       .then((d) => setValues(d || {}))
       .catch(() => {})
@@ -703,7 +703,7 @@ function RestaurantInfoSettings({ token }) {
     setField('store_closed', next);
     await fetch('/api/admin/settings', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ store_closed: next }),
     });
   };
@@ -716,7 +716,7 @@ function RestaurantInfoSettings({ token }) {
       SETTINGS_FIELDS.forEach((f) => { body[f.key] = values[f.key] || ''; });
       await fetch('/api/admin/settings', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       setSaved(true);
@@ -802,7 +802,7 @@ function HomepageDisplaySettings({ token }) {
   const [uploadError, setUploadError] = useState('');
 
   useEffect(() => {
-    fetch('/api/admin/products', { headers: { Authorization: `Bearer ${token}` } })
+    fetch('/api/admin/products')
       .then((r) => r.json())
       .then((d) => setProducts(Array.isArray(d) ? d : []))
       .catch(() => {});
@@ -835,7 +835,7 @@ function HomepageDisplaySettings({ token }) {
       const body = new FormData();
       body.append('file', file, file.name || 'upload.jpg');
       const res = await fetch('/api/admin/upload', {
-        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body,
+        method: 'POST', body,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Upload failed.');
@@ -861,7 +861,7 @@ function HomepageDisplaySettings({ token }) {
       };
       await fetch('/api/admin/settings', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       setSaved(true);
@@ -997,7 +997,7 @@ function TrackingAnalyticsSettings({ token }) {
       keys.forEach((k) => { body[k] = values[k] || ''; });
       await fetch('/api/admin/settings', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       setSaved(true);
@@ -1086,10 +1086,9 @@ function MenuTabs({ token }) {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const loadRefs = () => {
-    const headers = { Authorization: `Bearer ${token}` };
-    fetch('/api/admin/categories', { headers }).then((r) => r.json()).then((d) => setCategories(Array.isArray(d) ? d : [])).catch(() => {});
-    fetch('/api/admin/option_groups', { headers }).then((r) => r.json()).then((d) => setOptionGroups(Array.isArray(d) ? d : [])).catch(() => {});
-    fetch('/api/admin/products', { headers }).then((r) => r.json()).then((d) => setProducts(Array.isArray(d) ? d : [])).catch(() => {});
+    fetch('/api/admin/categories').then((r) => r.json()).then((d) => setCategories(Array.isArray(d) ? d : [])).catch(() => {});
+    fetch('/api/admin/option_groups').then((r) => r.json()).then((d) => setOptionGroups(Array.isArray(d) ? d : [])).catch(() => {});
+    fetch('/api/admin/products').then((r) => r.json()).then((d) => setProducts(Array.isArray(d) ? d : [])).catch(() => {});
   };
 
   useEffect(loadRefs, [token, refreshKey]);
@@ -1190,22 +1189,22 @@ function MenuTabs({ token }) {
       <button type="button" style={{ ...btn, marginBottom: 16 }} onClick={() => setTab(null)}>← Back to Product Management</button>
 
       {tab === 'categories' && (
-        <ResourceManager token={token} table="categories" title="Categories" fields={categoryFields} displayCols={['id', 'title', 'sub', 'sort_order']} onChanged={bump} />
+        <ResourceManager table="categories" title="Categories" fields={categoryFields} displayCols={['id', 'title', 'sub', 'sort_order']} onChanged={bump} />
       )}
       {tab === 'products' && (
-        <ResourceManager token={token} table="products" title="Products" fields={productFields} displayCols={['id', 'category_id', 'name', 'price', 'active']} onChanged={bump} />
+        <ResourceManager table="products" title="Products" fields={productFields} displayCols={['id', 'category_id', 'name', 'price', 'active']} onChanged={bump} />
       )}
       {tab === 'options' && (
         <>
           <div style={{ ...box, marginBottom: 16, padding: 16 }}>
             <strong>Option groups</strong> (Base, Sauce, Cheese, Toppings, Fillings…)
           </div>
-          <ResourceManager token={token} table="option_groups" title="Option Groups" fields={optionGroupFields} displayCols={['id', 'title', 'kind', 'sort_order']} onChanged={bump} />
-          <ResourceManager token={token} table="options" title="Options (individual choices within a group)" fields={optionFields} displayCols={['id', 'group_id', 'label', 'price_delta']} onChanged={bump} />
+          <ResourceManager table="option_groups" title="Option Groups" fields={optionGroupFields} displayCols={['id', 'title', 'kind', 'sort_order']} onChanged={bump} />
+          <ResourceManager table="options" title="Options (individual choices within a group)" fields={optionFields} displayCols={['id', 'group_id', 'label', 'price_delta']} onChanged={bump} />
         </>
       )}
       {tab === 'addons' && (
-        <ResourceManager token={token} table="addons" title="Add-ons (drinks, dips, snacks)" fields={addonFields} displayCols={['id', 'type', 'name', 'price', 'active']} onChanged={bump} />
+        <ResourceManager table="addons" title="Add-ons (drinks, dips, snacks)" fields={addonFields} displayCols={['id', 'type', 'name', 'price', 'active']} onChanged={bump} />
       )}
       {tab === 'bundles' && (
         <BundleManager token={token} categories={categories} products={products} onChanged={bump} />
@@ -1222,35 +1221,23 @@ export default function AdminDashboard() {
   const [ready, setReady] = useState(false);
   const [tab, setTab] = useState('overview');
 
-  // See app/admin/page.js for the same two-path check (sessionStorage
-  // token first, falls back to asking /api/admin/me about a cookie-only
-  // session) and why it's written to always resolve `ready` one way or
-  // another instead of ever leaving this page stuck blank.
+  // See app/admin/page.js for the matching check on the login page, and
+  // why it's written to always resolve `ready` one way or another instead
+  // of ever leaving this page stuck blank.
   //
-  // `token` here doubles as "are we authenticated" for every tab/child
-  // component below (many do `if (!token) return` before fetching, and
-  // all of them send it as `Authorization: Bearer ${token}`). In the
-  // cookie-only case there is no token string available to client JS —
-  // that's the whole point of httpOnly — so we set a harmless placeholder
-  // instead. The server checks the httpOnly cookie first (see
-  // lib/adminAuth.js's readToken) and only falls back to this header, so
-  // the placeholder is never actually relied on for auth; it just keeps
-  // every existing `if (!token)` guard and Bearer header working
-  // unchanged. Swapping all ~25 call sites to stop sending a header at
-  // all is a later cleanup once the cookie path is confirmed reliable.
+  // Phase 5b: cookie-only, no sessionStorage fast path anymore — every
+  // load asks /api/admin/me. `token` here is kept as a plain "are we
+  // authenticated" flag (not a real secret — there is no token string
+  // available to client JS at all now) purely so the many child
+  // components below that gate on `if (!token) return` / depend on it in
+  // a `useEffect([token])` keep working unchanged; none of them send it
+  // anywhere anymore (the `Authorization` headers were removed in this
+  // same phase — auth now travels solely via the httpOnly cookie, sent
+  // automatically on every same-origin fetch()).
   useEffect(() => {
     let cancelled = false;
 
     async function checkSession() {
-      const t = sessionStorage.getItem('ozy_admin_token');
-      const adminEmail = sessionStorage.getItem('ozy_admin_email');
-      if (t) {
-        setToken(t);
-        setEmail(adminEmail || '');
-        setReady(true);
-        return;
-      }
-
       try {
         const res = await fetch('/api/admin/me');
         const data = await res.json().catch(() => ({ authenticated: false }));
@@ -1278,13 +1265,13 @@ export default function AdminDashboard() {
   const { data: analytics, loading: analyticsLoading, reload: reloadAnalytics } = useAnalytics(token || null);
 
   const logout = () => {
-    sessionStorage.removeItem('ozy_admin_token');
-    sessionStorage.removeItem('ozy_admin_email');
     // Clears the httpOnly cookie server-side — client JS has no way to
-    // read or delete it directly. Fire-and-redirect: even if this request
-    // fails, sessionStorage is already cleared and the cookie will expire
-    // on its own (24h), so logout still "works" from this tab's point of
-    // view either way.
+    // read or delete it directly, and there's nothing left in
+    // sessionStorage to clean up on this end (phase 5b: cookie is the
+    // only session state). Fire-and-redirect: even if this request fails
+    // outright, the cookie still expires on its own (24h) — worst case is
+    // a stale device staying signed in a little longer, not this tab
+    // failing to leave.
     fetch('/api/admin/logout', { method: 'POST' }).finally(() => {
       window.location.href = '/admin';
     });
