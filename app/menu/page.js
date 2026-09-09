@@ -1,4 +1,8 @@
+import { getCloudflareContext } from '@opennextjs/cloudflare';
 import MenuPageClient from '@/components/MenuPageClient';
+import { loadMenuData } from '@/lib/menu-data';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'Full Menu — Pizza, Kebab & Burgers | ozy.fi',
@@ -9,6 +13,9 @@ export const metadata = {
   },
 };
 
-export default function MenuPage() {
-  return <MenuPageClient />;
+export default async function MenuPage() {
+  const { env } = await getCloudflareContext({ async: true });
+  const initialData = await loadMenuData(env);
+
+  return <MenuPageClient initialData={initialData} />;
 }
