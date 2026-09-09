@@ -661,12 +661,6 @@ const SETTINGS_FIELDS = [
   { key: 'delivery_fee', label: 'Delivery fee (€)', number: true },
 ];
 
-const SETTINGS_SECTIONS = [
-  { key: 'restaurant', label: 'Restaurant Info' },
-  { key: 'homepage', label: 'Homepage Display' },
-  { key: 'tracking', label: 'Tracking & Analytics' },
-];
-
 // Shared by all three settings sections below — each one loads the full
 // settings object (cheap: it's one small key/value table) but only ever
 // PUTs back the handful of keys it actually owns, so the three sections
@@ -687,28 +681,7 @@ function useSettingsValues(token) {
 }
 
 function SettingsTab({ token }) {
-  const [section, setSection] = useState('restaurant');
-
-  return (
-    <div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {SETTINGS_SECTIONS.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            onClick={() => setSection(s.key)}
-            style={section === s.key ? btnPrimary : btn}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
-
-      {section === 'restaurant' && <RestaurantInfoSettings token={token} />}
-      {section === 'homepage' && <HomepageDisplaySettings token={token} />}
-      {section === 'tracking' && <TrackingAnalyticsSettings token={token} />}
-    </div>
-  );
+  return <RestaurantInfoSettings token={token} />;
 }
 
 /* ---------------- Settings: Restaurant Info ---------------- */
@@ -1256,8 +1229,10 @@ export default function AdminDashboard() {
     { id: 'overview', label: '🏠 Dashboard' },
     { id: 'orders', label: '📦 Orders', badge: pendingCount },
     { id: 'menu', label: '🍕 Menu & Pricing' },
+    { id: 'homepage', label: '🖼️ Homepage Display' },
     { id: 'customers', label: '👥 Customers' },
     { id: 'reports', label: '📊 Reports' },
+    { id: 'tracking', label: '📈 Tracking & Analytics' },
     { id: 'settings', label: '⚙️ Settings' },
   ];
 
@@ -1300,8 +1275,10 @@ export default function AdminDashboard() {
         )}
         {tab === 'orders' && <OrdersTab token={token} />}
         {tab === 'menu' && <MenuTabs token={token} />}
+        {tab === 'homepage' && <HomepageDisplaySettings token={token} />}
         {tab === 'customers' && <CustomersTab token={token} />}
         {tab === 'reports' && <ReportsTab analytics={analytics} loading={analyticsLoading} />}
+        {tab === 'tracking' && <TrackingAnalyticsSettings token={token} />}
         {tab === 'settings' && <SettingsTab token={token} />}
       </div>
     </main>
