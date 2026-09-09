@@ -77,6 +77,42 @@ function formatTime(iso) {
   return d.toLocaleString('en-IE', { hour: '2-digit', minute: '2-digit' });
 }
 
+// Phase 7 remainder, part 6 — a live "X min left" alongside the existing
+// fixed clock-time ETA (formatTime above), not replacing it. Re-renders
+// once a minute via setInterval, which is precise enough for a minutes-
+// level estimate — no point re-rendering every second for this.
+function minutesRemainingLabel(etaIso, nowMs) {
+  if (!etaIso) return null;
+  const d = new Date(etaIso.includes('T') ? etaIso : `${etaIso.replace(' ', 'T')}Z`);
+  if (Number.isNaN(d.getTime())) return null;
+
+  const diffMinutes = Math.round((d.getTime() - nowMs) / 60000);
+
+  // The kitchen can run behind — an order still "preparing"/"on_the_way"
+  // past its original ETA shouldn't show a confusing "-3 min left".
+  if (diffMinutes <= 0) return 'should be ready any moment now';
+  if (diffMinutes === 1) return 'about 1 min left';
+  return `about ${diffMinutes} min left`;
+}
+
+function EtaCountdown({ etaIso }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  const remaining = minutesRemainingLabel(etaIso, now);
+
+  return (
+    <p className="track-eta">
+      ⏱ Estimated ready by <strong>{formatTime(etaIso)}</strong>
+      {remaining && <span className="track-eta-remaining"> ({remaining})</span>}
+    </p>
+  );
+}
+
 function RecentOrderShortcut({ onPick }) {
   const [recent, setRecent] = useState([]);
 
@@ -270,9 +306,7 @@ function TrackForm() {
           </div>
 
           {order.estimated_ready_at && ['preparing', 'on_the_way'].includes(order.status) && (
-            <p className="track-eta">
-              ⏱ Estimated ready by <strong>{formatTime(order.estimated_ready_at)}</strong>
-            </p>
+            <EtaCountdown etaIso={order.estimated_ready_at} />
           )}
 
           <OrderTimeline status={order.status} />
