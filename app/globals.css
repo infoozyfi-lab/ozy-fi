@@ -251,6 +251,12 @@ footer{ padding: 56px 0 32px; }
 .cookie-settings-title{ color: var(--cream); font-weight: 700; font-size: 0.88rem; margin: 0 0 4px; }
 .cookie-settings-desc{ color: var(--muted); font-size: 0.8rem; margin: 0; line-height: 1.5; }
 .cookie-settings-row input[type="checkbox"]{ flex-shrink:0; margin-top: 4px; width: 18px; height: 18px; }
+
+/* ---------- STORE CLOSED BANNER ---------- */
+.store-closed-banner{
+  background: #FF6A5C; color: #1A0D06; text-align: center; font-weight: 700;
+  font-size: 0.85rem; padding: 10px 16px;
+}
 .footer-grid{ display:grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 40px; padding-bottom: 40px; border-bottom: 1px solid var(--line); }
 .footer-grid h4{ color: var(--cream); font-size: 0.95rem; margin: 0 0 16px; }
 .footer-grid a{ display:block; color: var(--muted); padding: 6px 0; font-size: 0.94rem; }
