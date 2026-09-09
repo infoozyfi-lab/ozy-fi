@@ -45,7 +45,7 @@ export default function KitchenPage() {
   const logout = () => {
     sessionStorage.removeItem('ozy_admin_token');
     sessionStorage.removeItem('ozy_admin_email');
-    setToken(null);
+    fetch('/api/admin/logout', { method: 'POST' }).finally(() => setToken(null));
   };
 
   if (checking) return null;
