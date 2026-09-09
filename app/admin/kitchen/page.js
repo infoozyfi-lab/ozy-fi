@@ -13,18 +13,8 @@ export default function KitchenPage() {
 
   useEffect(() => {
     const t = sessionStorage.getItem('ozy_admin_token');
-    if (t) {
-      setToken(t);
-      setChecking(false);
-      return;
-    }
-    // No token in this tab (e.g. the kitchen tablet was reset/refreshed)
-    // — check for a still-valid session cookie before showing the login
-    // form again.
-    fetch('/api/admin/me')
-      .then((r) => (r.ok ? setToken('cookie-session') : setToken(null)))
-      .catch(() => setToken(null))
-      .finally(() => setChecking(false));
+    setToken(t || null);
+    setChecking(false);
   }, []);
 
   const handleLogin = async (e) => {
@@ -55,7 +45,7 @@ export default function KitchenPage() {
   const logout = () => {
     sessionStorage.removeItem('ozy_admin_token');
     sessionStorage.removeItem('ozy_admin_email');
-    fetch('/api/admin/logout', { method: 'POST' }).finally(() => setToken(null));
+    setToken(null);
   };
 
   if (checking) return null;
