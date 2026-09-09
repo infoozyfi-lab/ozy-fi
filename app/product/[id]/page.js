@@ -38,5 +38,26 @@ export default async function ProductDetailPage({ params }) {
     notFound();
   }
 
-  return <ProductPageStandalone productId={params.id} productHint={product} />;
+  const productSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    description: product.description || undefined,
+    image: product.image || undefined,
+    offers: {
+      '@type': 'Offer',
+      price: Number(product.offer_price || product.price).toFixed(2),
+      priceCurrency: 'EUR',
+      availability: 'https://schema.org/InStock',
+      url: `https://ozy.fi/product/${params.id}`,
+    },
+  };
+
+  return (
+    <>
+      {/* eslint-disable-next-line react/no-danger */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }} />
+      <ProductPageStandalone productId={params.id} productHint={product} />
+    </>
+  );
 }
