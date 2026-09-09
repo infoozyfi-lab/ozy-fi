@@ -44,11 +44,11 @@ export async function POST(request) {
 
   const token = await createAdminToken(env);
 
-  // The token is still returned in the JSON body (and the client still
-  // mirrors it into sessionStorage) so none of the existing admin fetch()
-  // calls that build `Authorization: Bearer <token>` by hand need to
-  // change — this is the dual-support transition period. The httpOnly
-  // cookie below is what actually keeps the admin signed in from now on.
+  // Phase 5b: cookie-only. The token is no longer returned in the JSON
+  // body or mirrored into sessionStorage (that was phase 5a's deliberate
+  // dual-support transition — now removed) — the httpOnly cookie below is
+  // the *only* place the token exists, so client-side JS never holds it
+  // in a readable form at all.
   //
   // Deliberately using NextResponse.cookies here rather than next/headers'
   // cookies(). next/headers reads/writes through Next's per-request
@@ -62,7 +62,7 @@ export async function POST(request) {
   // directly onto the exact Response object this function returns — no
   // separate context/merge step for anything to drop — so it doesn't
   // depend on that machinery at all.
-  const response = NextResponse.json({ token, email: env.ADMIN_EMAIL });
+  const response = NextResponse.json({ email: env.ADMIN_EMAIL });
   response.cookies.set(ADMIN_COOKIE_NAME, token, {
     ...ADMIN_COOKIE_OPTIONS,
     maxAge: TOKEN_LIFETIME_SECONDS,
