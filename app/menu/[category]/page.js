@@ -1,6 +1,7 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { notFound } from 'next/navigation';
 import MenuPageClient from '@/components/MenuPageClient';
+import { loadMenuData } from '@/lib/menu-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,5 +34,8 @@ export default async function CategoryMenuPage({ params }) {
     notFound();
   }
 
-  return <MenuPageClient onlyCategory={params.category} />;
+  const { env } = await getCloudflareContext({ async: true });
+  const initialData = await loadMenuData(env);
+
+  return <MenuPageClient onlyCategory={params.category} initialData={initialData} />;
 }
