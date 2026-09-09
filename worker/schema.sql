@@ -13,6 +13,7 @@ DROP TABLE IF EXISTS admin_settings;
 DROP TABLE IF EXISTS bundles;
 DROP TABLE IF EXISTS staff;
 DROP TABLE IF EXISTS audit_log;
+DROP TABLE IF EXISTS coupons;
 
 CREATE TABLE categories (
   id         TEXT PRIMARY KEY,
@@ -70,6 +71,9 @@ CREATE TABLE orders (
   order_num          TEXT NOT NULL UNIQUE,
   customer_name      TEXT NOT NULL,
   address            TEXT NOT NULL,
+  -- Optional since the "email removal" change (Phase 7 remainder) — an
+  -- empty string means the customer skipped it, not NULL (see
+  -- app/api/orders/route.js for why: no migration needed this way).
   email              TEXT NOT NULL,
   phone              TEXT NOT NULL,
   notes              TEXT,
@@ -77,6 +81,20 @@ CREATE TABLE orders (
   status             TEXT NOT NULL DEFAULT 'received',
   payment_method     TEXT NOT NULL DEFAULT 'cod',
   estimated_ready_at TEXT,
+  -- Phase 7.1: who's delivering this order, set (optionally) from the
+  -- Kanban board when moving an order to "on_the_way" — see
+  -- components/admin/OrderKanban.js's DriverPromptModal. Free text, no
+  -- separate drivers table (this business's current size doesn't need one
+  -- — see the migration file's comment for the same reasoning).
+  driver_name        TEXT,
+  -- Phase 7.6 — set only when a coupon was actually applied and passed
+  -- server-side re-validation in app/api/orders/route.js; discount_amount
+  -- is the euro amount taken off (not the coupon's raw percent/amount
+  -- value), so revenue reports never need to re-derive it. `total` above
+  -- is always the POST-discount amount actually owed — same column every
+  -- other query (analytics, refund tracking, /track) already reads.
+  coupon_code        TEXT,
+  discount_amount    REAL NOT NULL DEFAULT 0,
   created_at         TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -142,6 +160,16 @@ CREATE TABLE staff (
   password_hash TEXT NOT NULL,
   role          TEXT NOT NULL CHECK (role IN ('kitchen', 'manager', 'owner')),
   active        INTEGER NOT NULL DEFAULT 1,
+  -- Phase 7.9 — optional per-account TOTP 2FA (see lib/totp.js). NULL
+  -- secret + 0 means "never set up"; a secret can also sit here with
+  -- totp_enabled still 0 while a setup is in progress (generated but not
+  -- yet confirmed with a correct code) — only a successful /api/admin/
+  -- 2fa/confirm call flips totp_enabled to 1. Storing the raw base32
+  -- secret (not further encrypted) mirrors how SESSION_SECRET etc. are
+  -- handled in this project already — D1 access itself is the trust
+  -- boundary, same as every other column here.
+  totp_secret   TEXT,
+  totp_enabled  INTEGER NOT NULL DEFAULT 0,
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -165,3 +193,20 @@ CREATE TABLE audit_log (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX idx_audit_log_created ON audit_log(created_at);
+
+-- Phase 7.6 — coupon/discount codes. `code` is the primary key (stored
+-- normalized: trimmed + uppercased by the API before every read/write),
+-- not an auto id — a coupon code IS its own natural identifier, and
+-- storing it uppercase means "save10"/"SAVE10"/" Save10 " all match the
+-- one row instead of silently creating near-duplicates.
+CREATE TABLE coupons (
+  code             TEXT PRIMARY KEY,
+  discount_type    TEXT NOT NULL CHECK (discount_type IN ('percent', 'amount')),
+  discount_value   REAL NOT NULL,
+  active           INTEGER NOT NULL DEFAULT 1,
+  expires_at       TEXT,
+  min_order_amount REAL,
+  usage_limit      INTEGER,
+  times_used       INTEGER NOT NULL DEFAULT 0,
+  created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
