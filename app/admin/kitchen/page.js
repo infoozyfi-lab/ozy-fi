@@ -11,10 +11,38 @@ export default function KitchenPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Same sessionStorage-first, cookie-fallback check as the main admin
+  // gates (app/admin/page.js, app/admin/dashboard/page.js) — a kitchen
+  // tablet is exactly the case this was for: signed in once, tab/browser
+  // left open or reopened later, no sessionStorage left but the httpOnly
+  // cookie is still good.
   useEffect(() => {
-    const t = sessionStorage.getItem('ozy_admin_token');
-    setToken(t || null);
-    setChecking(false);
+    let cancelled = false;
+
+    async function checkSession() {
+      const t = sessionStorage.getItem('ozy_admin_token');
+      if (t) {
+        setToken(t);
+        setChecking(false);
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/admin/me');
+        const data = await res.json().catch(() => ({ authenticated: false }));
+        if (cancelled) return;
+        setToken(data.authenticated ? 'cookie-session' : null);
+      } catch {
+        if (!cancelled) setToken(null);
+      } finally {
+        if (!cancelled) setChecking(false);
+      }
+    }
+
+    checkSession();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleLogin = async (e) => {
@@ -45,7 +73,9 @@ export default function KitchenPage() {
   const logout = () => {
     sessionStorage.removeItem('ozy_admin_token');
     sessionStorage.removeItem('ozy_admin_email');
-    setToken(null);
+    fetch('/api/admin/logout', { method: 'POST' }).finally(() => {
+      setToken(null);
+    });
   };
 
   if (checking) return null;
