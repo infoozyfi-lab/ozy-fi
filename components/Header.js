@@ -7,7 +7,7 @@ import { useStore } from '@/context/StoreContext';
 
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { goToCheckoutDirect, cart } = useStore();
+  const { goToCheckoutDirect, cart, storeClosed } = useStore();
   const pathname = usePathname();
   const navRef = useRef(null);
   const itemCount = cart.reduce((sum, line) => sum + line.qty, 0);
@@ -47,6 +47,11 @@ export default function Header() {
 
   return (
     <header>
+      {storeClosed && (
+        <div className="store-closed-banner">
+          We&apos;re temporarily closed and not taking new orders right now.
+        </div>
+      )}
       <nav className="nav wrap" ref={navRef}>
         {pathname === '/' ? (
           <button className="logo" onClick={scrollTop} type="button">
