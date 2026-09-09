@@ -4,6 +4,9 @@ import { requireAdmin } from '@/lib/adminAuth';
 
 export const dynamic = 'force-dynamic';
 
+// One conditional-aggregation pass over `orders` for every headline KPI +
+// period-over-period comparison the dashboard needs (today vs yesterday,
+// last 7 days vs the 7 before that, last 30 days vs the 30 before that).
 async function loadSummary(env) {
   const row = await env.DB.prepare(
     `SELECT
@@ -50,8 +53,9 @@ export async function GET(request) {
   const denied = await requireAdmin(request, env);
   if (denied) return denied;
 
-  const [summary, revenueByDayRows, bestSellersRows, categoryRows, statusRows, hourlyRows] = await Promise.all([
+  const [summary, revenueByDayRows, bestSellersRows, todayBestSellersRows, categoryRows, statusRows, hourlyRows] = await Promise.all([
     loadSummary(env),
+
     env.DB.prepare(
       `SELECT date(created_at) AS day,
               SUM(CASE WHEN status != 'cancelled' THEN total ELSE 0 END) AS revenue,
@@ -61,6 +65,7 @@ export async function GET(request) {
        GROUP BY day
        ORDER BY day ASC`
     ).all(),
+
     env.DB.prepare(
       `SELECT oi.name AS name, SUM(oi.qty) AS qty, SUM(oi.line_total) AS revenue
        FROM order_items oi
@@ -70,6 +75,17 @@ export async function GET(request) {
        ORDER BY qty DESC
        LIMIT 8`
     ).all(),
+
+    env.DB.prepare(
+      `SELECT oi.name AS name, SUM(oi.qty) AS qty, SUM(oi.line_total) AS revenue
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       WHERE o.status != 'cancelled' AND date(o.created_at) = date('now')
+       GROUP BY oi.name
+       ORDER BY qty DESC
+       LIMIT 5`
+    ).all(),
+
     env.DB.prepare(
       `SELECT COALESCE(c.title, 'Other') AS category,
               SUM(oi.line_total) AS revenue,
@@ -82,12 +98,14 @@ export async function GET(request) {
        GROUP BY category
        ORDER BY revenue DESC`
     ).all(),
+
     env.DB.prepare(
       `SELECT status, COUNT(*) AS count
        FROM orders
        WHERE created_at >= datetime('now','-30 days')
        GROUP BY status`
     ).all(),
+
     env.DB.prepare(
       `SELECT CAST(strftime('%H', created_at) AS INTEGER) AS hour, COUNT(*) AS count
        FROM orders
@@ -97,10 +115,16 @@ export async function GET(request) {
     ).all(),
   ]);
 
+  const todayStatusRow = await env.DB.prepare(
+    `SELECT status, COUNT(*) AS count FROM orders WHERE date(created_at) = date('now') GROUP BY status`
+  ).all();
+
   return json({
     summary,
     revenueByDay: revenueByDayRows.results.map((r) => ({ day: r.day, revenue: Number(r.revenue || 0), orders: Number(r.orders || 0) })),
     bestSellers: bestSellersRows.results.map((r) => ({ name: r.name, qty: Number(r.qty || 0), revenue: Number(r.revenue || 0) })),
+    todayBestSellers: todayBestSellersRows.results.map((r) => ({ name: r.name, qty: Number(r.qty || 0), revenue: Number(r.revenue || 0) })),
+    todayStatusBreakdown: todayStatusRow.results.map((r) => ({ status: r.status, count: Number(r.count || 0) })),
     categoryBreakdown: categoryRows.results.map((r) => ({ category: r.category, revenue: Number(r.revenue || 0), qty: Number(r.qty || 0) })),
     statusBreakdown: statusRows.results.map((r) => ({ status: r.status, count: Number(r.count || 0) })),
     hourlyDistribution: hourlyRows.results.map((r) => ({ hour: Number(r.hour), count: Number(r.count || 0) })),
