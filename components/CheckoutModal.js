@@ -2,20 +2,20 @@
 
 import { useState } from 'react';
 import { useStore } from '@/context/StoreContext';
+import { useTranslations } from '@/lib/i18n';
 
-const EMPTY = { name: '', address: '', postalCode: '', email: '', phone: '', notes: '' };
+const EMPTY = { name: '', address: '', email: '', phone: '', notes: '' };
 
 // Accepts +358401234567, 0401234567, +358 40 123 4567, 040-123-4567, etc.
 function isValidFinnishPhone(raw) {
   const cleaned = raw.replace(/[\s-]/g, '');
   return /^(\+358[1-9]\d{6,9}|0[1-9]\d{6,9})$/.test(cleaned);
 }
-const STEP_LABELS = ['Cart', 'Details', 'Payment'];
 
-function StepIndicator({ step }) {
+function StepIndicator({ step, stepLabels }) {
   return (
     <div className="checkout-steps">
-      {STEP_LABELS.map((label, i) => {
+      {stepLabels.map((label, i) => {
         const n = i + 1;
         const isActive = step === n;
         const isDone = step > n;
@@ -37,13 +37,13 @@ function StepIndicator({ step }) {
   );
 }
 
-function MiniSummary({ cart, cartTotal }) {
+function MiniSummary({ cart, cartTotal, t }) {
   const [open, setOpen] = useState(false);
   const itemCount = cart.reduce((sum, l) => sum + l.qty, 0);
   return (
     <div className="mini-summary">
       <button type="button" className="mini-summary-head" onClick={() => setOpen((v) => !v)}>
-        <span>{itemCount} item{itemCount !== 1 ? 's' : ''} in your order</span>
+        <span>{t.checkout.itemsCount(itemCount)}</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <b>{cartTotal.toFixed(2)} €</b>
           <span className={`mini-summary-chev${open ? ' up' : ''}`}>⌄</span>
@@ -69,11 +69,13 @@ export default function CheckoutModal() {
     removeFromCart, updateCartQty, addDrinkToCart,
     drinks, dipCups, snacks,
   } = useStore();
+  const t = useTranslations();
+  const STEP_LABELS = [t.checkout.stepCart, t.checkout.stepDetails, t.checkout.stepPayment];
 
   const EXTRA_SECTIONS = {
-    drinks: { label: 'All drinks', items: drinks },
-    dips: { label: 'Dip the edges', items: dipCups },
-    snacks: { label: 'Snacks', items: snacks },
+    drinks: { label: t.checkout.allDrinks, items: drinks },
+    dips: { label: t.checkout.dipsShortcut, items: dipCups },
+    snacks: { label: t.checkout.snacks, items: snacks },
   };
 
   const [step, setStep] = useState(1);
@@ -137,7 +139,7 @@ export default function CheckoutModal() {
       const data = await res.json().catch(() => ({ valid: false }));
       if (!data.valid) {
         setCouponStatus('error');
-        setCouponError(data.error || 'This coupon code is not valid.');
+        setCouponError(data.error || t.checkout.couponGenericError);
         return;
       }
       setCouponCode(data.code);
@@ -146,7 +148,7 @@ export default function CheckoutModal() {
       setCouponStatus('applied');
     } catch {
       setCouponStatus('error');
-      setCouponError('Could not check this coupon right now. Please try again.');
+      setCouponError(t.checkout.couponNetworkError);
     }
   };
 
@@ -157,21 +159,18 @@ export default function CheckoutModal() {
 
   const validateDetails = () => {
     const next = {};
-    if (!customer.name.trim()) next.name = 'Please enter your full name.';
-    if (!customer.address.trim()) next.address = 'Please enter your delivery address.';
-    if (!/^\d{5}$/.test(customer.postalCode.trim())) {
-      next.postalCode = 'Please enter a valid 5-digit postal code.';
-    }
+    if (!customer.name.trim()) next.name = t.checkout.errorName;
+    if (!customer.address.trim()) next.address = t.checkout.errorAddress;
     // Email is optional (not legally required for a cash-on-delivery order
     // in Finland) — an empty field passes straight through, but if the
     // customer does type something, it's still format-checked so we don't
     // silently accept garbage. Phone stays the required contact/tracking
     // method either way.
     if (customer.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email.trim())) {
-      next.email = 'Please enter a valid email address.';
+      next.email = t.checkout.errorEmail;
     }
     if (!isValidFinnishPhone(customer.phone.trim())) {
-      next.phone = 'Please enter a valid Finnish phone number (e.g. 040 123 4567).';
+      next.phone = t.checkout.errorPhone;
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -193,7 +192,7 @@ export default function CheckoutModal() {
       setCustomer(EMPTY);
       resetCoupon();
     } catch (err) {
-      setOrderError(err.message || 'Could not place order. Please try again.');
+      setOrderError(err.message || t.checkout.genericOrderError);
     } finally {
       setSubmitting(false);
     }
@@ -202,26 +201,26 @@ export default function CheckoutModal() {
   return (
     <div className={`checkout-page${isCheckoutOpen ? ' open' : ''}`}>
       <div className="pp-topbar">
-        <button className="pp-back" type="button" aria-label={step > 1 ? 'Back' : 'Close'} onClick={() => (step > 1 ? setStep(step - 1) : close())}>←</button>
-        <span className="pp-topbar-title">Your order</span>
+        <button className="pp-back" type="button" aria-label={step > 1 ? t.checkout.backAriaLabel : t.checkout.closeAriaLabel} onClick={() => (step > 1 ? setStep(step - 1) : close())}>←</button>
+        <span className="pp-topbar-title">{t.checkout.title}</span>
         <span style={{ width: 28 }} />
       </div>
 
       <div className="pp-scroll">
         <div className="wrap" style={{ paddingTop: 24, paddingBottom: 40 }}>
-          <StepIndicator step={step} />
+          <StepIndicator step={step} stepLabels={STEP_LABELS} />
 
           {step === 1 && cart.length === 0 && (
             <div className="checkout-empty">
               <div className="checkout-empty-icon">🛒</div>
-              <p>Your cart is empty. Add something tasty from the menu first.</p>
-              <button type="button" className="btn-primary" onClick={close}>Back to menu</button>
+              <p>{t.checkout.emptyCart}</p>
+              <button type="button" className="btn-primary" onClick={close}>{t.checkout.backToMenu}</button>
             </div>
           )}
 
           {step === 1 && cart.length > 0 && (
             <div>
-              <p className="desc" style={{ marginBottom: 16 }}>Review your order</p>
+              <p className="desc" style={{ marginBottom: 16 }}>{t.checkout.reviewOrder}</p>
               <div className="checkout-summary">
                 {cart.map((l) => (
                   <div className="cs-row cs-row-editable" key={l.key}>
@@ -237,19 +236,19 @@ export default function CheckoutModal() {
                           <span>{l.qty}</span>
                           <button type="button" onClick={() => updateCartQty(l.key, l.qty + 1)}>+</button>
                         </div>
-                        <button type="button" className="cs-remove" onClick={() => removeFromCart(l.key)}>Remove</button>
+                        <button type="button" className="cs-remove" onClick={() => removeFromCart(l.key)}>{t.checkout.remove}</button>
                       </div>
                     </div>
                     <span className="cs-price">{l.lineTotal.toFixed(2)} €</span>
                   </div>
                 ))}
                 <div className="cs-total">
-                  <span>Total</span>
+                  <span>{t.checkout.total}</span>
                   <span>{cartTotal.toFixed(2)} €</span>
                 </div>
               </div>
 
-              <p className="pp-label" style={{ marginTop: 24 }}>A cold drink on the side?</p>
+              <p className="pp-label" style={{ marginTop: 24 }}>{t.checkout.coldDrink}</p>
               <div className="drink-upsell-row">
                 {drinks.map((d) => {
                   const line = cart.find((l) => l.drinkId === d.id);
@@ -257,7 +256,7 @@ export default function CheckoutModal() {
                     <button type="button" className="drink-tile" key={d.id} onClick={() => addDrinkToCart(d)}>
                       <img src={d.image} alt={d.name} />
                       <span className="dname">{d.name}</span>
-                      <span className="dprice">{line ? `In cart · ${line.qty}` : `${d.price.toFixed(2)} €`}</span>
+                      <span className="dprice">{line ? t.checkout.inCart(line.qty) : `${d.price.toFixed(2)} €`}</span>
                       <span className="drink-add-btn">+</span>
                     </button>
                   );
@@ -286,50 +285,45 @@ export default function CheckoutModal() {
 
           {step === 2 && (
             <form id="checkoutForm" onSubmit={submitDetails} noValidate>
-              <MiniSummary cart={cart} cartTotal={cartTotal} />
-              <p className="desc" style={{ marginBottom: 16 }}>Order details</p>
+              <MiniSummary cart={cart} cartTotal={cartTotal} t={t} />
+              <p className="desc" style={{ marginBottom: 16 }}>{t.checkout.orderDetails}</p>
               <label className={errors.name ? 'has-error' : ''}>
-                First name and last name
+                {t.checkout.fullName}
                 <input type="text" value={customer.name} onChange={onField('name')} />
                 {errors.name && <span className="field-error">{errors.name}</span>}
               </label>
               <label className={errors.address ? 'has-error' : ''}>
-                Delivery address
-                <input type="text" value={customer.address} onChange={onField('address')} placeholder="Street, house number, city" />
+                {t.checkout.deliveryAddress}
+                <input type="text" value={customer.address} onChange={onField('address')} placeholder={t.checkout.deliveryAddressPlaceholder} />
                 {errors.address && <span className="field-error">{errors.address}</span>}
               </label>
-              <label className={errors.postalCode ? 'has-error' : ''}>
-                Postal code
-                <input type="text" inputMode="numeric" maxLength={5} value={customer.postalCode} onChange={onField('postalCode')} placeholder="e.g. 01600" />
-                {errors.postalCode && <span className="field-error">{errors.postalCode}</span>}
-              </label>
               <label className={errors.email ? 'has-error' : ''}>
-                Email address (optional)
-                <input type="email" value={customer.email} onChange={onField('email')} placeholder="you@example.com (optional)" />
+                {t.checkout.emailOptional}
+                <input type="email" value={customer.email} onChange={onField('email')} placeholder={t.checkout.emailPlaceholder} />
                 {errors.email && <span className="field-error">{errors.email}</span>}
               </label>
               <label className={errors.phone ? 'has-error' : ''}>
-                Phone
-                <input type="tel" value={customer.phone} onChange={onField('phone')} placeholder="040 123 4567" />
+                {t.checkout.phone}
+                <input type="tel" value={customer.phone} onChange={onField('phone')} placeholder={t.checkout.phonePlaceholder} />
                 {errors.phone && <span className="field-error">{errors.phone}</span>}
               </label>
               <label>
-                Additional information for the restaurant
-                <input type="text" value={customer.notes} onChange={onField('notes')} placeholder="e.g. door code, floor, company, food allergy" />
+                {t.checkout.additionalInfo}
+                <input type="text" value={customer.notes} onChange={onField('notes')} placeholder={t.checkout.additionalInfoPlaceholder} />
               </label>
             </form>
           )}
 
           {step === 3 && (
             <form id="paymentForm" onSubmit={submitOrder}>
-              <MiniSummary cart={cart} cartTotal={cartTotal} />
+              <MiniSummary cart={cart} cartTotal={cartTotal} t={t} />
 
               <div style={{ margin: '16px 0' }}>
                 {couponStatus === 'applied' ? (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'rgba(60,160,80,0.12)', borderRadius: 8 }}>
-                    <span>🏷️ <strong>{couponCode}</strong> applied — −{couponDiscount.toFixed(2)} €</span>
+                    <span>🏷️ {t.checkout.couponApplied(couponCode, `${couponDiscount.toFixed(2)} €`)}</span>
                     <button type="button" onClick={resetCoupon} style={{ background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', fontSize: 13 }}>
-                      Remove
+                      {t.checkout.couponRemove}
                     </button>
                   </div>
                 ) : (
@@ -337,7 +331,7 @@ export default function CheckoutModal() {
                     <div style={{ display: 'flex', gap: 8 }}>
                       <input
                         type="text"
-                        placeholder="Coupon code"
+                        placeholder={t.checkout.couponPlaceholder}
                         value={couponInput}
                         onChange={(e) => { setCouponInput(e.target.value); if (couponStatus === 'error') setCouponStatus('idle'); }}
                         style={{ flex: 1 }}
@@ -349,7 +343,7 @@ export default function CheckoutModal() {
                         onClick={applyCoupon}
                         style={{ whiteSpace: 'nowrap' }}
                       >
-                        {couponStatus === 'checking' ? 'Checking…' : 'Apply'}
+                        {couponStatus === 'checking' ? t.checkout.couponChecking : t.checkout.couponApply}
                       </button>
                     </div>
                     {couponStatus === 'error' && <span className="field-error">{couponError}</span>}
@@ -358,12 +352,12 @@ export default function CheckoutModal() {
               </div>
 
               <div className="payment-method">
-                <p>Payment method</p>
+                <p>{t.checkout.paymentMethodHeading}</p>
                 <label className="pay-option">
                   <span className="pay-icon">💵</span>
                   <span className="pay-option-text">
-                    <b>Cash on delivery</b>
-                    <span>Pay when your order arrives</span>
+                    <b>{t.checkout.cod}</b>
+                    <span>{t.checkout.codDesc}</span>
                   </span>
                   <input type="radio" name="payment" value="cod" checked readOnly />
                 </label>
@@ -378,14 +372,14 @@ export default function CheckoutModal() {
       {step === 1 && cart.length > 0 && (
         <div className="checkout-footer">
           <button type="button" className="btn-primary" style={{ flex: 1 }} onClick={() => setStep(2)}>
-            Continue — {cartTotal.toFixed(2)} €
+            {t.checkout.continueWithTotal(`${cartTotal.toFixed(2)} €`)}
           </button>
         </div>
       )}
 
       {step === 2 && (
         <div className="checkout-footer">
-          <button type="submit" form="checkoutForm" className="btn-primary" style={{ flex: 1 }}>Continue</button>
+          <button type="submit" form="checkoutForm" className="btn-primary" style={{ flex: 1 }}>{t.checkout.continue}</button>
         </div>
       )}
 
@@ -398,7 +392,7 @@ export default function CheckoutModal() {
             style={{ flex: 1 }}
             disabled={submitting}
           >
-            Place order — {(couponStatus === 'applied' ? couponFinalTotal : cartTotal).toFixed(2)} €
+            {t.checkout.placeOrder(`${(couponStatus === 'applied' ? couponFinalTotal : cartTotal).toFixed(2)} €`)}
           </button>
         </div>
       )}
@@ -407,7 +401,7 @@ export default function CheckoutModal() {
         {openSection && (
           <>
             <div className="pp-topbar">
-              <button className="pp-back" type="button" aria-label="Close" onClick={() => setOpenSection(null)}>×</button>
+              <button className="pp-back" type="button" aria-label={t.checkout.closeAriaLabel} onClick={() => setOpenSection(null)}>×</button>
               <span className="pp-topbar-title">{EXTRA_SECTIONS[openSection].label.toUpperCase()}</span>
               <span style={{ width: 28 }} />
             </div>
@@ -430,7 +424,7 @@ export default function CheckoutModal() {
                         {isJustAdded ? (
                           <div className="extra-list-body extra-list-added">
                             <span className="extra-added-check">✓</span>
-                            <span>Added</span>
+                            <span>{t.checkout.added}</span>
                           </div>
                         ) : (
                           <div className="extra-list-body">
@@ -451,7 +445,7 @@ export default function CheckoutModal() {
                 className="btn-primary extra-ready-btn"
                 onClick={() => setOpenSection(null)}
               >
-                Ready
+                {t.checkout.ready}
               </button>
             </div>
           </>

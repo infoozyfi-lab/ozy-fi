@@ -13,6 +13,10 @@ export async function GET(request, { params }) {
     .bind(params.orderNum)
     .first();
 
+  // Order number alone isn't secret enough to hand back a stranger's name,
+  // address and phone on request — also require the phone number used at
+  // checkout. Same generic error either way, so a guesser can't tell which
+  // part was wrong.
   if (!order || !phoneMatches(order.phone, phone)) {
     return json({ error: 'Order not found' }, 404);
   }

@@ -263,6 +263,18 @@ footer{ padding: 56px 0 32px; }
 .footer-grid a:hover{ color: var(--ember); }
 .footer-bottom{ display:flex; justify-content:space-between; padding-top: 24px; color: var(--muted); font-size: 0.85rem; flex-wrap:wrap; gap: 10px; }
 
+/* ---------- LANGUAGE SWITCHER (bilingual site) ---------- */
+.lang-switcher{ display:flex; align-items:center; gap: 2px; flex-shrink:0; }
+.lang-switcher-opt{
+  color: var(--muted); font-weight: 600; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.02em;
+  padding: 5px 8px; border-radius: 6px; transition: color 0.2s ease, background 0.2s ease;
+}
+.lang-switcher-opt:hover{ color: var(--cream); }
+.lang-switcher-opt.active{ color: var(--ember); background: rgba(255,106,61,0.12); }
+.lang-switcher-sep{ color: var(--line); }
+.footer .lang-switcher{ margin-top: 14px; }
+.mobile-nav-lang{ margin-top: 10px; }
+
 /* ---------- MODAL (generic) ---------- */
 .modal-overlay{
   position: fixed; inset:0; background: rgba(10,7,5,0.7); display:none; align-items:center; justify-content:center;

@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useStore } from '@/context/StoreContext';
+import { useTranslations, useLocalePath } from '@/lib/i18n';
 
 const SCROLLSPY_OFFSET = 132;
 
@@ -13,6 +14,8 @@ export default function MenuSection({ onlyCategory = null }) {
     menuLoading: loading,
     menuError: error,
   } = useStore();
+  const t = useTranslations();
+  const lp = useLocalePath();
 
   const tabRefs = useRef({});
   const sectionRefs = useRef({});
@@ -116,9 +119,9 @@ export default function MenuSection({ onlyCategory = null }) {
       <section id="menu">
         <div className="wrap">
           <div className="section-head">
-            <p className="eyebrow">Menu</p>
-            <h2>Full menu</h2>
-            <p>Loading menu...</p>
+            <p className="eyebrow">{t.menuSection.eyebrow}</p>
+            <h2>{t.menuSection.heading}</h2>
+            <p>{t.menuSection.loading}</p>
           </div>
         </div>
       </section>
@@ -130,8 +133,8 @@ export default function MenuSection({ onlyCategory = null }) {
       <section id="menu">
         <div className="wrap">
           <div className="section-head">
-            <p className="eyebrow">Menu</p>
-            <h2>Full menu</h2>
+            <p className="eyebrow">{t.menuSection.eyebrow}</p>
+            <h2>{t.menuSection.heading}</h2>
             <p>{error}</p>
           </div>
         </div>
@@ -144,15 +147,12 @@ export default function MenuSection({ onlyCategory = null }) {
       <div className="wrap">
 
         <div className="section-head">
-          <p className="eyebrow">Menu</p>
+          <p className="eyebrow">{t.menuSection.eyebrow}</p>
 
-          <h2>Full menu</h2>
+          <h2>{t.menuSection.heading}</h2>
 
           <p>
-            Browse by category — pizzas, kebabs,
-            burgers, salads and schnitzels, all made
-            fresh. Tap an item to customize and add it
-            to your order.
+            {t.menuSection.description}
           </p>
         </div>
 
@@ -161,7 +161,7 @@ export default function MenuSection({ onlyCategory = null }) {
             onlyCategory ? (
               <Link
                 key={cat.id}
-                href={`/menu/${cat.id}`}
+                href={lp(`/menu/${cat.id}`)}
                 className={`cat-tab${cat.id === onlyCategory ? ' active' : ''}`}
               >
                 {cat.title}
@@ -210,7 +210,7 @@ export default function MenuSection({ onlyCategory = null }) {
               .map((item) => (
                 <Link
                   key={item.id}
-                  href={`/product/${item.id}`}
+                  href={lp(`/product/${item.id}`)}
                   className="menu-item"
                 >
                   <span className="menu-item-info">
@@ -259,11 +259,7 @@ export default function MenuSection({ onlyCategory = null }) {
         ))}
 
         <p className="menu-note">
-          Extra toppings 2.50 €: 120 g patty, bacon,
-          cheese, pineapple, blue cheese, onion, egg ·
-          Condiments: ketchup, yogurt sauce, pickle,
-          lemon juice, mayonnaise, American sauce,
-          parsley, mint, chili flakes.
+          {t.menuSection.note}
         </p>
 
       </div>

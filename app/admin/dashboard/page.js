@@ -490,17 +490,7 @@ function CustomersTab({ token }) {
             <tbody>
               {customers.map((c, i) => (
                 <tr key={i}>
-                  <td style={td}>
-                    {c.name}
-                    {c.totalOrders >= 2 && (
-                      <span style={{
-                        marginLeft: 8, fontSize: 11, fontWeight: 700, color: '#7CB86A',
-                        background: 'rgba(124,184,106,0.15)', borderRadius: 999, padding: '2px 8px',
-                      }}>
-                        Repeat
-                      </span>
-                    )}
-                  </td>
+                  <td style={td}>{c.name}</td>
                   <td style={td}>{c.phone}</td>
                   <td style={td}>{c.email || '—'}</td>
                   <td style={td}>{c.totalOrders}</td>
@@ -670,10 +660,6 @@ const SETTINGS_FIELDS = [
   { key: 'address', label: 'Address' },
   { key: 'minimum_order', label: 'Minimum order (€)', number: true },
   { key: 'delivery_fee', label: 'Delivery fee (€)', number: true },
-  {
-    key: 'delivery_postal_codes', label: 'Delivery postal codes (comma-separated, leave blank for no restriction)',
-    textarea: true, placeholder: 'e.g. 00 (all of Helsinki), or 00100, 00120 for specific codes',
-  },
 ];
 
 // Phase 7.7 — per-day opening hours, replacing the old single free-text
@@ -1220,17 +1206,24 @@ function MenuTabs({ token }) {
   const bump = () => setRefreshKey((k) => k + 1);
   const [tab, setTab] = useState(null); // null = show the landing page of big option cards
 
+  // Phase: bilingual site — every `_fi` field below is optional; the
+  // storefront falls back to the English/default field next to it when
+  // empty (see lib/menu-i18n.js). Placed directly after its English
+  // counterpart in each list so the two are easy to compare while editing.
   const categoryFields = [
     { key: 'id', label: 'ID (slug)', type: 'text', required: true, placeholder: 'e.g. pizzat' },
-    { key: 'title', label: 'Title', type: 'text', required: true },
-    { key: 'sub', label: 'Subtitle', type: 'text' },
+    { key: 'title', label: 'Title (English)', type: 'text', required: true },
+    { key: 'title_fi', label: 'Title (Finnish, optional)', type: 'text' },
+    { key: 'sub', label: 'Subtitle (English)', type: 'text' },
+    { key: 'sub_fi', label: 'Subtitle (Finnish, optional)', type: 'text' },
     { key: 'image', label: 'Image', type: 'image' },
     { key: 'sort_order', label: 'Sort order', type: 'number', default: 0 },
   ];
 
   const optionGroupFields = [
     { key: 'id', label: 'ID (slug)', type: 'text', required: true, placeholder: 'e.g. base' },
-    { key: 'title', label: 'Title', type: 'text', required: true },
+    { key: 'title', label: 'Title (English)', type: 'text', required: true },
+    { key: 'title_fi', label: 'Title (Finnish, optional)', type: 'text' },
     {
       key: 'kind', label: 'Kind', type: 'select', required: true,
       options: [
@@ -1246,7 +1239,8 @@ function MenuTabs({ token }) {
   const optionFields = [
     { key: 'id', label: 'ID (slug)', type: 'text', required: true, placeholder: 'e.g. base-classic' },
     { key: 'group_id', label: 'Option group', type: 'select', required: true, options: optionGroups.map((g) => ({ value: g.id, label: `${g.title} (${g.id})` })) },
-    { key: 'label', label: 'Label', type: 'text', required: true },
+    { key: 'label', label: 'Label (English)', type: 'text', required: true },
+    { key: 'label_fi', label: 'Label (Finnish, optional)', type: 'text' },
     { key: 'price_delta', label: 'Price delta (€)', type: 'number', step: '0.1', default: 0 },
     { key: 'color', label: 'Color (hex, optional)', type: 'text', placeholder: '#c0392b' },
     { key: 'sort_order', label: 'Sort order', type: 'number', default: 0 },
@@ -1255,8 +1249,10 @@ function MenuTabs({ token }) {
   const productFields = [
     { key: 'id', label: 'ID (slug)', type: 'text', required: true },
     { key: 'category_id', label: 'Category', type: 'select', required: true, options: categories.map((c) => ({ value: c.id, label: c.title })) },
-    { key: 'name', label: 'Name', type: 'text', required: true },
-    { key: 'description', label: 'Description', type: 'textarea' },
+    { key: 'name', label: 'Name (English)', type: 'text', required: true },
+    { key: 'name_fi', label: 'Name (Finnish, optional)', type: 'text' },
+    { key: 'description', label: 'Description (English)', type: 'textarea' },
+    { key: 'description_fi', label: 'Description (Finnish, optional)', type: 'textarea' },
     { key: 'price', label: 'Price (€)', type: 'number', step: '0.1', required: true },
     { key: 'offer_price', label: 'Offer price (€, optional)', type: 'number', step: '0.1' },
     { key: 'image', label: 'Image', type: 'image' },
@@ -1269,7 +1265,8 @@ function MenuTabs({ token }) {
   const addonFields = [
     { key: 'id', label: 'ID (slug)', type: 'text', required: true },
     { key: 'type', label: 'Type', type: 'select', required: true, options: [{ value: 'drink', label: 'Drink' }, { value: 'dip', label: 'Dip' }, { value: 'snack', label: 'Snack' }] },
-    { key: 'name', label: 'Name', type: 'text', required: true },
+    { key: 'name', label: 'Name (English)', type: 'text', required: true },
+    { key: 'name_fi', label: 'Name (Finnish, optional)', type: 'text' },
     { key: 'price', label: 'Price (€)', type: 'number', step: '0.1', required: true },
     { key: 'image', label: 'Image', type: 'image' },
     { key: 'active', label: 'Active', type: 'checkbox', default: true },

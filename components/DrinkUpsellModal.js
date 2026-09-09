@@ -1,13 +1,16 @@
 'use client';
 
 import { useStore } from '@/context/StoreContext';
+import { useTranslations, useLocalePath } from '@/lib/i18n';
 
 export default function DrinkUpsellModal() {
   const { isDrinkUpsellOpen, setDrinkUpsellOpen, continueFromUpsell, addDrinkToCart, drinks } = useStore();
+  const t = useTranslations();
+  const lp = useLocalePath();
 
   const closeToHome = () => {
     setDrinkUpsellOpen(false);
-    if (typeof window !== 'undefined') window.history.pushState({}, '', '/');
+    if (typeof window !== 'undefined') window.history.pushState({}, '', lp('/'));
   };
 
   const featured = drinks.slice(0, 2);
@@ -22,7 +25,7 @@ export default function DrinkUpsellModal() {
       <button className="upsell-close" type="button" onClick={closeToHome}>×</button>
 
       <div className="upsell-scroll">
-        <h2 className="upsell-title">Pepsi or<br />Pepsi Max?</h2>
+        <h2 className="upsell-title">{t.drinkUpsell.titleLine1}<br />{t.drinkUpsell.titleLine2}</h2>
 
         <div className="upsell-grid">
           {featured.map((d) => (
@@ -42,7 +45,7 @@ export default function DrinkUpsellModal() {
 
       <div className="upsell-footer">
         <button type="button" className="upsell-skip" onClick={continueFromUpsell}>
-          No thanks
+          {t.drinkUpsell.noThanks}
         </button>
       </div>
     </div>

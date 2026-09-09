@@ -1,10 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useTranslations, useLocalePath } from '@/lib/i18n';
 
 export default function CookieBanner() {
   const [visible, setVisible] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const t = useTranslations();
+  const lp = useLocalePath();
 
   useEffect(() => {
     try {
@@ -33,23 +37,22 @@ export default function CookieBanner() {
   if (!visible) return null;
 
   return (
-    <div className="cookie-banner" role="dialog" aria-label="Cookie consent">
+    <div className="cookie-banner" role="dialog" aria-label={t.cookieBanner.dialogAriaLabel}>
       <div className="cookie-banner-main">
         <p>
-          We use cookies and similar technical storage to run this site and
-          keep items in your cart while you order. With your permission, we
-          may also use cookies to measure traffic and ads. See our{' '}
-          <a href="/privacy">Privacy Policy</a> for details.
+          {t.cookieBanner.message(
+            <Link href={lp('/privacy')}>{t.cookieBanner.privacyPolicyLinkText}</Link>
+          )}
         </p>
         <div className="cookie-banner-actions">
           <button type="button" className="cookie-btn cookie-btn-ghost" onClick={() => setSettingsOpen((v) => !v)}>
-            Cookie settings
+            {t.cookieBanner.cookieSettings}
           </button>
           <button type="button" className="cookie-btn cookie-btn-outline" onClick={() => saveConsent('necessary')}>
-            Necessary only
+            {t.cookieBanner.necessaryOnly}
           </button>
           <button type="button" className="cookie-btn cookie-btn-primary" onClick={() => saveConsent('all')}>
-            Accept all
+            {t.cookieBanner.acceptAll}
           </button>
         </div>
       </div>
@@ -58,25 +61,21 @@ export default function CookieBanner() {
         <div className="cookie-settings">
           <div className="cookie-settings-row">
             <div>
-              <p className="cookie-settings-title">Necessary</p>
+              <p className="cookie-settings-title">{t.cookieBanner.necessaryTitle}</p>
               <p className="cookie-settings-desc">
-                Required for the site to work — keeping items in your cart
-                and logging in as admin. Always on, can&apos;t be switched
-                off.
+                {t.cookieBanner.necessaryDesc}
               </p>
             </div>
-            <input type="checkbox" checked disabled aria-label="Necessary storage — always on" />
+            <input type="checkbox" checked disabled aria-label={t.cookieBanner.necessaryAriaLabel} />
           </div>
           <div className="cookie-settings-row">
             <div>
-              <p className="cookie-settings-title">Advertising &amp; analytics</p>
+              <p className="cookie-settings-title">{t.cookieBanner.adsTitle}</p>
               <p className="cookie-settings-desc">
-                Helps us see how the site is used and measure ads (Google
-                Analytics, Meta/TikTok, Microsoft Clarity). Off unless you
-                choose &quot;Accept all&quot; below.
+                {t.cookieBanner.adsDesc}
               </p>
             </div>
-            <input type="checkbox" disabled aria-label="Advertising and analytics — off unless Accept all is chosen" />
+            <input type="checkbox" disabled aria-label={t.cookieBanner.adsAriaLabel} />
           </div>
         </div>
       )}

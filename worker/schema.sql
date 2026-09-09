@@ -15,32 +15,49 @@ DROP TABLE IF EXISTS staff;
 DROP TABLE IF EXISTS audit_log;
 DROP TABLE IF EXISTS coupons;
 
+-- Phase: bilingual site (Finnish primary + English) — every `_fi` column
+-- below is OPTIONAL. The pre-existing column (title/name/description/
+-- label/sub) stays the single source of truth for the default/English
+-- text and is never renamed — the `_fi` column is purely an optional
+-- Finnish override, filled in via the admin panel over time. Anywhere
+-- this text reaches a customer, it falls back to the non-_fi value when
+-- the _fi one is empty (see lib/menu-i18n.js's resolveText()), so the
+-- bilingual site works correctly even for products nobody has
+-- translated yet.
 CREATE TABLE categories (
   id         TEXT PRIMARY KEY,
   title      TEXT NOT NULL,
+  title_fi   TEXT,
   sub        TEXT,
+  sub_fi     TEXT,
   image      TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE products (
-  id            TEXT PRIMARY KEY,
-  category_id   TEXT NOT NULL REFERENCES categories(id),
-  name          TEXT NOT NULL,
-  description   TEXT,
-  price         REAL NOT NULL DEFAULT 0,
-  offer_price   REAL,
-  image         TEXT,
-  tag           TEXT,
-  has_toppings  INTEGER NOT NULL DEFAULT 0,
-  sort_order    INTEGER NOT NULL DEFAULT 0,
-  active        INTEGER NOT NULL DEFAULT 1
+  id              TEXT PRIMARY KEY,
+  category_id     TEXT NOT NULL REFERENCES categories(id),
+  name            TEXT NOT NULL,
+  name_fi         TEXT,
+  description     TEXT,
+  description_fi  TEXT,
+  price           REAL NOT NULL DEFAULT 0,
+  offer_price     REAL,
+  image           TEXT,
+  tag             TEXT,
+  has_toppings    INTEGER NOT NULL DEFAULT 0,
+  sort_order      INTEGER NOT NULL DEFAULT 0,
+  active          INTEGER NOT NULL DEFAULT 1
 );
 
 -- kind: 'base' | 'sauce' | 'cheese' | 'sauce_stripe' | 'dip' | 'filling'
+-- title_fi only really shows to customers for 'filling' groups (rendered
+-- as a "More fillings" category heading) — harmless to have it on every
+-- kind regardless, one consistent column beats a special case.
 CREATE TABLE option_groups (
   id         TEXT PRIMARY KEY,
   title      TEXT NOT NULL,
+  title_fi   TEXT,
   kind       TEXT NOT NULL,
   icon       TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0
@@ -50,6 +67,7 @@ CREATE TABLE options (
   id          TEXT PRIMARY KEY,
   group_id    TEXT NOT NULL REFERENCES option_groups(id),
   label       TEXT NOT NULL,
+  label_fi    TEXT,
   price_delta REAL NOT NULL DEFAULT 0,
   color       TEXT,
   sort_order  INTEGER NOT NULL DEFAULT 0
@@ -60,6 +78,7 @@ CREATE TABLE addons (
   id         TEXT PRIMARY KEY,
   type       TEXT NOT NULL,
   name       TEXT NOT NULL,
+  name_fi    TEXT,
   price      REAL NOT NULL DEFAULT 0,
   image      TEXT,
   active     INTEGER NOT NULL DEFAULT 1,
@@ -122,14 +141,16 @@ CREATE TABLE admin_settings (
 -- extras — toppings, size, base/sauce/cheese — add to the total).
 -- Fixed slots are included as-is, no customer choice.
 CREATE TABLE bundles (
-  id          TEXT PRIMARY KEY,
-  title       TEXT NOT NULL,
-  description TEXT,
-  image       TEXT,
-  price       REAL NOT NULL DEFAULT 0,
-  slots       TEXT NOT NULL DEFAULT '[]',
-  active      INTEGER NOT NULL DEFAULT 1,
-  sort_order  INTEGER NOT NULL DEFAULT 0
+  id              TEXT PRIMARY KEY,
+  title           TEXT NOT NULL,
+  title_fi        TEXT,
+  description     TEXT,
+  description_fi  TEXT,
+  image           TEXT,
+  price           REAL NOT NULL DEFAULT 0,
+  slots           TEXT NOT NULL DEFAULT '[]',
+  active          INTEGER NOT NULL DEFAULT 1,
+  sort_order      INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_products_category ON products(category_id);

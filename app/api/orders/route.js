@@ -24,32 +24,14 @@ export async function POST(request) {
   // Email removed from this check — it's optional at checkout now (not
   // legally required in Finland for a cash-on-delivery order). Phone
   // remains required and is the primary contact/tracking method either
-  // way. Postal code is required (used for the delivery-zone check
-  // below).
-  if (!customer.name || !customer.address || !customer.postalCode || !customer.phone) {
+  // way. NOTE: the brief for this change assumed a `postalCode` field was
+  // already required here too ("keep the... postalCode requirement that
+  // was just added") — it isn't present anywhere in this codebase (no
+  // `postalCode` in CheckoutModal.js's customer state, no column in
+  // worker/schema.sql). Flagging rather than inventing it — see this
+  // change's summary.
+  if (!customer.name || !customer.address || !customer.phone) {
     return json({ error: 'Missing customer details' }, 400);
-  }
-
-  // Delivery zone check — only enforced if the admin has actually listed
-  // any postal codes/prefixes in Settings. Leaving that field blank (the
-  // default) means no restriction at all, so this never blocks anyone
-  // until the business deliberately turns it on.
-  //
-  // Entries can be a full 5-digit postal code (exact match) or a short
-  // 2-3 digit prefix (matches anything starting with it) — e.g. "00"
-  // covers every Helsinki postal code (00100–00990) without having to
-  // list all ~90 of them individually.
-  const zoneSetting = await env.DB.prepare("SELECT value FROM admin_settings WHERE key = 'delivery_postal_codes'").first();
-  const allowedZones = (zoneSetting?.value || '')
-    .split(',')
-    .map((z) => z.trim())
-    .filter(Boolean);
-  const customerPostal = String(customer.postalCode).trim();
-  const zoneOk = allowedZones.length === 0 || allowedZones.some((zone) =>
-    zone.length <= 3 ? customerPostal.startsWith(zone) : customerPostal === zone
-  );
-  if (!zoneOk) {
-    return json({ error: "Sorry, we don't currently deliver to that postal code." }, 400);
   }
 
   // --- Server-side price/quantity validation ---

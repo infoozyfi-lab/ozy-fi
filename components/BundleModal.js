@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useStore } from '@/context/StoreContext';
+import { useTranslations } from '@/lib/i18n';
 
 function money(n) {
   return `${n.toFixed(2)} €`;
@@ -20,6 +21,7 @@ export default function BundleModal() {
     addBundleToCart,
     products,
   } = useStore();
+  const t = useTranslations();
 
   const [pickerSlotIndex, setPickerSlotIndex] = useState(null);
 
@@ -48,7 +50,7 @@ export default function BundleModal() {
   return (
     <div className={`bundle-modal${isBundleModalOpen ? ' open' : ''}`}>
       <div className="pp-topbar">
-        <button className="pp-back" type="button" aria-label="Back" onClick={closeBundleModal}>←</button>
+        <button className="pp-back" type="button" aria-label={t.bundleModal.backAriaLabel} onClick={closeBundleModal}>←</button>
         <span className="pp-topbar-title">ozy<span>.fi</span></span>
         <span style={{ width: 40 }} />
       </div>
@@ -57,10 +59,10 @@ export default function BundleModal() {
         {pickerSlot ? (
           <div className="wrap bundle-picker">
             <button type="button" className="change-btn" onClick={() => setPickerSlotIndex(null)}>
-              ← back to bundle
+              {t.bundleModal.backToBundle}
             </button>
             <p className="pp-heading">
-              {pickerSlot.label || 'Choose an item'} ({pickerSlot.filled.length}/{pickerSlot.qty || 1})
+              {pickerSlot.label || t.bundleModal.chooseItem} ({pickerSlot.filled.length}/{pickerSlot.qty || 1})
             </p>
             {pickerProducts.map((p) => {
               const timesPicked = pickerSlot.filled.filter((f) => f.productId === p.id).length;
@@ -74,7 +76,7 @@ export default function BundleModal() {
                   <span className="menu-item-info">
                     <span className="name-row">
                       <h3>{p.name}</h3>
-                      {timesPicked > 0 && <span className="tag">✓ added{timesPicked > 1 ? ` ×${timesPicked}` : ''}</span>}
+                      {timesPicked > 0 && <span className="tag">✓ {t.bundleModal.added}{timesPicked > 1 ? ` ×${timesPicked}` : ''}</span>}
                     </span>
                     <span className="price">{p.price.toFixed(2)} €</span>
                   </span>
@@ -104,7 +106,7 @@ export default function BundleModal() {
               {bundleSlots.map((slot, idx) => (
                 <div className="pp-section" key={idx}>
                   <p className="pp-label">
-                    {slot.label || (slot.kind === 'fixed' ? 'Included' : 'Choose')} ({slot.filled.length}/{slot.qty || 1})
+                    {slot.label || (slot.kind === 'fixed' ? t.bundleModal.included : t.bundleModal.choose)} ({slot.filled.length}/{slot.qty || 1})
                   </p>
 
                   {slot.filled.length > 0 && (
@@ -125,7 +127,7 @@ export default function BundleModal() {
                               className="change-btn"
                               onClick={() => removeBundleSlotItem(idx, item.key)}
                             >
-                              remove
+                              {t.bundleModal.remove}
                             </button>
                           )}
                         </div>
@@ -139,7 +141,7 @@ export default function BundleModal() {
                       className="btn-secondary"
                       onClick={() => setPickerSlotIndex(idx)}
                     >
-                      + Choose {slot.label || 'item'}
+                      {t.bundleModal.chooseItemBtn(slot.label || t.bundleModal.item)}
                     </button>
                   )}
                 </div>
@@ -157,7 +159,7 @@ export default function BundleModal() {
             disabled={!bundleReady}
             onClick={addBundleToCart}
           >
-            {bundleReady ? `Add bundle to order — ${money(bundleTotal)}` : 'Fill every slot to continue'}
+            {bundleReady ? t.bundleModal.addBundleToOrder(money(bundleTotal)) : t.bundleModal.fillEverySlot}
           </button>
         </div>
       )}

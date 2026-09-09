@@ -3,6 +3,8 @@
 import { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { trackViewItem, trackAddToCart, trackBeginCheckout, trackPurchase } from '@/lib/analytics';
+import { useLocale, useLocalePath, useTranslations } from '@/lib/i18n';
+import { normalizeCategories, normalizeProducts, normalizeMenuBlob } from '@/lib/menu-i18n';
 
 const StoreContext = createContext(null);
 
@@ -25,6 +27,17 @@ const FALLBACK_OPTION = [{ id: 'default', label: 'Default', delta: 0 }];
 export function StoreProvider({ children, initialData }) {
   const router = useRouter();
 
+  // Bilingual site — every route in this app now lives under /fi or /en
+  // (see middleware.js). `locale` comes from the [locale] URL segment via
+  // useParams() (see lib/i18n/index.js), so it's correct from the very
+  // first server-rendered paint, not just after hydration. `lp()` turns
+  // an old-style bare path ("/menu", "/checkout") into the locale-correct
+  // one — every navigation below uses it instead of a hardcoded path, so
+  // a customer browsing in Finnish never gets bounced into English mid-flow.
+  const locale = useLocale();
+  const lp = useLocalePath();
+  const t = useTranslations();
+
   // Used by every "close this overlay" action (product page, checkout,
   // bundle builder, order confirmation). Deliberately always a real,
   // predictable Next.js navigation to the full menu — not a "smart" guess
@@ -33,8 +46,8 @@ export function StoreProvider({ children, initialData }) {
   // "close" land in a different, confusing place depending on how the
   // customer arrived.
   const goBack = useCallback(() => {
-    router.push('/menu');
-  }, [router]);
+    router.push(lp('/menu'));
+  }, [router, lp]);
 
   const [cart, setCart] = useState([]);
 
@@ -76,8 +89,12 @@ export function StoreProvider({ children, initialData }) {
   // since the page was rendered.
   const [menuLoading, setMenuLoading] = useState(!initialData);
   const [menuError, setMenuError] = useState('');
-  const [categories, setCategories] = useState(initialData?.categories || []);
-  const [products, setProducts] = useState(initialData?.products || []);
+  // initialData holds raw D1 rows (same shape loadMenuData()/`/api/menu`
+  // return) — normalize + localize it here, to `locale`, so the very
+  // first server-rendered HTML already shows the right language instead
+  // of flashing English/raw text until the fetch effect below resolves.
+  const [categories, setCategories] = useState(() => normalizeCategories(initialData?.categories, locale));
+  const [products, setProducts] = useState(() => normalizeProducts(initialData?.products, locale));
   const [baseOptions, setBaseOptions] = useState(FALLBACK_OPTION);
   const [sauceOptions, setSauceOptions] = useState(FALLBACK_OPTION);
   const [cheeseOptions, setCheeseOptions] = useState(FALLBACK_OPTION);
@@ -126,160 +143,43 @@ export function StoreProvider({ children, initialData }) {
         if (!res.ok) throw new Error('Failed to load menu');
         const data = await res.json();
 
-        setCategories(
-          (data.categories || []).map((cat) => ({
-            id: cat.id,
-            title: cat.title,
-            sub: cat.sub,
-            image: cat.image,
-            sort_order: cat.sort_order,
-          }))
-        );
+        // /api/menu itself stays raw/unlocalized (it's aggressively
+        // cached — see app/api/menu/route.js — so it must not vary by
+        // locale). Localization to the current [locale] segment happens
+        // once, here, via the same shaping function the server-rendered
+        // initial state above uses — see lib/menu-i18n.js.
+        const blob = normalizeMenuBlob(data, locale);
 
-        setProducts(
-          (data.products || [])
-            .filter((item) => item.active !== 0)
-            .map((item) => ({
-              id: item.id,
-              cat: item.category_id,
-              name: item.name,
-              desc: item.description,
-              price: item.offer_price !== null ? Number(item.offer_price) : Number(item.price),
-              basePrice: Number(item.price),
-              offerPrice: item.offer_price !== null ? Number(item.offer_price) : null,
-              image: item.image,
-              tag: item.tag,
-              toppings: Boolean(item.has_toppings),
-              toppingsEnabled: Boolean(item.has_toppings),
-              sort_order: item.sort_order,
-            }))
-        );
-
-        const groups = data.optionGroups || [];
-        const fillings = [];
-
-        groups.forEach((g) => {
-          const opts = (g.options || []).map((o) => ({
-            id: o.id,
-            label: o.label,
-            delta: Number(o.price_delta) || 0,
-            color: o.color || null,
-          }));
-
-          switch (g.kind) {
-            case 'base':
-              setBaseOptions(opts.length ? opts : FALLBACK_OPTION);
-              break;
-            case 'sauce':
-              setSauceOptions(opts.length ? opts : FALLBACK_OPTION);
-              break;
-            case 'cheese':
-              setCheeseOptions(opts.length ? opts : FALLBACK_OPTION);
-              break;
-            case 'sauce_stripe':
-              setSauceStripeOptions(opts.length ? opts : [{ id: 'default', label: 'None', delta: 0, color: 'transparent' }]);
-              break;
-            case 'dip':
-              setDipOptions(opts.length ? opts : FALLBACK_OPTION);
-              break;
-            case 'topping':
-              setToppings(opts);
-              break;
-            case 'filling':
-              fillings.push({
-                id: g.id,
-                title: g.title,
-                icon: g.icon,
-                items: (g.options || []).map((o) => ({
-                  id: o.id,
-                  label: o.label,
-                  price: Number(o.price_delta) || 0,
-                })),
-              });
-              break;
-            default:
-              break;
-          }
-        });
-
-        setFillingCategories(fillings);
-
-        const addons = data.addons || [];
-        setDrinks(
-          addons
-            .filter((a) => a.type === 'drink')
-            .map((a) => ({ id: a.id, name: a.name, price: Number(a.price) || 0, image: a.image }))
-        );
-        setDipCups(
-          addons
-            .filter((a) => a.type === 'dip')
-            .map((a) => ({ id: a.id, name: a.name, price: Number(a.price) || 0, image: a.image }))
-        );
-        setSnacks(
-          addons
-            .filter((a) => a.type === 'snack')
-            .map((a) => ({ id: a.id, name: a.name, price: Number(a.price) || 0, image: a.image }))
-        );
-
-        setBundles(
-          (data.bundles || []).map((b) => {
-            let slots = [];
-            try {
-              slots = JSON.parse(b.slots || '[]');
-            } catch {
-              slots = [];
-            }
-            return {
-              id: b.id,
-              title: b.title,
-              description: b.description,
-              image: b.image,
-              price: Number(b.price) || 0,
-              slots,
-            };
-          })
-        );
-
-        const settings = data.settings || {};
-        setSizeLargeUpcharge(Number(settings.size_large_upcharge) || 0);
-        setStoreClosed(settings.store_closed === '1');
-        setTrackingConfig({
-          ga4Id: settings.ga4_measurement_id || null,
-          metaPixelId: settings.meta_pixel_id || null,
-          tiktokPixelId: settings.tiktok_pixel_id || null,
-          clarityId: settings.clarity_id || null,
-        });
-        // Old free-text values (or nothing set yet) fail this parse and
-        // stay null — see components/Visit.js for the placeholder fallback.
-        try {
-          const parsedHours = JSON.parse(settings.opening_hours || 'null');
-          setOpeningHours(Array.isArray(parsedHours) && parsedHours.length === 7 ? parsedHours : null);
-        } catch {
-          setOpeningHours(null);
-        }
-        setFeatured({
-          type: settings.featured_type || 'none', // 'banner' | 'product' | 'bundle'
-          bannerImage: settings.featured_banner_image || '',
-          bannerTitle: settings.featured_banner_title || '',
-          bannerPrice: settings.featured_banner_price || '',
-          productId: settings.featured_product_id || '',
-          bundleId: settings.featured_bundle_id || '',
-        });
-        try {
-          setPopularProductIds(JSON.parse(settings.popular_product_ids || '[]'));
-        } catch {
-          setPopularProductIds([]);
-        }
+        setCategories(blob.categories);
+        setProducts(blob.products);
+        setBaseOptions(blob.baseOptions);
+        setSauceOptions(blob.sauceOptions);
+        setCheeseOptions(blob.cheeseOptions);
+        setSauceStripeOptions(blob.sauceStripeOptions);
+        setDipOptions(blob.dipOptions);
+        setToppings(blob.toppings);
+        setFillingCategories(blob.fillingCategories);
+        setDrinks(blob.drinks);
+        setDipCups(blob.dipCups);
+        setSnacks(blob.snacks);
+        setBundles(blob.bundles);
+        setSizeLargeUpcharge(blob.sizeLargeUpcharge);
+        setStoreClosed(blob.storeClosed);
+        setTrackingConfig(blob.trackingConfig);
+        setOpeningHours(blob.openingHours);
+        setFeatured(blob.featured);
+        setPopularProductIds(blob.popularProductIds);
       } catch (err) {
         console.error('Menu loading error:', err);
-        setMenuError('Unable to load menu. Please try again.');
+        setMenuError(t.menuSection.loadError);
       } finally {
         setMenuLoading(false);
       }
     }
 
     loadMenu();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale]);
 
   // Make the phone/browser back button close whatever panel is open
   // (product page, cart, checkout, drink upsell, confirmation) instead of
@@ -344,7 +244,16 @@ export function StoreProvider({ children, initialData }) {
       if (bundleSlotIndex == null) trackViewItem(item);
       setSelection({
         basePrice: item.price,
-        toppingsEnabled: item.toppings,
+        // `item` here is sometimes the already-processed product from the
+        // `products` list (has a real toppingsEnabled boolean, set by
+        // lib/menu-i18n.js's normalize function), and sometimes a raw D1
+        // row passed straight from the server (the /product/[id] page's
+        // productHint) — which only has has_toppings, not
+        // toppingsEnabled. Falling back to has_toppings covers that
+        // second case; without it, opening a product via its direct URL
+        // showed just the name with no toppings/options at all, since
+        // `item.toppings` doesn't exist on either shape.
+        toppingsEnabled: item.toppingsEnabled ?? Boolean(item.has_toppings),
         qty: 1,
         size: 'M',
         toppings: [],
@@ -357,9 +266,9 @@ export function StoreProvider({ children, initialData }) {
         bundleSlotIndex,
       });
       setProductPageOpen(true);
-      if (bundleSlotIndex == null && !skipUrlPush) setUrl(`/product/${slugify(item.name)}`);
+      if (bundleSlotIndex == null && !skipUrlPush) setUrl(lp(`/product/${slugify(item.name)}`));
     },
-    [baseOptions, sauceOptions, cheeseOptions, sauceStripeOptions, dipOptions]
+    [baseOptions, sauceOptions, cheeseOptions, sauceStripeOptions, dipOptions, lp]
   );
 
   const closeProduct = useCallback(() => {
@@ -410,8 +319,8 @@ export function StoreProvider({ children, initialData }) {
     if (!activeProduct || !selection) return;
     const details = [];
     if (selection.toppingsEnabled) {
-      if (selection.size === 'L') details.push(`Large (+${sizeLargeUpcharge.toFixed(2)} €)`);
-      selection.toppings.forEach((t) => details.push(t));
+      if (selection.size === 'L') details.push(t.productPage.largeUpchargeDetail(`${sizeLargeUpcharge.toFixed(2)} €`));
+      selection.toppings.forEach((topping) => details.push(topping));
       const baseOpt = baseOptions.find((o) => o.id === selection.base);
       if (baseOpt && baseOpt.id !== baseOptions[0]?.id) details.push(baseOpt.label);
       const sauceOpt = sauceOptions.find((o) => o.id === selection.sauce);
@@ -472,7 +381,7 @@ export function StoreProvider({ children, initialData }) {
     goBack();
   }, [
     activeProduct, selection, unitPrice, lineTotal, sizeLargeUpcharge,
-    baseOptions, sauceOptions, cheeseOptions, sauceStripeOptions, dipOptions, allFillings, goBack,
+    baseOptions, sauceOptions, cheeseOptions, sauceStripeOptions, dipOptions, allFillings, goBack, t,
   ]);
 
   const removeFromCart = useCallback((key) => {
@@ -524,8 +433,8 @@ export function StoreProvider({ children, initialData }) {
     trackBeginCheckout(cart, cartTotal);
     setCartOpen(false);
     setDrinkUpsellOpen(true);
-    setUrl('/drinks');
-  }, [cart, cartTotal]);
+    setUrl(lp('/drinks'));
+  }, [cart, cartTotal, lp]);
 
   // Header cart icon uses this — skips the drink-upsell step entirely and
   // goes straight to the checkout form.
@@ -535,8 +444,8 @@ export function StoreProvider({ children, initialData }) {
     setCartOpen(false);
     setDrinkUpsellOpen(false);
     setCheckoutOpen(true);
-    setUrl('/checkout');
-  }, [cart, cartTotal]);
+    setUrl(lp('/checkout'));
+  }, [cart, cartTotal, lp]);
 
   const closeCheckout = useCallback(() => {
     setCheckoutOpen(false);
@@ -546,12 +455,12 @@ export function StoreProvider({ children, initialData }) {
   const continueFromUpsell = useCallback(() => {
     setDrinkUpsellOpen(false);
     setCheckoutOpen(true);
-    setUrl('/checkout');
-  }, []);
+    setUrl(lp('/checkout'));
+  }, [lp]);
 
   const placeOrder = useCallback(async (customer, couponCode) => {
     if (storeClosed) {
-      throw new Error("We're temporarily closed and not taking orders right now. Please check back soon.");
+      throw new Error(t.checkout.storeClosedError);
     }
     const payload = {
       customer,
@@ -574,7 +483,7 @@ export function StoreProvider({ children, initialData }) {
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || 'Could not place order. Please try again.');
+      throw new Error(body.error || t.checkout.genericOrderError);
     }
 
     const data = await res.json();
@@ -607,8 +516,8 @@ export function StoreProvider({ children, initialData }) {
     });
     setCheckoutOpen(false);
     setCart([]);
-    setUrl('/order-confirmed');
-  }, [cart, cartTotal, storeClosed]);
+    setUrl(lp('/order-confirmed'));
+  }, [cart, cartTotal, storeClosed, lp, t]);
 
   /* ---- Bundle building (e.g. "3 Pizza + 1.5L Lemonade — €45"). ---- */
 
@@ -635,9 +544,9 @@ export function StoreProvider({ children, initialData }) {
       setActiveBundle(bundle);
       setBundleSlots(slots);
       setBundleModalOpen(true);
-      setUrl('/bundle');
+      setUrl(lp('/bundle'));
     },
-    [products]
+    [products, lp]
   );
 
   const closeBundleModal = useCallback(() => {

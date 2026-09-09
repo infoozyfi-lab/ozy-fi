@@ -1,15 +1,17 @@
 'use client';
 
 import { useStore } from '@/context/StoreContext';
+import { useTranslations } from '@/lib/i18n';
 
 export default function Bundles() {
   const { bundles, openBundle } = useStore();
+  const t = useTranslations();
 
   if (!bundles || bundles.length === 0) return null;
 
   return (
     <section className="menu-category wrap" id="bundles">
-      <h3 className="cat-title">Combo deals</h3>
+      <h3 className="cat-title">{t.bundles.heading}</h3>
       {bundles.map((bundle) => (
         <button
           key={bundle.id}

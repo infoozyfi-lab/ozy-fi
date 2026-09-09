@@ -1,4 +1,9 @@
+'use client';
+
+import { useTranslations } from '@/lib/i18n';
+
 export default function Story() {
+  const t = useTranslations();
   return (
     <section className="story" id="story">
       <div className="wrap story-grid">
@@ -10,16 +15,13 @@ export default function Story() {
           />
         </div>
         <div className="story-text">
-          <p>ozy.fi started with one oven, one recipe, and a refusal to cut corners on either.</p>
-          <p>
-            We make every order the same way, every time — fresh dough, hand-portioned toppings, a hot oven
-            — plated the moment it&apos;s ready.
-          </p>
-          <p>No shortcuts, no frozen bases. Just good ingredients and a kitchen that never really cools down.</p>
+          <p>{t.story.p1}</p>
+          <p>{t.story.p2}</p>
+          <p>{t.story.p3}</p>
           <div className="story-stats">
-            <div><span className="num">100%</span><span className="lbl">Made to order</span></div>
-            <div><span className="num">60+</span><span className="lbl">Items on the menu</span></div>
-            <div><span className="num">7</span><span className="lbl">Days a week</span></div>
+            <div><span className="num">100%</span><span className="lbl">{t.story.stat1Label}</span></div>
+            <div><span className="num">60+</span><span className="lbl">{t.story.stat2Label}</span></div>
+            <div><span className="num">7</span><span className="lbl">{t.story.stat3Label}</span></div>
           </div>
         </div>
       </div>

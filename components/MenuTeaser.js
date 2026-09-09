@@ -2,14 +2,17 @@
 
 import Bundles from '@/components/Bundles';
 import PopularNow from '@/components/PopularNow';
-
-const QUICK_CATEGORIES = [
-  { id: 'pizzat', label: 'Pizza' },
-  { id: 'kebab', label: 'Kebab' },
-  { id: 'burgerit', label: 'Burgers' },
-];
+import { useTranslations } from '@/lib/i18n';
 
 export default function MenuTeaser() {
+  const t = useTranslations();
+
+  const QUICK_CATEGORIES = [
+    { id: 'pizzat', label: t.categories.pizza },
+    { id: 'kebab', label: t.categories.kebab },
+    { id: 'burgerit', label: t.categories.burgers },
+  ];
+
   const goToMenu = (e) => {
     e.preventDefault();
     document.getElementById('menu')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -23,10 +26,10 @@ export default function MenuTeaser() {
     <section className="menu-teaser">
       <div className="wrap">
         <div className="section-head">
-          <p className="eyebrow">HUNGRY ALREADY?</p>
-          <h2>Fresh pizza, kebab and burgers</h2>
+          <p className="eyebrow">{t.menuTeaser.eyebrow}</p>
+          <h2>{t.menuTeaser.heading}</h2>
         </div>
-        <a href="#menu" className="btn-primary" onClick={goToMenu}>See full menu</a>
+        <a href="#menu" className="btn-primary" onClick={goToMenu}>{t.menuTeaser.seeFullMenu}</a>
         <div className="teaser-cats">
           {QUICK_CATEGORIES.map((cat) => (
             <button key={cat.id} type="button" className="cat-tab" onClick={() => goToCategory(cat.id)}>

@@ -216,11 +216,15 @@ async function getMenu(request, env, ctx) {
       'SELECT * FROM bundles WHERE active = 1 ORDER BY sort_order'
     ).all(),
 
-    // Only pricing constants live in this table (never secrets — the
-    // admin login is checked against Cloudflare Secrets, not this
-    // table), so it's safe to expose here for the storefront to price
-    // orders (e.g. the large-size upcharge, or which product/bundle is
-    // featured on the homepage).
+    // NOTE (audit fix): this comment used to say "never secrets" — that
+    // stopped being true once the Tracking & Analytics feature added
+    // secret_ga4_api_secret / secret_meta_access_token /
+    // secret_tiktok_access_token rows to this same table. Every key is
+    // still fetched here (cheap, one query), but anything prefixed
+    // "secret_" is stripped below before it reaches the public response —
+    // see the matching, deliberately identical rule in
+    // lib/menu-data.js (the Next.js/SSR-branch equivalent of this
+    // function) and app/api/menu/route.js's comment referencing it.
     env.DB.prepare(
       'SELECT key, value FROM admin_settings'
     ).all(),
@@ -240,6 +244,9 @@ async function getMenu(request, env, ctx) {
   const settings = {};
 
   for (const row of settingsRows.results) {
+    // Keys prefixed "secret_" (ad-platform access tokens) never leave the
+    // server via this public, unauthenticated endpoint.
+    if (row.key.startsWith('secret_')) continue;
     settings[row.key] = row.value;
   }
 

@@ -1,12 +1,16 @@
 'use client';
 
-const QUICK_CATEGORIES = [
-  { id: 'pizzat', label: 'Pizza', icon: '🍕' },
-  { id: 'kebab', label: 'Kebab', icon: '🥙' },
-  { id: 'burgerit', label: 'Burgers', icon: '🍔' },
-];
+import { useTranslations } from '@/lib/i18n';
 
 export default function Hero() {
+  const t = useTranslations();
+
+  const QUICK_CATEGORIES = [
+    { id: 'pizzat', label: t.categories.pizza, icon: '🍕' },
+    { id: 'kebab', label: t.categories.kebab, icon: '🥙' },
+    { id: 'burgerit', label: t.categories.burgers, icon: '🍔' },
+  ];
+
   const goToCategory = (id) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -14,21 +18,20 @@ export default function Hero() {
   return (
     <section className="hero">
       <div className="wrap">
-        <p className="eyebrow">Pizza, kebab & burgers</p>
+        <p className="eyebrow">{t.hero.eyebrow}</p>
         <h1 className="hero-title display">
-          Start your <em>order</em>
+          {t.hero.titleStart} <em>{t.hero.titleEm}</em>
         </h1>
         <p className="hero-meta">
           <span className="stars">★ 4.8</span>
-          <span>· 320+ reviews</span>
+          <span>{t.hero.reviews}</span>
           <span className="sep">|</span>
-          <span className="open">● Open now</span>
+          <span className="open">● {t.hero.openNow}</span>
           <span className="sep">|</span>
-          <span>25-35 min</span>
+          <span>{t.hero.etaRange}</span>
         </p>
         <p className="hero-sub">
-          Fresh dough, made to order, always hot. Pick a category or browse the full menu —
-          delivery or pickup at checkout.
+          {t.hero.subtitle}
         </p>
         <div className="hero-cats">
           {QUICK_CATEGORIES.map((cat) => (

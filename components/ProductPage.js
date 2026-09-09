@@ -3,7 +3,15 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useStore } from '@/context/StoreContext';
+import { useTranslations, useLocalePath } from '@/lib/i18n';
 
+// Keyed by the ENGLISH topping label from the database — since Finnish
+// toppings now resolve to their translated `label_fi` text (see
+// lib/menu-i18n.js), a topping the business owner has translated no
+// longer matches a key here and silently falls back to the generic '●'
+// bullet below. Purely cosmetic (pricing/selection still work correctly
+// either way) — flagged in this feature's delivery summary rather than
+// reworked into a bigger ID-based lookup.
 const TOPPING_EMOJI = {
   'Extra cheese': '🧀', Pepperoni: '🔴', Mushroom: '🍄', Onion: '🧅',
   Bacon: '🥓', Jalapeño: '🌶️', Olives: '🫒', Pineapple: '🍍', Ham: '🍖', Garlic: '🧄',
@@ -13,14 +21,14 @@ function money(n) {
   return `${n.toFixed(2)} €`;
 }
 
-function BottomRow({ label, options, current, onChange }) {
+function BottomRow({ label, options, current, onChange, t }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.id === current);
   return (
     <div className="pp-bottom-row">
       <button type="button" className="pp-bottom-row-head" onClick={() => setOpen((v) => !v)}>
         <span className="label">{selected.label}</span>
-        <span className="change-btn">change <span className={`chev${open ? ' up' : ''}`}>▾</span></span>
+        <span className="change-btn">{t.productPage.change} <span className={`chev${open ? ' up' : ''}`}>▾</span></span>
       </button>
       {open && (
         <div className="pp-bottom-options">
@@ -42,18 +50,18 @@ function BottomRow({ label, options, current, onChange }) {
   );
 }
 
-function SauceStripeRow({ options, current, onChange }) {
+function SauceStripeRow({ options, current, onChange, t }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.id === current) || options[0];
   if (!selected) return null;
   return (
     <div className="pp-section">
-      <p className="pp-label">Finish with sauce stripes</p>
+      <p className="pp-label">{t.productPage.sauceStripesHeading}</p>
       <div className="pp-swatch-row">
         <span className="pp-swatch" style={{ background: selected.color }} aria-hidden="true" />
         <span className="pp-swatch-label">{selected.label}</span>
         <button type="button" className="change-btn" onClick={() => setOpen((v) => !v)}>
-          change <span className={`chev${open ? ' up' : ''}`}>▾</span>
+          {t.productPage.change} <span className={`chev${open ? ' up' : ''}`}>▾</span>
         </button>
       </div>
       {open && (
@@ -77,17 +85,17 @@ function SauceStripeRow({ options, current, onChange }) {
   );
 }
 
-function DipRow({ options, current, onChange }) {
+function DipRow({ options, current, onChange, t }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.id === current) || options[0];
   if (!selected) return null;
   return (
     <div className="pp-section">
-      <p className="pp-label">Dip the edges</p>
+      <p className="pp-label">{t.productPage.dipHeading}</p>
       <div className="pp-select-box">
         <button type="button" className="pp-select-head" onClick={() => setOpen((v) => !v)}>
-          <span>{selected.id === options[0]?.id ? 'Select a dip' : selected.label}</span>
-          <span className="change-btn">select <span className={`chev${open ? ' up' : ''}`}>▾</span></span>
+          <span>{selected.id === options[0]?.id ? t.productPage.selectADip : selected.label}</span>
+          <span className="change-btn">{t.productPage.select} <span className={`chev${open ? ' up' : ''}`}>▾</span></span>
         </button>
         {open && (
           <div className="pp-bottom-options">
@@ -110,23 +118,23 @@ function DipRow({ options, current, onChange }) {
   );
 }
 
-function QtyStepper({ qty, onDec, onInc }) {
+function QtyStepper({ qty, onDec, onInc, t }) {
   return (
     <div className="pp-qty-stepper">
-      <button type="button" aria-label="Remove one" onClick={onDec} disabled={qty <= 0}>−</button>
+      <button type="button" aria-label={t.productPage.removeOneAriaLabel} onClick={onDec} disabled={qty <= 0}>−</button>
       {qty > 0 && <span>{qty}</span>}
-      <button type="button" aria-label="Add one" onClick={onInc}>+</button>
+      <button type="button" aria-label={t.productPage.addOneAriaLabel} onClick={onInc}>+</button>
     </div>
   );
 }
 
-function CurrentFillings({ allFillings, fillings, onSetQty }) {
+function CurrentFillings({ allFillings, fillings, onSetQty, t }) {
   const entries = Object.entries(fillings).filter(([, qty]) => qty > 0);
   return (
     <div className="pp-section">
-      <p className="pp-label">Fillings</p>
+      <p className="pp-label">{t.productPage.fillingsHeading}</p>
       {entries.length === 0 ? (
-        <p className="pp-empty-hint">No fillings added yet — add some from “More fillings” below.</p>
+        <p className="pp-empty-hint">{t.productPage.fillingsEmptyHint}</p>
       ) : (
         <div className="pp-fillings-list">
           {entries.map(([id, qty]) => {
@@ -145,6 +153,7 @@ function CurrentFillings({ allFillings, fillings, onSetQty }) {
                   qty={qty}
                   onDec={() => onSetQty(id, qty - 1)}
                   onInc={() => onSetQty(id, qty + 1)}
+                  t={t}
                 />
               </div>
             );
@@ -155,7 +164,7 @@ function CurrentFillings({ allFillings, fillings, onSetQty }) {
   );
 }
 
-function MoreFillingsCategory({ category, fillings, onSetQty, open, onToggle }) {
+function MoreFillingsCategory({ category, fillings, onSetQty, open, onToggle, t }) {
   return (
     <div className="pp-cat">
       <button type="button" className="pp-cat-head" onClick={onToggle}>
@@ -182,6 +191,7 @@ function MoreFillingsCategory({ category, fillings, onSetQty, open, onToggle }) 
                   qty={qty}
                   onDec={() => onSetQty(item.id, qty - 1)}
                   onInc={() => onSetQty(item.id, qty + 1)}
+                  t={t}
                 />
               </div>
             );
@@ -192,31 +202,18 @@ function MoreFillingsCategory({ category, fillings, onSetQty, open, onToggle }) 
   );
 }
 
-const PRODUCT_DETAIL_SECTIONS = [
-  {
-    id: 'raw-material',
-    title: 'Raw material information',
-    body: 'All ingredients are sourced from approved suppliers and prepared fresh in-house daily. Allergen and origin information for every topping is available on request at the restaurant, and full ingredient lists are printed on the packaging.',
-  },
-  {
-    id: 'nutrition',
-    title: 'Nutritional information',
-    body: 'Energy, fat, carbohydrate, sugar, protein and salt values are calculated per 100 g and per portion, and vary slightly depending on the size and toppings you choose. Exact values for your customised order are shown at checkout.',
-  },
-  {
-    id: 'climate',
-    title: 'Climate calculator',
-    body: 'This item\u2019s estimated carbon footprint is calculated from its ingredients, packaging and preparation method. Choosing plant-based fillings and cheese generally lowers the footprint of your order.',
-  },
-];
-
-function ProductDetails() {
+function ProductDetails({ t }) {
   const [openId, setOpenId] = useState(null);
+  const sections = [
+    { id: 'raw-material', title: t.productPage.rawMaterialTitle, body: t.productPage.rawMaterialBody },
+    { id: 'nutrition', title: t.productPage.nutritionTitle, body: t.productPage.nutritionBody },
+    { id: 'climate', title: t.productPage.climateTitle, body: t.productPage.climateBody },
+  ];
   return (
     <div className="pp-section">
-      <p className="pp-heading">Product details</p>
+      <p className="pp-heading">{t.productPage.productDetailsHeading}</p>
       <div className="pp-details-list">
-        {PRODUCT_DETAIL_SECTIONS.map((sec) => {
+        {sections.map((sec) => {
           const open = openId === sec.id;
           return (
             <div className="pp-details-row" key={sec.id}>
@@ -247,6 +244,8 @@ export default function ProductPage() {
     fillingCategories: FILLING_CATEGORIES, allFillings: ALL_FILLINGS,
     sauceStripeOptions: SAUCE_STRIPE_OPTIONS, dipOptions: DIP_OPTIONS,
   } = useStore();
+  const t = useTranslations();
+  const lp = useLocalePath();
 
   const [openCat, setOpenCat] = useState(null);
 
@@ -261,12 +260,12 @@ export default function ProductPage() {
   return (
     <div className={`product-page${isProductPageOpen ? ' open' : ''}`}>
       <div className="pp-topbar">
-        <button className="pp-back" type="button" aria-label="Back" onClick={closeProduct}>←</button>
-        <Link href="/" className="pp-topbar-title">ozy<span>.fi</span></Link>
+        <button className="pp-back" type="button" aria-label={t.productPage.backAriaLabel} onClick={closeProduct}>←</button>
+        <Link href={lp('/')} className="pp-topbar-title">ozy<span>.fi</span></Link>
         <button
           className="pp-cart"
           type="button"
-          aria-label="Cart"
+          aria-label={t.productPage.cartAriaLabel}
           onClick={() => { closeProduct(); goToCheckoutDirect(); }}
         >
           🛒
@@ -292,37 +291,37 @@ export default function ProductPage() {
           {selection.toppingsEnabled && (
             <>
               <div className="pp-section">
-                <p className="pp-label">Size</p>
+                <p className="pp-label">{t.productPage.size}</p>
                 <div className="pp-toggle">
                   <button
                     type="button"
                     className={`pp-toggle-opt${selection.size === 'M' ? ' active' : ''}`}
                     onClick={() => setSize('M')}
                   >
-                    Medium
+                    {t.productPage.medium}
                   </button>
                   <button
                     type="button"
                     className={`pp-toggle-opt${selection.size === 'L' ? ' active' : ''}`}
                     onClick={() => setSize('L')}
                   >
-                    Large<span className="pp-toggle-sub">+{SIZE_LARGE_UPCHARGE.toFixed(2)} €</span>
+                    {t.productPage.large}<span className="pp-toggle-sub">+{SIZE_LARGE_UPCHARGE.toFixed(2)} €</span>
                   </button>
                 </div>
               </div>
 
               <div className="pp-section">
-                <p className="pp-label">Finish — tap to add toppings</p>
+                <p className="pp-label">{t.productPage.finishToppings}</p>
                 <div className="pp-finish-row">
-                  {TOPPINGS.map((t) => (
+                  {TOPPINGS.map((topping) => (
                     <button
-                      key={t.id}
+                      key={topping.id}
                       type="button"
-                      className={`pp-finish-tile${selection.toppings.includes(t.label) ? ' selected' : ''}`}
-                      onClick={() => toggleTopping(t.label)}
+                      className={`pp-finish-tile${selection.toppings.includes(topping.label) ? ' selected' : ''}`}
+                      onClick={() => toggleTopping(topping.label)}
                     >
-                      <span className="emoji">{TOPPING_EMOJI[t.label] || '●'}</span>
-                      <span className="fname">{t.label}</span>
+                      <span className="emoji">{TOPPING_EMOJI[topping.label] || '●'}</span>
+                      <span className="fname">{topping.label}</span>
                       <span className="fprice">+{TOPPING_PRICE.toFixed(2)} €</span>
                     </button>
                   ))}
@@ -330,20 +329,20 @@ export default function ProductPage() {
               </div>
 
               <div className="pp-section">
-                <p className="pp-label">Bottom</p>
+                <p className="pp-label">{t.productPage.bottom}</p>
                 <div className="pp-bottom-list">
-                  <BottomRow label="base" options={BASE_OPTIONS} current={selection.base} onChange={(id) => setOption('base', id)} />
-                  <BottomRow label="sauce" options={SAUCE_OPTIONS} current={selection.sauce} onChange={(id) => setOption('sauce', id)} />
-                  <BottomRow label="cheese" options={CHEESE_OPTIONS} current={selection.cheese} onChange={(id) => setOption('cheese', id)} />
+                  <BottomRow label="base" options={BASE_OPTIONS} current={selection.base} onChange={(id) => setOption('base', id)} t={t} />
+                  <BottomRow label="sauce" options={SAUCE_OPTIONS} current={selection.sauce} onChange={(id) => setOption('sauce', id)} t={t} />
+                  <BottomRow label="cheese" options={CHEESE_OPTIONS} current={selection.cheese} onChange={(id) => setOption('cheese', id)} t={t} />
                 </div>
               </div>
 
-              <CurrentFillings allFillings={ALL_FILLINGS} fillings={selection.fillings} onSetQty={setFillingQty} />
+              <CurrentFillings allFillings={ALL_FILLINGS} fillings={selection.fillings} onSetQty={setFillingQty} t={t} />
 
-              <SauceStripeRow options={SAUCE_STRIPE_OPTIONS} current={selection.sauceStripe} onChange={(id) => setOption('sauceStripe', id)} />
+              <SauceStripeRow options={SAUCE_STRIPE_OPTIONS} current={selection.sauceStripe} onChange={(id) => setOption('sauceStripe', id)} t={t} />
 
               <div className="pp-section">
-                <p className="pp-heading">More fillings</p>
+                <p className="pp-heading">{t.productPage.moreFillings}</p>
                 <div className="pp-cat-list">
                   {FILLING_CATEGORIES.map((cat) => (
                     <MoreFillingsCategory
@@ -353,14 +352,15 @@ export default function ProductPage() {
                       onSetQty={setFillingQty}
                       open={openCat === cat.id}
                       onToggle={() => setOpenCat((c) => (c === cat.id ? null : cat.id))}
+                      t={t}
                     />
                   ))}
                 </div>
               </div>
 
-              <DipRow options={DIP_OPTIONS} current={selection.dip} onChange={(id) => setOption('dip', id)} />
+              <DipRow options={DIP_OPTIONS} current={selection.dip} onChange={(id) => setOption('dip', id)} t={t} />
 
-              <ProductDetails />
+              <ProductDetails t={t} />
             </>
           )}
         </div>
@@ -377,9 +377,9 @@ export default function ProductPage() {
         <button className="btn-primary pp-add-btn" type="button" onClick={addToCart}>
           {isBundleSlot
             ? unitPrice > activeProduct.basePrice
-              ? `Add to bundle — +${money(unitPrice - activeProduct.basePrice)}`
-              : 'Add to bundle'
-            : `Add to order — ${money(lineTotal)}`}
+              ? t.productPage.addToBundleExtra(money(unitPrice - activeProduct.basePrice))
+              : t.productPage.addToBundle
+            : t.productPage.addToOrder(money(lineTotal))}
         </button>
       </div>
     </div>

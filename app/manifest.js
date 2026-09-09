@@ -3,7 +3,10 @@ export default function manifest() {
     name: 'ozy.fi — Pizza, Kebab & Burgers',
     short_name: 'ozy.fi',
     description: 'Order pizza, kebab, or burgers online for delivery or pickup.',
-    start_url: '/',
+    // Bilingual site — Finnish is the primary/default language (see
+    // middleware.js), so the installed-PWA shortcut opens straight into
+    // /fi rather than bouncing through the bare "/" redirect.
+    start_url: '/fi',
     display: 'standalone',
     background_color: '#17110D',
     theme_color: '#17110D',

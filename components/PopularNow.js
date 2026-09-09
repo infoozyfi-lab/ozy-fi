@@ -2,9 +2,12 @@
 
 import Link from 'next/link';
 import { useStore } from '@/context/StoreContext';
+import { useTranslations, useLocalePath } from '@/lib/i18n';
 
 export default function PopularNow() {
   const { products, popularProductIds } = useStore();
+  const t = useTranslations();
+  const lp = useLocalePath();
 
   const picks = (popularProductIds || [])
     .map((id) => products.find((p) => p.id === id))
@@ -14,10 +17,10 @@ export default function PopularNow() {
 
   return (
     <div className="popular-now">
-      <p className="eyebrow">POPULAR RIGHT NOW</p>
+      <p className="eyebrow">{t.popularNow.eyebrow}</p>
       <div className="popular-grid">
         {picks.map((p) => (
-          <Link key={p.id} href={`/product/${p.id}`} className="popular-card">
+          <Link key={p.id} href={lp(`/product/${p.id}`)} className="popular-card">
             <img src={p.image} alt={p.name} loading="lazy" />
             <span className="popular-card-info">
               <span className="popular-card-name">{p.name}</span>

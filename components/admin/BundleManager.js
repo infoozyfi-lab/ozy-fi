@@ -21,7 +21,7 @@ const th = { textAlign: 'left', padding: '10px', borderBottom: '2px solid var(--
 const td = { padding: '10px', borderBottom: '1px solid var(--line)', fontSize: 14, color: 'var(--cream)' };
 
 function emptyBundle() {
-  return { id: '', title: '', description: '', image: '', price: '', active: true, sort_order: 0, slots: [] };
+  return { id: '', title: '', title_fi: '', description: '', description_fi: '', image: '', price: '', active: true, sort_order: 0, slots: [] };
 }
 
 function slugify(text) {
@@ -76,7 +76,8 @@ export default function BundleManager({ token, categories, products, onChanged }
         : s
     ));
     setForm({
-      id: row.id, title: row.title || '', description: row.description || '',
+      id: row.id, title: row.title || '', title_fi: row.title_fi || '',
+      description: row.description || '', description_fi: row.description_fi || '',
       image: row.image || '', price: String(row.price ?? ''), active: Boolean(row.active),
       sort_order: row.sort_order ?? 0, slots,
     });
@@ -135,7 +136,9 @@ export default function BundleManager({ token, categories, products, onChanged }
       const body = {
         id: form.id || `${slugify(form.title)}-${Date.now().toString(36).slice(-4)}`,
         title: form.title,
+        title_fi: form.title_fi || null,
         description: form.description || null,
+        description_fi: form.description_fi || null,
         image: form.image || null,
         price: form.price === '' ? 0 : Number(form.price),
         active: form.active ? 1 : 0,
@@ -206,13 +209,15 @@ export default function BundleManager({ token, categories, products, onChanged }
             ) : (
               <label>ID (slug, optional — auto from title)<input style={inputStyle} value={form.id} onChange={(e) => setField('id', e.target.value)} placeholder="e.g. pizza-lemonade-combo" /></label>
             )}
-            <label>Title<input style={inputStyle} required value={form.title} onChange={(e) => setField('title', e.target.value)} placeholder="3 Pizza + 1.5L Lemonade" /></label>
+            <label>Title (English)<input style={inputStyle} required value={form.title} onChange={(e) => setField('title', e.target.value)} placeholder="3 Pizza + 1.5L Lemonade" /></label>
+            <label>Title (Finnish, optional)<input style={inputStyle} value={form.title_fi} onChange={(e) => setField('title_fi', e.target.value)} /></label>
             <label>Price (€, flat combo price)<input style={inputStyle} type="number" step="0.1" required value={form.price} onChange={(e) => setField('price', e.target.value)} /></label>
             <label>Sort order<input style={inputStyle} type="number" value={form.sort_order} onChange={(e) => setField('sort_order', e.target.value)} /></label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 22 }}>
               <input type="checkbox" checked={form.active} onChange={(e) => setField('active', e.target.checked)} /> Active
             </label>
-            <label style={{ gridColumn: '1 / -1' }}>Description<textarea style={{ ...inputStyle, minHeight: 60 }} value={form.description} onChange={(e) => setField('description', e.target.value)} /></label>
+            <label style={{ gridColumn: '1 / -1' }}>Description (English)<textarea style={{ ...inputStyle, minHeight: 60 }} value={form.description} onChange={(e) => setField('description', e.target.value)} /></label>
+            <label style={{ gridColumn: '1 / -1' }}>Description (Finnish, optional)<textarea style={{ ...inputStyle, minHeight: 60 }} value={form.description_fi} onChange={(e) => setField('description_fi', e.target.value)} /></label>
             <label style={{ gridColumn: '1 / -1' }}>
               Image
               <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>

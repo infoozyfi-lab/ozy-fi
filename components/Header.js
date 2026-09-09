@@ -4,13 +4,22 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useStore } from '@/context/StoreContext';
+import { useTranslations, useLocalePath } from '@/lib/i18n';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { goToCheckoutDirect, cart, storeClosed } = useStore();
   const pathname = usePathname();
+  const t = useTranslations();
+  const lp = useLocalePath();
   const navRef = useRef(null);
   const itemCount = cart.reduce((sum, line) => sum + line.qty, 0);
+
+  // The homepage is now /fi or /en (not just "/") — this is what the
+  // header uses to decide between "scroll to section on this page" links
+  // and real cross-page <Link>s to the homepage's anchors.
+  const isHome = pathname === lp('/');
 
   // Belt-and-suspenders: whichever link was tapped, once the route
   // actually changes, make sure the mobile menu is closed.
@@ -49,37 +58,38 @@ export default function Header() {
     <header>
       {storeClosed && (
         <div className="store-closed-banner">
-          We&apos;re temporarily closed and not taking new orders right now.
+          {t.header.storeClosedBanner}
         </div>
       )}
       <nav className="nav wrap" ref={navRef}>
-        {pathname === '/' ? (
+        {isHome ? (
           <button className="logo" onClick={scrollTop} type="button">
             ozy<span>.fi</span>
           </button>
         ) : (
-          <Link className="logo" href="/" onClick={() => setMobileOpen(false)}>
+          <Link className="logo" href={lp('/')} onClick={() => setMobileOpen(false)}>
             ozy<span>.fi</span>
           </Link>
         )}
         <ul className="nav-links">
-          {pathname === '/' ? (
+          {isHome ? (
             <>
-              <li><a href="#menu" onClick={scrollTo('menu')}>Menu</a></li>
-              <li><a href="#story" onClick={scrollTo('story')}>Offers</a></li>
-              <li><a href="#visit" onClick={scrollTo('visit')}>Gift cards</a></li>
+              <li><a href="#menu" onClick={scrollTo('menu')}>{t.header.menu}</a></li>
+              <li><a href="#story" onClick={scrollTo('story')}>{t.header.offers}</a></li>
+              <li><a href="#visit" onClick={scrollTo('visit')}>{t.header.giftCards}</a></li>
             </>
           ) : (
             <>
-              <li><Link href="/menu">Menu</Link></li>
-              <li><Link href="/#story">Offers</Link></li>
-              <li><Link href="/#visit">Gift cards</Link></li>
+              <li><Link href={lp('/menu')}>{t.header.menu}</Link></li>
+              <li><Link href={lp('/#story')}>{t.header.offers}</Link></li>
+              <li><Link href={lp('/#visit')}>{t.header.giftCards}</Link></li>
             </>
           )}
-          <li><a href="/track">Track order</a></li>
+          <li><Link href={lp('/track')}>{t.header.trackOrder}</Link></li>
         </ul>
         <div className="nav-order">
-          <button className="cart-icon-btn" type="button" aria-label="Cart" onClick={goToCheckoutDirect}>
+          <LanguageSwitcher />
+          <button className="cart-icon-btn" type="button" aria-label={t.header.cartAriaLabel} onClick={goToCheckoutDirect}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path
                 d="M7 8V6.5C7 4.01472 9.01472 2 11.5 2H12.5C14.9853 2 17 4.01472 17 6.5V8"
@@ -100,7 +110,7 @@ export default function Header() {
         </div>
         <button
           className="burger"
-          aria-label="Open menu"
+          aria-label={t.header.openMenuAriaLabel}
           aria-expanded={mobileOpen}
           onClick={() => setMobileOpen((v) => !v)}
           type="button"
@@ -108,20 +118,21 @@ export default function Header() {
           <span></span><span></span><span></span>
         </button>
         <div className={`mobile-nav${mobileOpen ? ' open' : ''}`}>
-          {pathname === '/' ? (
+          {isHome ? (
             <>
-              <a href="#menu" onClick={scrollTo('menu')}>Menu</a>
-              <a href="#story" onClick={scrollTo('story')}>Offers</a>
-              <a href="#visit" onClick={scrollTo('visit')}>Gift cards</a>
+              <a href="#menu" onClick={scrollTo('menu')}>{t.header.menu}</a>
+              <a href="#story" onClick={scrollTo('story')}>{t.header.offers}</a>
+              <a href="#visit" onClick={scrollTo('visit')}>{t.header.giftCards}</a>
             </>
           ) : (
             <>
-              <Link href="/menu" onClick={() => setMobileOpen(false)}>Menu</Link>
-              <Link href="/#story" onClick={() => setMobileOpen(false)}>Offers</Link>
-              <Link href="/#visit" onClick={() => setMobileOpen(false)}>Gift cards</Link>
+              <Link href={lp('/menu')} onClick={() => setMobileOpen(false)}>{t.header.menu}</Link>
+              <Link href={lp('/#story')} onClick={() => setMobileOpen(false)}>{t.header.offers}</Link>
+              <Link href={lp('/#visit')} onClick={() => setMobileOpen(false)}>{t.header.giftCards}</Link>
             </>
           )}
-          <a href="/track" onClick={() => setMobileOpen(false)}>Track order</a>
+          <Link href={lp('/track')} onClick={() => setMobileOpen(false)}>{t.header.trackOrder}</Link>
+          <LanguageSwitcher className="mobile-nav-lang" />
         </div>
       </nav>
     </header>

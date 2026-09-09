@@ -2,22 +2,25 @@
 
 import Link from 'next/link';
 import { useStore } from '@/context/StoreContext';
+import { useTranslations, useLocalePath } from '@/lib/i18n';
 
 export default function FeaturedCard() {
   const { featured, products, bundles, openBundle } = useStore();
+  const t = useTranslations();
+  const lp = useLocalePath();
 
   if (!featured || featured.type === 'none') return null;
 
-  return <section className="featured-section"><div className="wrap">{renderCard(featured, { products, bundles, openBundle })}</div></section>;
+  return <section className="featured-section"><div className="wrap">{renderCard(featured, { products, bundles, openBundle, t, lp })}</div></section>;
 }
 
-function renderCard(featured, { products, bundles, openBundle }) {
+function renderCard(featured, { products, bundles, openBundle, t, lp }) {
   if (featured.type === 'product') {
     const product = products.find((p) => p.id === featured.productId);
     if (!product) return null;
     return (
-      <Link href={`/product/${product.id}`} className="featured-card">
-        <span className="featured-badge">NEW</span>
+      <Link href={lp(`/product/${product.id}`)} className="featured-card">
+        <span className="featured-badge">{t.featuredCard.badgeNew}</span>
         <img className="featured-img" src={product.image} alt={product.name} />
         <span className="featured-info">
           <span className="featured-name">{product.name}</span>
@@ -32,7 +35,7 @@ function renderCard(featured, { products, bundles, openBundle }) {
     if (!bundle) return null;
     return (
       <button type="button" className="featured-card" onClick={() => openBundle(bundle)}>
-        <span className="featured-badge">DEAL</span>
+        <span className="featured-badge">{t.featuredCard.badgeDeal}</span>
         <img className="featured-img" src={bundle.image} alt={bundle.title} />
         <span className="featured-info">
           <span className="featured-name">{bundle.title}</span>
@@ -49,7 +52,7 @@ function renderCard(featured, { products, bundles, openBundle }) {
     };
     return (
       <button type="button" className="featured-card" onClick={goToMenu}>
-        <span className="featured-badge">NEW</span>
+        <span className="featured-badge">{t.featuredCard.badgeNew}</span>
         {featured.bannerImage && <img className="featured-img" src={featured.bannerImage} alt={featured.bannerTitle} />}
         <span className="featured-info">
           <span className="featured-name">{featured.bannerTitle}</span>

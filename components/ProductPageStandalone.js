@@ -9,14 +9,15 @@ import DrinkUpsellModal from '@/components/DrinkUpsellModal';
 import CheckoutModal from '@/components/CheckoutModal';
 import ConfirmModal from '@/components/ConfirmModal';
 import OrderBar from '@/components/OrderBar';
+import { useTranslations } from '@/lib/i18n';
 
 // Shown the instant the page loads, using the product row the server
 // already fetched (for the <title>/meta tags) — so the customer sees the
 // real photo/name/price immediately instead of a blank page while the
 // full menu (needed for the topping picker) loads in the background.
-function ProductSkeleton({ productHint }) {
+function ProductSkeleton({ productHint, t }) {
   if (!productHint) {
-    return <div className="wrap" style={{ padding: '60px 0', textAlign: 'center', color: 'var(--muted)' }}>Loading…</div>;
+    return <div className="wrap" style={{ padding: '60px 0', textAlign: 'center', color: 'var(--muted)' }}>{t.common.loading}</div>;
   }
   return (
     <div className="wrap" style={{ padding: '24px 0 60px', maxWidth: 480 }}>
@@ -26,13 +27,14 @@ function ProductSkeleton({ productHint }) {
       <h1 style={{ margin: '0 0 6px', fontSize: '1.6rem' }}>{productHint.name}</h1>
       {productHint.description && <p style={{ color: 'var(--muted)', margin: '0 0 10px' }}>{productHint.description}</p>}
       <p style={{ fontWeight: 700, fontSize: '1.2rem', color: 'var(--ember)' }}>{Number(productHint.price).toFixed(2)} €</p>
-      <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginTop: 18 }}>Loading options…</p>
+      <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginTop: 18 }}>{t.productPage.loadingOptions}</p>
     </div>
   );
 }
 
 function AutoOpenProduct({ productId, productHint }) {
   const { products, menuLoading, openProduct, activeProduct } = useStore();
+  const t = useTranslations();
 
   useEffect(() => {
     if (menuLoading || activeProduct) return;
@@ -41,13 +43,13 @@ function AutoOpenProduct({ productId, productHint }) {
   }, [menuLoading, products, activeProduct, productId, openProduct]);
 
   if (menuLoading) {
-    return <ProductSkeleton productHint={productHint} />;
+    return <ProductSkeleton productHint={productHint} t={t} />;
   }
 
   if (!products.find((p) => p.id === productId)) {
     return (
       <div className="wrap" style={{ padding: '80px 0', textAlign: 'center' }}>
-        <p>This item isn&apos;t available right now.</p>
+        <p>{t.productPage.itemUnavailable}</p>
       </div>
     );
   }
