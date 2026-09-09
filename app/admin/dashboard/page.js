@@ -1225,30 +1225,13 @@ export default function AdminDashboard() {
   useEffect(() => {
     const t = sessionStorage.getItem('ozy_admin_token');
     const adminEmail = sessionStorage.getItem('ozy_admin_email');
-    if (t) {
-      setToken(t);
-      setEmail(adminEmail || '');
-      setReady(true);
+    if (!t) {
+      window.location.href = '/admin';
       return;
     }
-
-    // No token in this tab's sessionStorage (e.g. a fresh tab) — but the
-    // httpOnly session cookie from login may still be valid. Check
-    // before bouncing to the login screen, so a second tab doesn't look
-    // logged out when it isn't.
-    fetch('/api/admin/me')
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data) => {
-        // extractToken() checks the cookie before this header, so the
-        // exact value here doesn't matter for auth — it just needs to
-        // be non-empty for the admin fetch calls that still attach it.
-        setToken('cookie-session');
-        setEmail(data.email || '');
-        setReady(true);
-      })
-      .catch(() => {
-        window.location.href = '/admin';
-      });
+    setToken(t);
+    setEmail(adminEmail || '');
+    setReady(true);
   }, []);
 
   const { data: analytics, loading: analyticsLoading, reload: reloadAnalytics } = useAnalytics(token || null);
@@ -1256,9 +1239,7 @@ export default function AdminDashboard() {
   const logout = () => {
     sessionStorage.removeItem('ozy_admin_token');
     sessionStorage.removeItem('ozy_admin_email');
-    fetch('/api/admin/logout', { method: 'POST' }).finally(() => {
-      window.location.href = '/admin';
-    });
+    window.location.href = '/admin';
   };
 
   if (!ready) return null;
