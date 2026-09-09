@@ -88,6 +88,12 @@ export function StoreProvider({ children, initialData }) {
   const [sizeLargeUpcharge, setSizeLargeUpcharge] = useState(0);
   const [storeClosed, setStoreClosed] = useState(false);
   const [trackingConfig, setTrackingConfig] = useState({ ga4Id: null, metaPixelId: null, tiktokPixelId: null, clarityId: null });
+  // Phase 7.7 — structured per-day opening hours (replaces the old
+  // free-text admin_settings.opening_hours value). null until the /api/menu
+  // fetch below resolves, or if the stored value is missing/still the old
+  // free-text shape — components/Visit.js falls back to its own
+  // placeholder rows in either case rather than rendering nothing.
+  const [openingHours, setOpeningHours] = useState(null);
   const [drinks, setDrinks] = useState([]);
   const [dipCups, setDipCups] = useState([]);
   const [snacks, setSnacks] = useState([]);
@@ -243,6 +249,14 @@ export function StoreProvider({ children, initialData }) {
           tiktokPixelId: settings.tiktok_pixel_id || null,
           clarityId: settings.clarity_id || null,
         });
+        // Old free-text values (or nothing set yet) fail this parse and
+        // stay null — see components/Visit.js for the placeholder fallback.
+        try {
+          const parsedHours = JSON.parse(settings.opening_hours || 'null');
+          setOpeningHours(Array.isArray(parsedHours) && parsedHours.length === 7 ? parsedHours : null);
+        } catch {
+          setOpeningHours(null);
+        }
         setFeatured({
           type: settings.featured_type || 'none', // 'banner' | 'product' | 'bundle'
           bannerImage: settings.featured_banner_image || '',
@@ -535,13 +549,14 @@ export function StoreProvider({ children, initialData }) {
     setUrl('/checkout');
   }, []);
 
-  const placeOrder = useCallback(async (customer) => {
+  const placeOrder = useCallback(async (customer, couponCode) => {
     if (storeClosed) {
       throw new Error("We're temporarily closed and not taking orders right now. Please check back soon.");
     }
     const payload = {
       customer,
       total: cartTotal,
+      couponCode: couponCode || undefined,
       items: cart.map((line) => ({
         productId: line.productId || null,
         name: line.name,
@@ -578,8 +593,18 @@ export function StoreProvider({ children, initialData }) {
       // Non-essential — tracking still works via manual entry either way.
     }
 
-    trackPurchase(data.orderNum, cart, cartTotal);
-    setConfirmedOrder({ orderNum: `#${data.orderNum}`, customer, total: cartTotal, items: cart });
+    // Use the server's own total (post-discount, if a coupon applied) for
+    // both the purchase event and the confirmation screen — it's the
+    // authoritative number, not the client's pre-validation preview.
+    const finalTotal = typeof data.total === 'number' ? data.total : cartTotal;
+    trackPurchase(data.orderNum, cart, finalTotal);
+    setConfirmedOrder({
+      orderNum: `#${data.orderNum}`,
+      customer,
+      total: finalTotal,
+      discountAmount: data.discountAmount || 0,
+      items: cart,
+    });
     setCheckoutOpen(false);
     setCart([]);
     setUrl('/order-confirmed');
@@ -743,6 +768,7 @@ export function StoreProvider({ children, initialData }) {
     sizeLargeUpcharge,
     storeClosed,
     trackingConfig,
+    openingHours,
     drinks,
     dipCups,
     snacks,
