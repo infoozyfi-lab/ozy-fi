@@ -4,6 +4,7 @@ import { json } from '@/lib/api-helpers';
 import {
   createStaffToken,
   createLegacyOwnerToken,
+  createPending2faToken,
   verifyPassword,
   ADMIN_COOKIE_NAME,
   ADMIN_COOKIE_OPTIONS,
@@ -59,16 +60,37 @@ export async function POST(request) {
   let staff = null;
   try {
     staff = await env.DB.prepare(
-      'SELECT id, name, email, password_hash, role, active FROM staff WHERE email = ?'
+      'SELECT id, name, email, password_hash, role, active, totp_enabled FROM staff WHERE email = ?'
     ).bind(email).first();
   } catch {
-    staff = null;
+    // On a deploy where migration 005 (staff 2FA columns) hasn't run yet,
+    // selecting totp_enabled throws ("no such column") exactly like the
+    // outer try/catch already handles a missing `staff` table entirely —
+    // fall back to a query without it so login still works pre-migration,
+    // just without 2FA support until the column exists.
+    try {
+      staff = await env.DB.prepare(
+        'SELECT id, name, email, password_hash, role, active FROM staff WHERE email = ?'
+      ).bind(email).first();
+    } catch {
+      staff = null;
+    }
   }
 
   if (staff) {
     if (!staff.active) return fail();
     const valid = await verifyPassword(password, staff.password_hash);
     if (!valid) return fail();
+
+    // Phase 7.9: password alone isn't enough for an account that's turned
+    // on 2FA — hand back a short-lived pending token instead of a real
+    // session. No cookie is set here; the browser must call
+    // /api/admin/login/verify-2fa with this token + a correct TOTP code
+    // before it gets one. See lib/adminAuth.js's createPending2faToken.
+    if (staff.totp_enabled) {
+      const pendingToken = await createPending2faToken(env, staff.id);
+      return json({ twoFactorRequired: true, pendingToken });
+    }
 
     const token = await createStaffToken(env, { id: staff.id, role: staff.role, name: staff.name });
     const response = NextResponse.json({ email: staff.email, name: staff.name, role: staff.role });
