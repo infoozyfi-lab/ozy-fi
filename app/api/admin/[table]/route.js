@@ -1,12 +1,18 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { json, slugify, purgeMenuCache, ADMIN_TABLES } from '@/lib/api-helpers';
-import { requireAdmin } from '@/lib/adminAuth';
+import { requireRole, getSession } from '@/lib/adminAuth';
+import { logActivity } from '@/lib/auditLog';
 
 export const dynamic = 'force-dynamic';
 
+// Menu & Pricing (categories/products/option_groups/options/addons/
+// bundles, per ADMIN_TABLES) — Kitchen has no reason to read or write
+// any of this; Manager and Owner both manage the menu.
+const TABLE_ROLES = ['manager', 'owner'];
+
 export async function GET(request, { params }) {
   const { env } = await getCloudflareContext({ async: true });
-  const denied = await requireAdmin(request, env);
+  const denied = await requireRole(request, env, TABLE_ROLES);
   if (denied) return denied;
 
   const table = ADMIN_TABLES[params.table];
@@ -18,7 +24,7 @@ export async function GET(request, { params }) {
 
 export async function POST(request, { params }) {
   const { env, ctx } = await getCloudflareContext({ async: true });
-  const denied = await requireAdmin(request, env);
+  const denied = await requireRole(request, env, TABLE_ROLES);
   if (denied) return denied;
 
   const table = ADMIN_TABLES[params.table];
@@ -45,6 +51,10 @@ export async function POST(request, { params }) {
   ).bind(...values).run();
 
   await purgeMenuCache(request, ctx);
+
+  const session = await getSession(request, env);
+  const label = body.name || body.label || body.id;
+  ctx.waitUntil(logActivity(env, session, `${params.table}.created`, `Created ${params.table} "${label}"`));
 
   return json({ ok: true, id: body.id }, 201);
 }
