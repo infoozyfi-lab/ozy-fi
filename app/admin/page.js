@@ -9,16 +9,47 @@ export default function AdminPage() {
   const [error, setError] = useState('');
   const [checking, setChecking] = useState(true);
 
-  // If a valid session already exists (e.g. the user hit the browser
-  // "back" button from the dashboard), skip the login form instead of
-  // making it look like they got logged out.
+  // If a valid session already exists, skip the login form instead of
+  // making it look like they got logged out. Two ways that can be true:
+  // a sessionStorage token from this same tab (checked first — no network
+  // round trip needed), or an httpOnly cookie from a previous visit that
+  // outlived the tab that created it (a fresh tab has no sessionStorage,
+  // so /api/admin/me is what can still tell us "yes, still signed in").
+  //
+  // This whole check is wrapped so `checking` is *guaranteed* to end up
+  // false one way or another — a version of this that let a network
+  // hiccup skip straight to `return` without that used to leave the page
+  // stuck showing nothing (see /api/admin/me's comment for the story).
   useEffect(() => {
-    const t = sessionStorage.getItem('ozy_admin_token');
-    if (t) {
-      window.location.href = '/admin/dashboard';
-      return;
+    let cancelled = false;
+
+    async function checkExistingSession() {
+      const t = sessionStorage.getItem('ozy_admin_token');
+      if (t) {
+        window.location.href = '/admin/dashboard';
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/admin/me');
+        const data = await res.json().catch(() => ({ authenticated: false }));
+        if (cancelled) return;
+        if (data.authenticated) {
+          window.location.href = '/admin/dashboard';
+          return;
+        }
+      } catch {
+        // Couldn't reach the server to check — fall through to showing
+        // the login form rather than hanging on a blank page.
+      }
+
+      if (!cancelled) setChecking(false);
     }
-    setChecking(false);
+
+    checkExistingSession();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleLogin = async (e) => {
