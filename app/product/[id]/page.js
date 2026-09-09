@@ -1,6 +1,7 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { notFound } from 'next/navigation';
 import ProductPageStandalone from '@/components/ProductPageStandalone';
+import { loadMenuData } from '@/lib/menu-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,6 +39,9 @@ export default async function ProductDetailPage({ params }) {
     notFound();
   }
 
+  const { env } = await getCloudflareContext({ async: true });
+  const initialData = await loadMenuData(env);
+
   const productSchema = {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -57,7 +61,7 @@ export default async function ProductDetailPage({ params }) {
     <>
       {/* eslint-disable-next-line react/no-danger */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }} />
-      <ProductPageStandalone productId={params.id} productHint={product} />
+      <ProductPageStandalone productId={params.id} productHint={product} initialData={initialData} />
     </>
   );
 }
