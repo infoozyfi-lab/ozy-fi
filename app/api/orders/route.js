@@ -1,6 +1,7 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { json, makeOrderNum } from '@/lib/api-helpers';
 import { trackPurchaseServerSide } from '@/lib/server-tracking';
+import { validateCoupon, normalizeCouponCode } from '@/lib/coupons';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,8 +21,35 @@ export async function POST(request) {
 
   const { customer, items } = body;
 
-  if (!customer.name || !customer.address || !customer.email || !customer.phone) {
+  // Email removed from this check — it's optional at checkout now (not
+  // legally required in Finland for a cash-on-delivery order). Phone
+  // remains required and is the primary contact/tracking method either
+  // way. Postal code is required (used for the delivery-zone check
+  // below).
+  if (!customer.name || !customer.address || !customer.postalCode || !customer.phone) {
     return json({ error: 'Missing customer details' }, 400);
+  }
+
+  // Delivery zone check — only enforced if the admin has actually listed
+  // any postal codes/prefixes in Settings. Leaving that field blank (the
+  // default) means no restriction at all, so this never blocks anyone
+  // until the business deliberately turns it on.
+  //
+  // Entries can be a full 5-digit postal code (exact match) or a short
+  // 2-3 digit prefix (matches anything starting with it) — e.g. "00"
+  // covers every Helsinki postal code (00100–00990) without having to
+  // list all ~90 of them individually.
+  const zoneSetting = await env.DB.prepare("SELECT value FROM admin_settings WHERE key = 'delivery_postal_codes'").first();
+  const allowedZones = (zoneSetting?.value || '')
+    .split(',')
+    .map((z) => z.trim())
+    .filter(Boolean);
+  const customerPostal = String(customer.postalCode).trim();
+  const zoneOk = allowedZones.length === 0 || allowedZones.some((zone) =>
+    zone.length <= 3 ? customerPostal.startsWith(zone) : customerPostal === zone
+  );
+  if (!zoneOk) {
+    return json({ error: "Sorry, we don't currently deliver to that postal code." }, 400);
   }
 
   // --- Server-side price/quantity validation ---
@@ -74,14 +102,43 @@ export async function POST(request) {
   }
   recomputedTotal = Math.round(recomputedTotal * 100) / 100;
 
+  // --- Coupon re-validation (Phase 7.6) ---
+  // The client may have shown its own "10% off" preview (from
+  // /api/coupons/validate, called as the customer types the code in) —
+  // that preview is never trusted here. Same principle as the item-price
+  // check above: re-validate and recompute the discount from scratch,
+  // against the subtotal THIS route just verified, not anything the
+  // client sent.
+  let finalTotal = recomputedTotal;
+  let discountAmount = 0;
+  let appliedCouponCode = null;
+
+  if (body.couponCode) {
+    const result = await validateCoupon(env, body.couponCode, recomputedTotal);
+    if (!result.valid) {
+      return json({ error: result.error || 'This coupon code is not valid.' }, 400);
+    }
+    finalTotal = result.finalTotal;
+    discountAmount = result.discountAmount;
+    appliedCouponCode = normalizeCouponCode(body.couponCode);
+  }
+
   const orderNum = makeOrderNum();
+
+  // orders.email is NOT NULL (worker/schema.sql) — storing '' for a
+  // skipped email needs no migration, vs. making the column nullable.
+  // Kept consistent everywhere else that reads it: '' is already falsy in
+  // JS, so display code and lib/server-tracking.js's
+  // `order.email ? sha256Hex(order.email) : null` already treat it the
+  // same as no email, no extra empty-string checks needed there.
+  const email = (customer.email || '').trim();
 
   const insertOrder = await env.DB.prepare(
     `INSERT INTO orders
-      (order_num, customer_name, address, email, phone, notes, total, status, payment_method)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'received', 'cod')`
+      (order_num, customer_name, address, email, phone, notes, total, status, payment_method, coupon_code, discount_amount)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'received', 'cod', ?, ?)`
   )
-    .bind(orderNum, customer.name, customer.address, customer.email, customer.phone, customer.notes || '', recomputedTotal)
+    .bind(orderNum, customer.name, customer.address, email, customer.phone, customer.notes || '', finalTotal, appliedCouponCode, discountAmount)
     .run();
 
   const orderId = insertOrder.meta.last_row_id;
@@ -97,17 +154,36 @@ export async function POST(request) {
     await env.DB.batch(stmts);
   }
 
+  // Coupon usage counter — best-effort, after the order row itself is
+  // safely committed. Not wrapped in the same batch as the order/items
+  // inserts above (D1 batches are all-or-nothing as a group, but this is
+  // a secondary bookkeeping update, not something that should roll back
+  // an otherwise-successful order if it somehow failed). A theoretical
+  // race between two simultaneous orders on the last remaining use of a
+  // usage-limited coupon could let both through — acceptable for this
+  // business's order volume; a stricter conditional UPDATE could close
+  // that gap later if it ever matters.
+  if (appliedCouponCode) {
+    ctx.waitUntil(
+      env.DB.prepare('UPDATE coupons SET times_used = times_used + 1 WHERE code = ?')
+        .bind(appliedCouponCode)
+        .run()
+    );
+  }
+
   // Fire-and-forget — doesn't delay the customer's response, and one
   // platform's failure never blocks another's (see server-tracking.js).
   // Safely does nothing until the matching ad-account secrets exist.
+  // Uses the final (post-discount) total — what actually gets paid is
+  // what ad platforms should count as the conversion value.
   ctx.waitUntil(
     trackPurchaseServerSide(
       env,
-      { orderNum, total: recomputedTotal, email: customer.email, phone: customer.phone, items },
+      { orderNum, total: finalTotal, email, phone: customer.phone, items },
       request
     )
   );
 
-  return json({ orderNum, id: orderId, status: 'received' }, 201);
+  return json({ orderNum, id: orderId, status: 'received', total: finalTotal, discountAmount }, 201);
 }
 
