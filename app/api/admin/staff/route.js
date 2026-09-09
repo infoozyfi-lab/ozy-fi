@@ -12,12 +12,24 @@ export async function GET(request) {
   const denied = await requireRole(request, env, ['owner']);
   if (denied) return denied;
 
-  // Never select password_hash — this response goes straight to the
-  // Staff Management UI, no reason for a hash (even a salted/hashed one)
-  // to leave the database at all.
-  const rows = await env.DB.prepare(
-    'SELECT id, name, email, role, active, created_at FROM staff ORDER BY created_at ASC'
-  ).all();
+  // Never select password_hash (or totp_secret — same reasoning, a
+  // shared secret that has no business leaving the database) — this
+  // response goes straight to the Staff Management UI. totp_enabled is
+  // just a boolean flag, safe to show so an Owner can see who has 2FA on
+  // and use the force-disable action (PATCH .../staff/[id]) if needed.
+  let rows;
+  try {
+    rows = await env.DB.prepare(
+      'SELECT id, name, email, role, active, totp_enabled, created_at FROM staff ORDER BY created_at ASC'
+    ).all();
+  } catch {
+    // Pre-migration-005 database (no totp_enabled column yet) — fall back
+    // rather than 500ing the whole Staff tab over a column this feature
+    // added.
+    rows = await env.DB.prepare(
+      'SELECT id, name, email, role, active, created_at FROM staff ORDER BY created_at ASC'
+    ).all();
+  }
 
   return json(rows.results);
 }
