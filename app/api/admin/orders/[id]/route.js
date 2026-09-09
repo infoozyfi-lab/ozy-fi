@@ -33,20 +33,39 @@ export async function PATCH(request, { params }) {
     return json({ error: 'Invalid status' }, 400);
   }
 
+  // Both extra fields below are optional add-ons to the same status-change
+  // PATCH (matches the existing ETA pattern) rather than separate
+  // endpoints — the Kanban board already calls this one PATCH per move.
+  const sets = ['status = ?'];
+  const values = [body.status];
+  let noteSuffix = '';
+
   // Optional: when accepting an order (moving it to "preparing"), staff
   // can attach an ETA. Stored as an absolute timestamp so it stays
   // correct however long the customer waits before checking /track.
   const minutes = Number(body.estimated_minutes);
-  let etaNote = '';
   if (Number.isFinite(minutes) && minutes > 0) {
     const eta = new Date(Date.now() + minutes * 60000).toISOString();
-    await env.DB.prepare('UPDATE orders SET status = ?, estimated_ready_at = ? WHERE id = ?')
-      .bind(body.status, eta, params.id)
-      .run();
-    etaNote = ` (ETA ${minutes} min)`;
-  } else {
-    await env.DB.prepare('UPDATE orders SET status = ? WHERE id = ?').bind(body.status, params.id).run();
+    sets.push('estimated_ready_at = ?');
+    values.push(eta);
+    noteSuffix += ` (ETA ${minutes} min)`;
   }
+
+  // Optional: when sending an order out ("on_the_way"), staff can note
+  // who's delivering it (Phase 7.1). Free-text, matches the ETA prompt's
+  // UX pattern — see components/admin/OrderKanban.js's DriverPromptModal.
+  // Skippable (the Kanban UI has a "send without a driver" option), so
+  // only touch the column when a non-empty name was actually sent.
+  const driverName = typeof body.driver_name === 'string' ? body.driver_name.trim() : '';
+  if (driverName) {
+    sets.push('driver_name = ?');
+    values.push(driverName);
+    noteSuffix += ` (driver: ${driverName})`;
+  }
+
+  values.push(params.id);
+  await env.DB.prepare(`UPDATE orders SET ${sets.join(', ')} WHERE id = ?`).bind(...values).run();
+  const etaNote = noteSuffix;
 
   // Fetched once, reused for both the audit log entry (needs order_num)
   // and the cancellation-tracking branch below (needs total/email/phone)
