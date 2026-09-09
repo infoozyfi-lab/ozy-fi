@@ -9,6 +9,14 @@ export default function AdminPage() {
   const [error, setError] = useState('');
   const [checking, setChecking] = useState(true);
 
+  // Phase 7.9 — set only when the account that just logged in with the
+  // right password has 2FA turned on. Non-null means "show the code
+  // step instead of the password form"; the pending token itself came
+  // back from /api/admin/login (see handleLogin) and must be sent back
+  // alongside the code — nothing about this step is a real session yet.
+  const [pendingToken, setPendingToken] = useState(null);
+  const [code, setCode] = useState('');
+
   // If a valid session already exists, skip the login form instead of
   // making it look like they got logged out. Phase 5b: cookie-only, so
   // there's no sessionStorage fast path anymore — /api/admin/me (reading
@@ -70,10 +78,46 @@ export default function AdminPage() {
         return;
       }
 
+      // Phase 7.9 — password was correct, but this account has 2FA on:
+      // no cookie was set, just a short-lived pendingToken. Show the code
+      // step instead of redirecting.
+      if (data.twoFactorRequired) {
+        setPendingToken(data.pendingToken);
+        return;
+      }
+
       // Phase 5b: the login response no longer carries a token to store —
       // the httpOnly cookie the response just set is the entire session.
       // The dashboard's own /api/admin/me check (next page load) confirms
       // it from the cookie.
+      window.location.href = '/admin/dashboard';
+    } catch (err) {
+      setError('Unable to connect to server.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify2fa = async (e) => {
+    e.preventDefault();
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await fetch('/api/admin/login/verify-2fa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pendingToken, code }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'Invalid code');
+        return;
+      }
+
       window.location.href = '/admin/dashboard';
     } catch (err) {
       setError('Unable to connect to server.');
@@ -110,7 +154,7 @@ export default function AdminPage() {
         </h1>
 
         <p style={{ marginBottom: '24px', color: '#666' }}>
-          Sign in to manage your restaurant.
+          {pendingToken ? 'Enter the 6-digit code from your authenticator app.' : 'Sign in to manage your restaurant.'}
         </p>
 
         {error && (
@@ -127,6 +171,69 @@ export default function AdminPage() {
           </div>
         )}
 
+        {pendingToken ? (
+          <form onSubmit={handleVerify2fa}>
+            <div style={{ marginBottom: '20px' }}>
+              <label>Verification code</label>
+
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="123456"
+                required
+                autoFocus
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  marginTop: '6px',
+                  boxSizing: 'border-box',
+                  border: '1px solid #ccc',
+                  borderRadius: '8px',
+                  fontSize: '20px',
+                  letterSpacing: '4px',
+                  textAlign: 'center',
+                }}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading || code.length !== 6}
+              style={{
+                width: '100%',
+                padding: '13px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                border: 'none',
+                borderRadius: '8px',
+                background: '#111',
+                color: '#fff',
+                fontSize: '16px',
+              }}
+            >
+              {loading ? 'Verifying...' : 'Verify'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setPendingToken(null); setCode(''); setError(''); }}
+              style={{
+                width: '100%',
+                marginTop: '10px',
+                padding: '10px',
+                cursor: 'pointer',
+                border: 'none',
+                background: 'none',
+                color: '#666',
+                fontSize: '13px',
+              }}
+            >
+              ← Back to login
+            </button>
+          </form>
+        ) : (
         <form onSubmit={handleLogin}>
           <div style={{ marginBottom: '16px' }}>
             <label>Email</label>
@@ -185,6 +292,7 @@ export default function AdminPage() {
             {loading ? 'Signing in...' : 'Login'}
           </button>
         </form>
+        )}
       </div>
       )}
     </main>
