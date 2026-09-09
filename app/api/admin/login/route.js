@@ -38,19 +38,5 @@ export async function POST(request) {
   }
 
   const token = await createAdminToken(env);
-
-  // Sets the same token as an httpOnly cookie (can't be read by page
-  // JavaScript, so an XSS bug elsewhere on the site can't exfiltrate it)
-  // in addition to returning it in the response body. Existing admin
-  // fetch calls that still attach it as an Authorization header keep
-  // working unchanged during the transition — see lib/adminAuth.js's
-  // extractToken(), which checks the cookie first, then falls back to
-  // the header. Secure + SameSite=Strict since this is same-origin only.
-  return new Response(JSON.stringify({ token, email: env.ADMIN_EMAIL }), {
-    status: 200,
-    headers: {
-      'content-type': 'application/json;charset=UTF-8',
-      'set-cookie': `ozy_admin_token=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=86400`,
-    },
-  });
+  return json({ token, email: env.ADMIN_EMAIL });
 }
