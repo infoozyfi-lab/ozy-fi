@@ -68,9 +68,14 @@ export default function PrivacyPage() {
 
         <h2>6. Cookies</h2>
         <p>
-          This site uses only the technical cookies/local storage needed to
-          keep items in your cart while you order. It does not use
-          advertising or tracking cookies.
+          This site uses technical cookies/local storage needed to keep
+          items in your cart while you order, and to remember your cookie
+          preference. With your permission (given via the cookie banner),
+          it may also use cookies from Google Analytics, Meta, TikTok, and
+          Microsoft Clarity to measure site traffic and advertising
+          performance. You can withdraw this permission at any time by
+          clearing your browser&apos;s site data, which will show the
+          cookie banner again.
         </p>
 
         <h2>7. Contact</h2>
