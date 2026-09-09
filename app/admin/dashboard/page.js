@@ -1213,13 +1213,272 @@ function MenuTabs({ token }) {
   );
 }
 
+/* ---------------- Staff Management (Owner-only) ---------------- */
+
+const ROLE_OPTIONS = [
+  { value: 'kitchen', label: 'Kitchen' },
+  { value: 'manager', label: 'Manager' },
+  { value: 'owner', label: 'Owner' },
+];
+
+function useStaffList(token) {
+  const [staff, setStaff] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = () => {
+    if (!token) return;
+    setLoading(true);
+    setError('');
+    fetch('/api/admin/staff')
+      .then((res) => {
+        if (!res.ok) throw new Error('Could not load staff.');
+        return res.json();
+      })
+      .then((data) => setStaff(Array.isArray(data) ? data : []))
+      .catch(() => setError('Could not load staff.'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, [token]);
+
+  return { staff, loading, error, reload: load };
+}
+
+function AddStaffForm({ onAdded }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [role, setRole] = useState('kitchen');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const reset = () => {
+    setName(''); setEmail(''); setPassword(''); setRole('kitchen'); setError('');
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const res = await fetch('/api/admin/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password, role }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not create staff account.');
+      reset();
+      setOpen(false);
+      onAdded();
+    } catch (err) {
+      setError(err.message || 'Could not create staff account.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!open) {
+    return <button type="button" style={btnPrimary} onClick={() => setOpen(true)}>+ Add staff account</button>;
+  }
+
+  return (
+    <form onSubmit={submit} style={{ ...card, marginBottom: 20 }}>
+      <h3 style={cardTitle}>New staff account</h3>
+      {error && <p style={{ color: '#FF8A75', marginTop: 0 }}>{error}</p>}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+        <label>Name<input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} required /></label>
+        <label>Email<input style={inputStyle} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
+        <label>Temporary password<input style={inputStyle} type="text" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required /></label>
+        <label>
+          Role
+          <select style={inputStyle} value={role} onChange={(e) => setRole(e.target.value)}>
+            {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
+        </label>
+      </div>
+      <p style={{ fontSize: 12.5, color: 'var(--muted)' }}>
+        Give this password to the staff member directly — there's no email-invite flow yet, so share it out of band (in person, a call, etc.), not over an insecure channel.
+      </p>
+      <div style={{ marginTop: 8 }}>
+        <button type="submit" style={btnPrimary} disabled={saving}>{saving ? 'Creating…' : 'Create account'}</button>
+        <button type="button" style={btn} onClick={() => { reset(); setOpen(false); }}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
+function StaffRow({ member, onChanged }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const patch = async (body) => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/admin/staff/${member.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Update failed.');
+      onChanged();
+    } catch (err) {
+      setError(err.message || 'Update failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <tr>
+      <td style={td}>{member.name}</td>
+      <td style={td}>{member.email}</td>
+      <td style={td}>
+        <select
+          style={{ ...inputStyle, marginTop: 0, width: 'auto' }}
+          value={member.role}
+          disabled={busy}
+          onChange={(e) => patch({ role: e.target.value })}
+        >
+          {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+        </select>
+      </td>
+      <td style={td}>{member.active ? '🟢 Active' : '⚪ Inactive'}</td>
+      <td style={td}>
+        <button
+          type="button"
+          style={member.active ? btnDanger : btnPrimary}
+          disabled={busy}
+          onClick={() => patch({ active: member.active ? 0 : 1 })}
+        >
+          {member.active ? 'Deactivate' : 'Reactivate'}
+        </button>
+        {error && <div style={{ color: '#FF8A75', fontSize: 12, marginTop: 4 }}>{error}</div>}
+      </td>
+    </tr>
+  );
+}
+
+function StaffManagementTab({ token }) {
+  const { staff, loading, error, reload } = useStaffList(token);
+
+  return (
+    <div style={box}>
+      <h2 style={{ marginTop: 0 }}>Staff</h2>
+      <p style={{ color: 'var(--muted)', fontSize: 13.5 }}>
+        Kitchen role: Orders board only. Manager: Orders, Menu &amp; Pricing, Homepage Display, Customers, Reports.
+        Owner: everything, including this page. There's always at least one Owner account — the last one can't be deactivated or demoted.
+      </p>
+      <div style={{ marginBottom: 20 }}>
+        <AddStaffForm onAdded={reload} />
+      </div>
+      {loading ? <p>Loading…</p> : error ? <p style={{ color: '#FF8A75' }}>{error}</p> : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={th}>Name</th>
+                <th style={th}>Email</th>
+                <th style={th}>Role</th>
+                <th style={th}>Status</th>
+                <th style={th}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {staff.map((m) => <StaffRow key={m.id} member={m} onChanged={reload} />)}
+              {!staff.length && (
+                <tr><td style={td} colSpan={5}>No staff accounts yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- Activity Log (Owner-only) ---------------- */
+
+function ActivityLogTab({ token }) {
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!token) return;
+    setLoading(true);
+    setError('');
+    fetch('/api/admin/activity')
+      .then((res) => {
+        if (!res.ok) throw new Error('Could not load activity.');
+        return res.json();
+      })
+      .then((data) => setEntries(Array.isArray(data) ? data : []))
+      .catch(() => setError('Could not load activity.'))
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  return (
+    <div style={box}>
+      <h2 style={{ marginTop: 0 }}>Activity Log</h2>
+      <p style={{ color: 'var(--muted)', fontSize: 13.5 }}>
+        Recent order status changes, menu/price edits, settings changes and staff account changes, most recent first.
+      </p>
+      {loading ? <p>Loading…</p> : error ? <p style={{ color: '#FF8A75' }}>{error}</p> : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={th}>When</th>
+                <th style={th}>Who</th>
+                <th style={th}>Action</th>
+                <th style={th}>Detail</th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((e) => (
+                <tr key={e.id}>
+                  <td style={td}>{new Date(`${e.created_at}Z`).toLocaleString()}</td>
+                  <td style={td}>{e.staff_name}</td>
+                  <td style={td}>{e.action}</td>
+                  <td style={td}>{e.detail}</td>
+                </tr>
+              ))}
+              {!entries.length && (
+                <tr><td style={td} colSpan={4}>Nothing logged yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---------------- Root ---------------- */
+
+// Which top-level tabs each role can see — mirrors the requireRole()
+// checks the underlying APIs already enforce (lib/adminAuth.js and each
+// app/api/admin/**/route.js), so a role never sees a tab whose API call
+// would 403 anyway. This list is the UX nicety on top of that real
+// enforcement, not a substitute for it.
+const ROLE_TABS = {
+  kitchen: ['orders'],
+  manager: ['overview', 'orders', 'menu', 'homepage', 'customers', 'reports'],
+  owner: ['overview', 'orders', 'menu', 'homepage', 'customers', 'reports', 'tracking', 'settings', 'staff', 'activity'],
+};
 
 export default function AdminDashboard() {
   const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [role, setRole] = useState(null);
   const [token, setToken] = useState('');
   const [ready, setReady] = useState(false);
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab] = useState(null); // set once we know the role — see checkSession below
 
   // See app/admin/page.js for the matching check on the login page, and
   // why it's written to always resolve `ready` one way or another instead
@@ -1231,9 +1490,9 @@ export default function AdminDashboard() {
   // available to client JS at all now) purely so the many child
   // components below that gate on `if (!token) return` / depend on it in
   // a `useEffect([token])` keep working unchanged; none of them send it
-  // anywhere anymore (the `Authorization` headers were removed in this
-  // same phase — auth now travels solely via the httpOnly cookie, sent
-  // automatically on every same-origin fetch()).
+  // anywhere anymore (the `Authorization` headers were removed before
+  // staff roles existed — auth now travels solely via the httpOnly
+  // cookie, sent automatically on every same-origin fetch()).
   useEffect(() => {
     let cancelled = false;
 
@@ -1245,6 +1504,12 @@ export default function AdminDashboard() {
         if (data.authenticated) {
           setToken('cookie-session');
           setEmail(data.email || '');
+          setName(data.name || '');
+          setRole(data.role);
+          // Kitchen never sees the Overview/Dashboard tab — land them
+          // straight on the one tab they do have (Orders) instead of a
+          // tab list that would render empty for a beat.
+          setTab((ROLE_TABS[data.role] || []).includes('overview') ? 'overview' : (ROLE_TABS[data.role] || ['orders'])[0]);
           setReady(true);
         } else {
           window.location.href = '/admin';
@@ -1262,7 +1527,11 @@ export default function AdminDashboard() {
     };
   }, []);
 
-  const { data: analytics, loading: analyticsLoading, reload: reloadAnalytics } = useAnalytics(token || null);
+  // Kitchen's role has no access to GET /api/admin/analytics (403) — skip
+  // the request entirely rather than firing it and discarding the error,
+  // same as the pre-signed-in case this hook already handles via `token`.
+  const canSeeAnalytics = role === 'manager' || role === 'owner';
+  const { data: analytics, loading: analyticsLoading, reload: reloadAnalytics } = useAnalytics(canSeeAnalytics ? token || null : null);
 
   const logout = () => {
     // Clears the httpOnly cookie server-side — client JS has no way to
@@ -1277,11 +1546,11 @@ export default function AdminDashboard() {
     });
   };
 
-  if (!ready) return null;
+  if (!ready || !tab) return null;
 
   const pendingCount = analytics ? analytics.summary.pendingOrders : null;
 
-  const TOP_TABS = [
+  const ALL_TABS = [
     { id: 'overview', label: '🏠 Dashboard' },
     { id: 'orders', label: '📦 Orders', badge: pendingCount },
     { id: 'menu', label: '🍕 Menu & Pricing' },
@@ -1290,7 +1559,16 @@ export default function AdminDashboard() {
     { id: 'reports', label: '📊 Reports' },
     { id: 'tracking', label: '📈 Tracking & Analytics' },
     { id: 'settings', label: '⚙️ Settings' },
+    { id: 'staff', label: '🧑‍🍳 Staff' },
+    { id: 'activity', label: '📝 Activity Log' },
   ];
+  // The real enforcement is server-side (requireRole in every
+  // app/api/admin/**/route.js) — this filter just keeps a role from
+  // seeing a tab whose API calls would 403 anyway. Falls back to showing
+  // nothing extra for an unrecognized role rather than guessing broad.
+  const TOP_TABS = ALL_TABS.filter((t) => (ROLE_TABS[role] || []).includes(t.id));
+
+  const ROLE_LABEL = { kitchen: 'Kitchen', manager: 'Manager', owner: 'Owner' };
 
   return (
     <main style={{ minHeight: '100vh', background: 'var(--bg)', padding: '30px', color: 'var(--cream)', fontFamily: "'Work Sans', sans-serif" }}>
@@ -1298,7 +1576,10 @@ export default function AdminDashboard() {
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
           <div>
             <h1 style={{ margin: 0, color: 'var(--cream)' }}>OZY Admin Dashboard</h1>
-            <p style={{ color: 'var(--muted)' }}>{email}</p>
+            <p style={{ color: 'var(--muted)' }}>
+              {name || email}
+              {role && <span style={{ marginLeft: 8, opacity: 0.7 }}>· {ROLE_LABEL[role] || role}</span>}
+            </p>
           </div>
           <button onClick={logout} style={btn}>Logout</button>
         </header>
@@ -1336,6 +1617,8 @@ export default function AdminDashboard() {
         {tab === 'reports' && <ReportsTab analytics={analytics} loading={analyticsLoading} />}
         {tab === 'tracking' && <TrackingAnalyticsSettings token={token} />}
         {tab === 'settings' && <SettingsTab token={token} />}
+        {tab === 'staff' && <StaffManagementTab token={token} />}
+        {tab === 'activity' && <ActivityLogTab token={token} />}
       </div>
     </main>
   );
