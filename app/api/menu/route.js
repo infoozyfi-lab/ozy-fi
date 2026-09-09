@@ -1,4 +1,5 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
+import { loadMenuData } from '@/lib/menu-data';
 
 // This route reads live data from D1 on every request — it must never be
 // statically prerendered at build time.
@@ -17,51 +18,8 @@ export async function GET(request) {
   const cached = await cache.match(cacheKey);
   if (cached) return cached;
 
-  const [
-    categories,
-    products,
-    groups,
-    options,
-    addons,
-    bundles,
-    settingsRows,
-  ] = await Promise.all([
-    env.DB.prepare('SELECT * FROM categories ORDER BY sort_order').all(),
-    env.DB.prepare('SELECT * FROM products WHERE active = 1 ORDER BY sort_order').all(),
-    env.DB.prepare('SELECT * FROM option_groups ORDER BY sort_order').all(),
-    env.DB.prepare('SELECT * FROM options ORDER BY sort_order').all(),
-    env.DB.prepare('SELECT * FROM addons WHERE active = 1 ORDER BY sort_order').all(),
-    env.DB.prepare('SELECT * FROM bundles WHERE active = 1 ORDER BY sort_order').all(),
-    env.DB.prepare('SELECT key, value FROM admin_settings').all(),
-  ]);
-
-  const optionsByGroup = {};
-  for (const o of options.results) {
-    (optionsByGroup[o.group_id] ||= []).push(o);
-  }
-  const optionGroups = groups.results.map((g) => ({
-    ...g,
-    options: optionsByGroup[g.id] || [],
-  }));
-
-  const settings = {};
-  for (const row of settingsRows.results) {
-    // Keys prefixed "secret_" (access tokens etc.) never reach the
-    // client — /api/menu is public, so anything here is effectively
-    // world-readable. See app/api/admin/settings/route.js for where
-    // secret_* keys are actually used (server-side only).
-    if (row.key.startsWith('secret_')) continue;
-    settings[row.key] = row.value;
-  }
-
-  const payload = JSON.stringify({
-    categories: categories.results,
-    products: products.results,
-    optionGroups,
-    addons: addons.results,
-    bundles: bundles.results,
-    settings,
-  });
+  const data = await loadMenuData(env);
+  const payload = JSON.stringify(data);
 
   const response = new Response(payload, {
     status: 200,
