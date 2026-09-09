@@ -116,3 +116,13 @@ CREATE INDEX idx_products_category ON products(category_id);
 CREATE INDEX idx_options_group ON options(group_id);
 CREATE INDEX idx_order_items_order ON order_items(order_id);
 CREATE INDEX idx_orders_status ON orders(status);
+
+-- Failed-login tracking for /api/admin/login rate-limiting. Rows older
+-- than a day are pruned opportunistically by the login route itself, so
+-- this table stays small — no scheduled cleanup job needed.
+CREATE TABLE login_attempts (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  ip           TEXT NOT NULL,
+  attempted_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_login_attempts_ip ON login_attempts(ip, attempted_at);
