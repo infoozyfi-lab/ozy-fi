@@ -661,25 +661,178 @@ const SETTINGS_FIELDS = [
   { key: 'delivery_fee', label: 'Delivery fee (€)', number: true },
 ];
 
-function SettingsTab({ token }) {
+const SETTINGS_SECTIONS = [
+  { key: 'restaurant', label: 'Restaurant Info' },
+  { key: 'homepage', label: 'Homepage Display' },
+  { key: 'tracking', label: 'Tracking & Analytics' },
+];
+
+// Shared by all three settings sections below — each one loads the full
+// settings object (cheap: it's one small key/value table) but only ever
+// PUTs back the handful of keys it actually owns, so the three sections
+// can never clobber each other's data.
+function useSettingsValues(token) {
   const [values, setValues] = useState({});
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [products, setProducts] = useState([]);
-  const [bundles, setBundles] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState('');
 
   useEffect(() => {
-    const headers = { Authorization: `Bearer ${token}` };
-    fetch('/api/admin/settings', { headers })
+    fetch('/api/admin/settings', { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
       .then((d) => setValues(d || {}))
       .catch(() => {})
       .finally(() => setLoading(false));
-    fetch('/api/admin/products', { headers }).then((r) => r.json()).then((d) => setProducts(Array.isArray(d) ? d : [])).catch(() => {});
-    fetch('/api/admin/bundles', { headers }).then((r) => r.json()).then((d) => setBundles(Array.isArray(d) ? d : [])).catch(() => {});
+  }, [token]);
+
+  return { values, setValues, loading };
+}
+
+function SettingsTab({ token }) {
+  const [section, setSection] = useState('restaurant');
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        {SETTINGS_SECTIONS.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => setSection(s.key)}
+            style={section === s.key ? btnPrimary : btn}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {section === 'restaurant' && <RestaurantInfoSettings token={token} />}
+      {section === 'homepage' && <HomepageDisplaySettings token={token} />}
+      {section === 'tracking' && <TrackingAnalyticsSettings token={token} />}
+    </div>
+  );
+}
+
+/* ---------------- Settings: Restaurant Info ---------------- */
+
+function RestaurantInfoSettings({ token }) {
+  const { values, setValues, loading } = useSettingsValues(token);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const setField = (key, val) => {
+    setValues((v) => ({ ...v, [key]: val }));
+    setSaved(false);
+  };
+
+  const isClosed = values.store_closed === '1';
+
+  const toggleStoreClosed = async () => {
+    const next = isClosed ? '0' : '1';
+    setField('store_closed', next);
+    await fetch('/api/admin/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ store_closed: next }),
+    });
+  };
+
+  const save = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const body = {};
+      SETTINGS_FIELDS.forEach((f) => { body[f.key] = values[f.key] || ''; });
+      await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      setSaved(true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <p>Loading…</p>;
+
+  return (
+    <div style={box}>
+      <h2 style={{ marginTop: 0 }}>Restaurant Settings</h2>
+
+      <div
+        style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12,
+          padding: 16, marginBottom: 24, borderRadius: 10,
+          background: isClosed ? 'rgba(255,106,92,0.12)' : 'var(--bg-alt)',
+          border: `1px solid ${isClosed ? '#5A2A1F' : 'var(--line)'}`,
+        }}
+      >
+        <div>
+          <strong style={{ color: isClosed ? '#FF6A5C' : 'var(--cream)' }}>
+            {isClosed ? '🔴 Store is closed — not taking orders' : '🟢 Store is open — taking orders normally'}
+          </strong>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--muted)' }}>
+            For emergencies (kitchen issue, fully booked, closing early). Takes effect immediately.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={toggleStoreClosed}
+          style={isClosed ? btnPrimary : btnDanger}
+        >
+          {isClosed ? 'Reopen store' : 'Close store now'}
+        </button>
+      </div>
+
+      <form onSubmit={save}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+          {SETTINGS_FIELDS.map((f) => (
+            <label key={f.key} style={f.textarea ? { gridColumn: '1 / -1' } : undefined}>
+              {f.label}
+              {f.textarea ? (
+                <textarea
+                  style={{ ...inputStyle, minHeight: 70 }}
+                  value={values[f.key] || ''}
+                  onChange={(e) => setField(f.key, e.target.value)}
+                />
+              ) : (
+                <input
+                  style={inputStyle}
+                  type={f.number ? 'number' : 'text'}
+                  step={f.number ? '0.1' : undefined}
+                  value={values[f.key] || ''}
+                  onChange={(e) => setField(f.key, e.target.value)}
+                />
+              )}
+            </label>
+          ))}
+        </div>
+        <div style={{ marginTop: 16 }}>
+          <button type="submit" style={btnPrimary} disabled={saving}>{saving ? 'Saving…' : 'Save settings'}</button>
+          {saved && <span style={{ marginLeft: 12, color: 'var(--gold)' }}>Saved ✓</span>}
+        </div>
+      </form>
+      <p style={{ marginTop: 16, color: 'var(--muted)', fontSize: 13 }}>
+        Note: the login email/password are separate Cloudflare secrets and aren&apos;t changed here.
+      </p>
+    </div>
+  );
+}
+
+/* ---------------- Settings: Homepage Display (featured card + popular products) ---------------- */
+
+function HomepageDisplaySettings({ token }) {
+  const { values, setValues, loading } = useSettingsValues(token);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [products, setProducts] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+
+  useEffect(() => {
+    fetch('/api/admin/products', { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((d) => setProducts(Array.isArray(d) ? d : []))
+      .catch(() => {});
   }, [token]);
 
   const setField = (key, val) => {
@@ -725,10 +878,18 @@ function SettingsTab({ token }) {
     e.preventDefault();
     setSaving(true);
     try {
+      const body = {
+        featured_type: values.featured_type || 'none',
+        featured_product_id: values.featured_product_id || '',
+        featured_banner_title: values.featured_banner_title || '',
+        featured_banner_price: values.featured_banner_price || '',
+        featured_banner_image: values.featured_banner_image || '',
+        popular_product_ids: values.popular_product_ids || '[]',
+      };
       await fetch('/api/admin/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(values),
+        body: JSON.stringify(body),
       });
       setSaved(true);
     } finally {
@@ -739,46 +900,10 @@ function SettingsTab({ token }) {
   if (loading) return <p>Loading…</p>;
 
   const featuredType = values.featured_type || 'none';
-  const isClosed = values.store_closed === '1';
-
-  const toggleStoreClosed = async () => {
-    const next = isClosed ? '0' : '1';
-    setField('store_closed', next);
-    await fetch('/api/admin/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ store_closed: next }),
-    });
-  };
 
   return (
     <div style={box}>
-      <h2 style={{ marginTop: 0 }}>Restaurant Settings</h2>
-
-      <div
-        style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12,
-          padding: 16, marginBottom: 24, borderRadius: 10,
-          background: isClosed ? 'rgba(255,106,92,0.12)' : 'var(--bg-alt)',
-          border: `1px solid ${isClosed ? '#5A2A1F' : 'var(--line)'}`,
-        }}
-      >
-        <div>
-          <strong style={{ color: isClosed ? '#FF6A5C' : 'var(--cream)' }}>
-            {isClosed ? '🔴 Store is closed — not taking orders' : '🟢 Store is open — taking orders normally'}
-          </strong>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--muted)' }}>
-            For emergencies (kitchen issue, fully booked, closing early). Takes effect immediately.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={toggleStoreClosed}
-          style={isClosed ? btnPrimary : btnDanger}
-        >
-          {isClosed ? 'Reopen store' : 'Close store now'}
-        </button>
-      </div>
+      <h2 style={{ marginTop: 0 }}>Homepage Display</h2>
 
       <form onSubmit={save}>
         <h3 style={{ marginBottom: 4 }}>Homepage featured card</h3>
@@ -864,37 +989,63 @@ function SettingsTab({ token }) {
           })}
         </div>
 
-        <h3 style={{ marginBottom: 4 }}>Restaurant info</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
-          {SETTINGS_FIELDS.map((f) => (
-            <label key={f.key} style={f.textarea ? { gridColumn: '1 / -1' } : undefined}>
-              {f.label}
-              {f.textarea ? (
-                <textarea
-                  style={{ ...inputStyle, minHeight: 70 }}
-                  value={values[f.key] || ''}
-                  onChange={(e) => setField(f.key, e.target.value)}
-                />
-              ) : (
-                <input
-                  style={inputStyle}
-                  type={f.number ? 'number' : 'text'}
-                  step={f.number ? '0.1' : undefined}
-                  value={values[f.key] || ''}
-                  onChange={(e) => setField(f.key, e.target.value)}
-                />
-              )}
-            </label>
-          ))}
+        <div style={{ marginTop: 16 }}>
+          <button type="submit" style={btnPrimary} disabled={saving}>{saving ? 'Saving…' : 'Save settings'}</button>
+          {saved && <span style={{ marginLeft: 12, color: 'var(--gold)' }}>Saved ✓</span>}
         </div>
+      </form>
+    </div>
+  );
+}
 
-        <h3 style={{ marginBottom: 4, marginTop: 28 }}>Tracking &amp; Analytics</h3>
-        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
-          Optional — only fill these in once you&apos;ve created the matching ad/analytics
-          accounts. Leaving a field blank means that platform stays completely off; nothing
-          fires until its ID (and, for Meta/TikTok, its access token) is set here. Takes
-          effect immediately on save — no redeploy needed.
-        </p>
+/* ---------------- Settings: Tracking & Analytics ---------------- */
+
+function TrackingAnalyticsSettings({ token }) {
+  const { values, setValues, loading } = useSettingsValues(token);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const setField = (key, val) => {
+    setValues((v) => ({ ...v, [key]: val }));
+    setSaved(false);
+  };
+
+  const save = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const keys = [
+        'ga4_measurement_id', 'secret_ga4_api_secret', 'ga4_debug_mode',
+        'meta_pixel_id', 'secret_meta_access_token', 'meta_test_event_code',
+        'tiktok_pixel_id', 'secret_tiktok_access_token', 'tiktok_test_event_code',
+        'clarity_id',
+      ];
+      const body = {};
+      keys.forEach((k) => { body[k] = values[k] || ''; });
+      await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      setSaved(true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <p>Loading…</p>;
+
+  return (
+    <div style={box}>
+      <h2 style={{ marginTop: 0 }}>Tracking &amp; Analytics</h2>
+      <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
+        Optional — only fill these in once you&apos;ve created the matching ad/analytics
+        accounts. Leaving a field blank means that platform stays completely off; nothing
+        fires until its ID (and, for Meta/TikTok, its access token) is set here. Takes
+        effect immediately on save — no redeploy needed.
+      </p>
+
+      <form onSubmit={save}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 12 }}>
           <label>
             GA4 Measurement ID
@@ -943,18 +1094,15 @@ function SettingsTab({ token }) {
           source). The Access Token/API Secret fields are never exposed publicly — they&apos;re
           only used from the server when sending order events.
         </p>
-
         <div style={{ marginTop: 16 }}>
           <button type="submit" style={btnPrimary} disabled={saving}>{saving ? 'Saving…' : 'Save settings'}</button>
           {saved && <span style={{ marginLeft: 12, color: 'var(--gold)' }}>Saved ✓</span>}
         </div>
       </form>
-      <p style={{ marginTop: 16, color: 'var(--muted)', fontSize: 13 }}>
-        Note: these are informational/display settings and delivery-fee math the checkout can read later — the login email/password are separate Cloudflare secrets and aren't changed here.
-      </p>
     </div>
   );
 }
+
 
 /* ---------------- Menu & Pricing (Categories/Products/Options/Add-ons) ---------------- */
 
