@@ -17,6 +17,11 @@ export default function ConfirmModal() {
             <div className="big">{confirmedOrder.orderNum}</div>
             <p>Thanks{confirmedOrder.customer?.name ? `, ${confirmedOrder.customer.name}` : ''}! Your order is on its way.</p>
             <p className="confirm-eta">Estimated ready time: 25–35 minutes</p>
+            {confirmedOrder.discountAmount > 0 && (
+              <p style={{ color: 'var(--ember, #d97706)', fontSize: '0.9rem', margin: '4px 0 0' }}>
+                Coupon applied: −{confirmedOrder.discountAmount.toFixed(2)} €
+              </p>
+            )}
             <div className="cod-note">
               <span style={{ fontSize: '1.3rem' }}>💵</span>
               <span>Pay <b>{confirmedOrder.total.toFixed(2)} €</b> by cash on delivery when your order arrives.</span>

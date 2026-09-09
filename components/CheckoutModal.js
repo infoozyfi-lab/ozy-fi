@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useStore } from '@/context/StoreContext';
 
-const EMPTY = { name: '', address: '', email: '', phone: '', notes: '' };
+const EMPTY = { name: '', address: '', postalCode: '', email: '', phone: '', notes: '' };
 
 // Accepts +358401234567, 0401234567, +358 40 123 4567, 040-123-4567, etc.
 function isValidFinnishPhone(raw) {
@@ -84,11 +84,34 @@ export default function CheckoutModal() {
   const [openSection, setOpenSection] = useState(null);
   const [justAddedId, setJustAddedId] = useState(null);
 
+  // Phase 7.6 — coupon code. `couponStatus` 'applied' is only ever an
+  // advisory preview from /api/coupons/validate (see that route + the
+  // shared lib/coupons.js logic it shares with app/api/orders/route.js) —
+  // the real check happens again, from scratch, when the order is
+  // actually submitted. If that later check disagrees (e.g. someone else
+  // used the last remaining redemption in between), submitOrder's catch
+  // below surfaces that as the normal order-error banner.
+  const [couponInput, setCouponInput] = useState('');
+  const [couponCode, setCouponCode] = useState('');
+  const [couponStatus, setCouponStatus] = useState('idle'); // idle | checking | applied | error
+  const [couponError, setCouponError] = useState('');
+  const [couponDiscount, setCouponDiscount] = useState(0);
+  const [couponFinalTotal, setCouponFinalTotal] = useState(null);
+
   const handleAdd = (item) => {
     addDrinkToCart(item);
     setJustAddedId(item.id);
     window.clearTimeout(handleAdd._t);
     handleAdd._t = window.setTimeout(() => setJustAddedId(null), 1100);
+  };
+
+  const resetCoupon = () => {
+    setCouponInput('');
+    setCouponCode('');
+    setCouponStatus('idle');
+    setCouponError('');
+    setCouponDiscount(0);
+    setCouponFinalTotal(null);
   };
 
   const close = () => {
@@ -97,6 +120,34 @@ export default function CheckoutModal() {
     setOpenSection(null);
     setErrors({});
     setOrderError('');
+    resetCoupon();
+  };
+
+  const applyCoupon = async () => {
+    const code = couponInput.trim();
+    if (!code) return;
+    setCouponStatus('checking');
+    setCouponError('');
+    try {
+      const res = await fetch('/api/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, subtotal: cartTotal }),
+      });
+      const data = await res.json().catch(() => ({ valid: false }));
+      if (!data.valid) {
+        setCouponStatus('error');
+        setCouponError(data.error || 'This coupon code is not valid.');
+        return;
+      }
+      setCouponCode(data.code);
+      setCouponDiscount(data.discountAmount);
+      setCouponFinalTotal(data.finalTotal);
+      setCouponStatus('applied');
+    } catch {
+      setCouponStatus('error');
+      setCouponError('Could not check this coupon right now. Please try again.');
+    }
   };
 
   const onField = (key) => (e) => {
@@ -108,7 +159,15 @@ export default function CheckoutModal() {
     const next = {};
     if (!customer.name.trim()) next.name = 'Please enter your full name.';
     if (!customer.address.trim()) next.address = 'Please enter your delivery address.';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email.trim())) {
+    if (!/^\d{5}$/.test(customer.postalCode.trim())) {
+      next.postalCode = 'Please enter a valid 5-digit postal code.';
+    }
+    // Email is optional (not legally required for a cash-on-delivery order
+    // in Finland) — an empty field passes straight through, but if the
+    // customer does type something, it's still format-checked so we don't
+    // silently accept garbage. Phone stays the required contact/tracking
+    // method either way.
+    if (customer.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email.trim())) {
       next.email = 'Please enter a valid email address.';
     }
     if (!isValidFinnishPhone(customer.phone.trim())) {
@@ -129,9 +188,10 @@ export default function CheckoutModal() {
     setSubmitting(true);
     setOrderError('');
     try {
-      await placeOrder(customer);
+      await placeOrder(customer, couponStatus === 'applied' ? couponCode : undefined);
       setStep(1);
       setCustomer(EMPTY);
+      resetCoupon();
     } catch (err) {
       setOrderError(err.message || 'Could not place order. Please try again.');
     } finally {
@@ -238,9 +298,14 @@ export default function CheckoutModal() {
                 <input type="text" value={customer.address} onChange={onField('address')} placeholder="Street, house number, city" />
                 {errors.address && <span className="field-error">{errors.address}</span>}
               </label>
+              <label className={errors.postalCode ? 'has-error' : ''}>
+                Postal code
+                <input type="text" inputMode="numeric" maxLength={5} value={customer.postalCode} onChange={onField('postalCode')} placeholder="e.g. 01600" />
+                {errors.postalCode && <span className="field-error">{errors.postalCode}</span>}
+              </label>
               <label className={errors.email ? 'has-error' : ''}>
-                Email address
-                <input type="email" value={customer.email} onChange={onField('email')} placeholder="you@example.com" />
+                Email address (optional)
+                <input type="email" value={customer.email} onChange={onField('email')} placeholder="you@example.com (optional)" />
                 {errors.email && <span className="field-error">{errors.email}</span>}
               </label>
               <label className={errors.phone ? 'has-error' : ''}>
@@ -258,6 +323,39 @@ export default function CheckoutModal() {
           {step === 3 && (
             <form id="paymentForm" onSubmit={submitOrder}>
               <MiniSummary cart={cart} cartTotal={cartTotal} />
+
+              <div style={{ margin: '16px 0' }}>
+                {couponStatus === 'applied' ? (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'rgba(60,160,80,0.12)', borderRadius: 8 }}>
+                    <span>🏷️ <strong>{couponCode}</strong> applied — −{couponDiscount.toFixed(2)} €</span>
+                    <button type="button" onClick={resetCoupon} style={{ background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', fontSize: 13 }}>
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        type="text"
+                        placeholder="Coupon code"
+                        value={couponInput}
+                        onChange={(e) => { setCouponInput(e.target.value); if (couponStatus === 'error') setCouponStatus('idle'); }}
+                        style={{ flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        disabled={!couponInput.trim() || couponStatus === 'checking'}
+                        onClick={applyCoupon}
+                        style={{ whiteSpace: 'nowrap' }}
+                      >
+                        {couponStatus === 'checking' ? 'Checking…' : 'Apply'}
+                      </button>
+                    </div>
+                    {couponStatus === 'error' && <span className="field-error">{couponError}</span>}
+                  </div>
+                )}
+              </div>
 
               <div className="payment-method">
                 <p>Payment method</p>
@@ -300,7 +398,7 @@ export default function CheckoutModal() {
             style={{ flex: 1 }}
             disabled={submitting}
           >
-            Place order — {cartTotal.toFixed(2)} €
+            Place order — {(couponStatus === 'applied' ? couponFinalTotal : cartTotal).toFixed(2)} €
           </button>
         </div>
       )}
