@@ -1222,16 +1222,57 @@ export default function AdminDashboard() {
   const [ready, setReady] = useState(false);
   const [tab, setTab] = useState('overview');
 
+  // See app/admin/page.js for the same two-path check (sessionStorage
+  // token first, falls back to asking /api/admin/me about a cookie-only
+  // session) and why it's written to always resolve `ready` one way or
+  // another instead of ever leaving this page stuck blank.
+  //
+  // `token` here doubles as "are we authenticated" for every tab/child
+  // component below (many do `if (!token) return` before fetching, and
+  // all of them send it as `Authorization: Bearer ${token}`). In the
+  // cookie-only case there is no token string available to client JS —
+  // that's the whole point of httpOnly — so we set a harmless placeholder
+  // instead. The server checks the httpOnly cookie first (see
+  // lib/adminAuth.js's readToken) and only falls back to this header, so
+  // the placeholder is never actually relied on for auth; it just keeps
+  // every existing `if (!token)` guard and Bearer header working
+  // unchanged. Swapping all ~25 call sites to stop sending a header at
+  // all is a later cleanup once the cookie path is confirmed reliable.
   useEffect(() => {
-    const t = sessionStorage.getItem('ozy_admin_token');
-    const adminEmail = sessionStorage.getItem('ozy_admin_email');
-    if (!t) {
-      window.location.href = '/admin';
-      return;
+    let cancelled = false;
+
+    async function checkSession() {
+      const t = sessionStorage.getItem('ozy_admin_token');
+      const adminEmail = sessionStorage.getItem('ozy_admin_email');
+      if (t) {
+        setToken(t);
+        setEmail(adminEmail || '');
+        setReady(true);
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/admin/me');
+        const data = await res.json().catch(() => ({ authenticated: false }));
+        if (cancelled) return;
+        if (data.authenticated) {
+          setToken('cookie-session');
+          setEmail(data.email || '');
+          setReady(true);
+        } else {
+          window.location.href = '/admin';
+        }
+      } catch {
+        // Couldn't verify the session — send them back to login rather
+        // than leaving the dashboard hanging on nothing.
+        if (!cancelled) window.location.href = '/admin';
+      }
     }
-    setToken(t);
-    setEmail(adminEmail || '');
-    setReady(true);
+
+    checkSession();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const { data: analytics, loading: analyticsLoading, reload: reloadAnalytics } = useAnalytics(token || null);
@@ -1239,7 +1280,14 @@ export default function AdminDashboard() {
   const logout = () => {
     sessionStorage.removeItem('ozy_admin_token');
     sessionStorage.removeItem('ozy_admin_email');
-    window.location.href = '/admin';
+    // Clears the httpOnly cookie server-side — client JS has no way to
+    // read or delete it directly. Fire-and-redirect: even if this request
+    // fails, sessionStorage is already cleared and the cookie will expire
+    // on its own (24h), so logout still "works" from this tab's point of
+    // view either way.
+    fetch('/api/admin/logout', { method: 'POST' }).finally(() => {
+      window.location.href = '/admin';
+    });
   };
 
   if (!ready) return null;
