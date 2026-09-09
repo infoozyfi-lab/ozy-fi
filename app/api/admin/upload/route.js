@@ -1,11 +1,11 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { json } from '@/lib/api-helpers';
-import { requireAdmin } from '@/lib/adminAuth';
+import { requireRole } from '@/lib/adminAuth';
 
 export const dynamic = 'force-dynamic';
 
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
 
 function extFromContentType(type) {
   switch (type) {
@@ -17,9 +17,12 @@ function extFromContentType(type) {
   }
 }
 
+// Used for menu/category/addon photos (Manager, Owner) and the homepage
+// featured-banner image (also Manager, Owner) — Kitchen never uploads
+// anything.
 export async function POST(request) {
   const { env } = await getCloudflareContext({ async: true });
-  const denied = await requireAdmin(request, env);
+  const denied = await requireRole(request, env, ['manager', 'owner']);
   if (denied) return denied;
 
   if (!env.IMAGES) {
