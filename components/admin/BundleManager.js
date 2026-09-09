@@ -43,12 +43,15 @@ export default function BundleManager({ token, categories, products, onChanged }
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const authHeaders = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+  // Phase 5b: no more Authorization header — the httpOnly admin cookie
+  // travels automatically on every same-origin fetch(). Kept as its own
+  // const purely for the JSON Content-Type header on POST/PUT below.
+  const jsonHeaders = { 'Content-Type': 'application/json' };
 
   const load = () => {
     setLoading(true);
     setError('');
-    fetch('/api/admin/bundles', { headers: { Authorization: `Bearer ${token}` } })
+    fetch('/api/admin/bundles')
       .then((res) => res.json())
       .then((data) => setRows(Array.isArray(data) ? data : []))
       .catch(() => setError('Could not load bundles.'))
@@ -112,7 +115,7 @@ export default function BundleManager({ token, categories, products, onChanged }
       const body = new FormData();
       body.append('file', file, file.name || 'upload.jpg');
       const res = await fetch('/api/admin/upload', {
-        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body,
+        method: 'POST', body,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Upload failed.');
@@ -141,10 +144,10 @@ export default function BundleManager({ token, categories, products, onChanged }
       };
       let res;
       if (editingId === 'new') {
-        res = await fetch('/api/admin/bundles', { method: 'POST', headers: authHeaders, body: JSON.stringify(body) });
+        res = await fetch('/api/admin/bundles', { method: 'POST', headers: jsonHeaders, body: JSON.stringify(body) });
       } else {
         const { id: _drop, ...rest } = body;
-        res = await fetch(`/api/admin/bundles/${encodeURIComponent(editingId)}`, { method: 'PUT', headers: authHeaders, body: JSON.stringify(rest) });
+        res = await fetch(`/api/admin/bundles/${encodeURIComponent(editingId)}`, { method: 'PUT', headers: jsonHeaders, body: JSON.stringify(rest) });
       }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -163,7 +166,7 @@ export default function BundleManager({ token, categories, products, onChanged }
   const remove = async (row) => {
     if (!window.confirm(`Delete bundle "${row.title}"? This cannot be undone.`)) return;
     try {
-      const res = await fetch(`/api/admin/bundles/${encodeURIComponent(row.id)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`/api/admin/bundles/${encodeURIComponent(row.id)}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Delete failed.');
       load();
       if (onChanged) onChanged();

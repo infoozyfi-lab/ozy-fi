@@ -33,7 +33,7 @@ function OrderDetailModal({ token, order, onClose, onAdvance, onCancel, movingId
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch(`/api/admin/orders/${order.id}`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`/api/admin/orders/${order.id}`)
       .then((r) => r.json())
       .then((d) => { if (!cancelled) setDetail(d); })
       .catch(() => {})
@@ -162,7 +162,7 @@ function EtaPromptModal({ token, order, onConfirm, onClose }) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/admin/orders/${order.id}`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`/api/admin/orders/${order.id}`)
       .then((r) => r.json())
       .then((d) => { if (!cancelled) setItems(d.items || []); })
       .catch(() => {})
@@ -263,13 +263,17 @@ export default function OrderKanban({ token, size = 'normal' }) {
   }, []);
 
   useEffect(() => {
+    // `token` is kept as a plain "are we ready to load yet" flag from the
+    // parent (AdminDashboard / KitchenPage) — as of phase 5b it's not a
+    // real secret and isn't sent anywhere; every fetch() below relies on
+    // the httpOnly admin cookie instead, sent automatically same-origin.
     if (!token) return undefined;
 
     let cancelled = false;
 
     const load = async () => {
       try {
-        const res = await fetch('/api/admin/orders', { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch('/api/admin/orders');
         const data = await res.json();
         if (cancelled || !Array.isArray(data)) return;
 
@@ -341,7 +345,7 @@ export default function OrderKanban({ token, size = 'normal' }) {
       if (etaMinutes) body.estimated_minutes = etaMinutes;
       await fetch(`/api/admin/orders/${order.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       setOrders((list) => list.map((o) => (o.id === order.id ? { ...o, status: nextStatus } : o)));
@@ -368,7 +372,7 @@ export default function OrderKanban({ token, size = 'normal' }) {
     try {
       await fetch(`/api/admin/orders/${order.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'cancelled' }),
       });
       setOrders((list) => list.map((o) => (o.id === order.id ? { ...o, status: 'cancelled' } : o)));

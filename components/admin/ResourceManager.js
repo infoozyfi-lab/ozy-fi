@@ -101,7 +101,12 @@ function formToBody(form, fields) {
   return body;
 }
 
-export default function ResourceManager({ token, table, title, fields, displayCols, onChanged }) {
+// No `token` prop: nothing in this component reads it anymore (its only
+// past use was building Authorization headers, which are gone as of
+// phase 5b — see jsonHeaders below), so it's dropped rather than kept as
+// a no-op prop. If you're looking for auth, the httpOnly admin cookie is
+// what every fetch() below actually relies on.
+export default function ResourceManager({ table, title, fields, displayCols, onChanged }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -122,15 +127,15 @@ export default function ResourceManager({ token, table, title, fields, displayCo
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMsg, setBulkMsg] = useState('');
 
-  const authHeaders = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  };
+  // Phase 5b: no more Authorization header — the httpOnly admin cookie is
+  // sent automatically on every same-origin fetch(), so this is just the
+  // Content-Type needed for a JSON body (formerly named `authHeaders`).
+  const jsonHeaders = { 'Content-Type': 'application/json' };
 
   const load = () => {
     setLoading(true);
     setError('');
-    fetch(`/api/admin/${table}`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`/api/admin/${table}`)
       .then((res) => res.json())
       .then((data) => {
         setRows(Array.isArray(data) ? data : []);
@@ -170,7 +175,6 @@ export default function ResourceManager({ token, table, title, fields, displayCo
       body.append('file', processed, file.name || 'upload.jpg');
       const res = await fetch('/api/admin/upload', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
         body,
       });
       const data = await res.json().catch(() => ({}));
@@ -193,14 +197,14 @@ export default function ResourceManager({ token, table, title, fields, displayCo
       if (editingId === 'new') {
         res = await fetch(`/api/admin/${table}`, {
           method: 'POST',
-          headers: authHeaders,
+          headers: jsonHeaders,
           body: JSON.stringify(body),
         });
       } else {
         const { id: _drop, ...rest } = body;
         res = await fetch(`/api/admin/${table}/${encodeURIComponent(editingId)}`, {
           method: 'PUT',
-          headers: authHeaders,
+          headers: jsonHeaders,
           body: JSON.stringify(rest),
         });
       }
@@ -224,7 +228,6 @@ export default function ResourceManager({ token, table, title, fields, displayCo
     try {
       const res = await fetch(`/api/admin/${table}/${encodeURIComponent(row.id)}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Delete failed.');
       load();
@@ -240,7 +243,7 @@ export default function ResourceManager({ token, table, title, fields, displayCo
     try {
       const res = await fetch(`/api/admin/${table}/${encodeURIComponent(row.id)}`, {
         method: 'PUT',
-        headers: authHeaders,
+        headers: jsonHeaders,
         body: JSON.stringify({ active: row.active ? 0 : 1 }),
       });
       if (!res.ok) throw new Error('Update failed.');
@@ -264,7 +267,7 @@ export default function ResourceManager({ token, table, title, fields, displayCo
       body.id = `${row.id}-copy-${Date.now().toString(36)}`;
       const res = await fetch(`/api/admin/${table}`, {
         method: 'POST',
-        headers: authHeaders,
+        headers: jsonHeaders,
         body: JSON.stringify(body),
       });
       if (!res.ok) {
@@ -313,7 +316,7 @@ export default function ResourceManager({ token, table, title, fields, displayCo
       await Promise.all(
         [...selectedIds].map((id) =>
           fetch(`/api/admin/${table}/${encodeURIComponent(id)}`, {
-            method: 'PUT', headers: authHeaders, body: JSON.stringify({ active: makeActive ? 1 : 0 }),
+            method: 'PUT', headers: jsonHeaders, body: JSON.stringify({ active: makeActive ? 1 : 0 }),
           })
         )
       );
@@ -346,7 +349,7 @@ export default function ResourceManager({ token, table, title, fields, displayCo
       await Promise.all(
         updates.map((u) =>
           fetch(`/api/admin/${table}/${encodeURIComponent(u.id)}`, {
-            method: 'PUT', headers: authHeaders, body: JSON.stringify({ price: u.price }),
+            method: 'PUT', headers: jsonHeaders, body: JSON.stringify({ price: u.price }),
           })
         )
       );
