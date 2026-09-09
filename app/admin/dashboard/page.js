@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState, Fragment } from 'react';
+import { useEffect, useMemo, useRef, useState, Fragment } from 'react';
 import ResourceManager from '@/components/admin/ResourceManager';
 import BundleManager from '@/components/admin/BundleManager';
 import OrderKanban from '@/components/admin/OrderKanban';
+import MyAccountModal from '@/components/admin/MyAccountModal';
 import StatTile from '@/components/admin/charts/StatTile';
 import AreaTrendChart from '@/components/admin/charts/AreaTrendChart';
 import BarChart from '@/components/admin/charts/BarChart';
@@ -298,7 +299,7 @@ function OrderDetailRow({ token, order }) {
               <p style={{ margin: '0 0 4px', color: 'var(--muted)', fontSize: 13 }}>Customer</p>
               <p style={{ margin: 0 }}>{detail.customer_name}</p>
               <p style={{ margin: 0 }}>{detail.phone}</p>
-              <p style={{ margin: 0 }}>{detail.email}</p>
+              <p style={{ margin: 0, color: detail.email ? undefined : 'var(--muted)' }}>{detail.email || 'No email provided'}</p>
               <p style={{ margin: 0 }}>{detail.address}</p>
             </div>
             <div>
@@ -306,6 +307,7 @@ function OrderDetailRow({ token, order }) {
               <p style={{ margin: 0 }}>Placed: {detail.created_at}</p>
               <p style={{ margin: 0 }}>Payment: {detail.payment_method}</p>
               {detail.notes && <p style={{ margin: 0 }}>Notes: {detail.notes}</p>}
+              {detail.driver_name && <p style={{ margin: 0 }}>🛵 Driver: {detail.driver_name}</p>}
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <p style={{ margin: '0 0 4px', color: 'var(--muted)', fontSize: 13 }}>Items</p>
@@ -488,9 +490,19 @@ function CustomersTab({ token }) {
             <tbody>
               {customers.map((c, i) => (
                 <tr key={i}>
-                  <td style={td}>{c.name}</td>
+                  <td style={td}>
+                    {c.name}
+                    {c.totalOrders >= 2 && (
+                      <span style={{
+                        marginLeft: 8, fontSize: 11, fontWeight: 700, color: '#7CB86A',
+                        background: 'rgba(124,184,106,0.15)', borderRadius: 999, padding: '2px 8px',
+                      }}>
+                        Repeat
+                      </span>
+                    )}
+                  </td>
                   <td style={td}>{c.phone}</td>
-                  <td style={td}>{c.email}</td>
+                  <td style={td}>{c.email || '—'}</td>
                   <td style={td}>{c.totalOrders}</td>
                   <td style={td}>{formatCurrency(c.totalSpent)}</td>
                   <td style={td}>{c.lastOrder}</td>
@@ -656,10 +668,50 @@ const SETTINGS_FIELDS = [
   { key: 'phone', label: 'Phone' },
   { key: 'email', label: 'Email' },
   { key: 'address', label: 'Address' },
-  { key: 'opening_hours', label: 'Opening hours', textarea: true },
   { key: 'minimum_order', label: 'Minimum order (€)', number: true },
   { key: 'delivery_fee', label: 'Delivery fee (€)', number: true },
+  {
+    key: 'delivery_postal_codes', label: 'Delivery postal codes (comma-separated, leave blank for no restriction)',
+    textarea: true, placeholder: 'e.g. 00 (all of Helsinki), or 00100, 00120 for specific codes',
+  },
 ];
+
+// Phase 7.7 — per-day opening hours, replacing the old single free-text
+// `opening_hours` field. Same settings key, new value shape: a JSON array
+// of 7 {day, open, close, closed} objects instead of a free-text string —
+// see this change's summary for why the same key was reused and what
+// reads it (nothing did publicly before this — components/Visit.js was
+// hardcoded placeholder content; it's now wired to this).
+const OPENING_HOURS_DAYS = [
+  { key: 'mon', label: 'Monday' },
+  { key: 'tue', label: 'Tuesday' },
+  { key: 'wed', label: 'Wednesday' },
+  { key: 'thu', label: 'Thursday' },
+  { key: 'fri', label: 'Friday' },
+  { key: 'sat', label: 'Saturday' },
+  { key: 'sun', label: 'Sunday' },
+];
+
+function defaultOpeningHours() {
+  return OPENING_HOURS_DAYS.map((d) => ({ day: d.key, open: '11:00', close: '22:00', closed: false }));
+}
+
+// Returns a valid 7-day array, or null if `raw` is empty/missing, or is
+// the OLD free-text value from before this change (plain JSON.parse
+// failure — that old value can't be auto-converted into structured
+// open/close times, so the admin form falls back to defaults and the
+// person re-enters their real hours once, rather than the page crashing
+// on an unparseable settings value).
+function parseOpeningHours(raw) {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length === OPENING_HOURS_DAYS.length) return parsed;
+  } catch {
+    // Old free-text value, or corrupt — treated the same as "unset".
+  }
+  return null;
+}
 
 // Shared by all three settings sections below — each one loads the full
 // settings object (cheap: it's one small key/value table) but only ever
@@ -690,9 +742,37 @@ function RestaurantInfoSettings({ token }) {
   const { values, setValues, loading } = useSettingsValues(token);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [hours, setHours] = useState(defaultOpeningHours());
+  const [hoursWasFreeText, setHoursWasFreeText] = useState(false);
+  const hoursInitialized = useRef(false);
+
+  // Initialize the structured-hours editor once, the first time settings
+  // finish loading — not on every `values` change, or typing in any other
+  // Restaurant Settings field would keep resetting whatever the person
+  // just edited here.
+  useEffect(() => {
+    if (loading || hoursInitialized.current) return;
+    hoursInitialized.current = true;
+    const parsed = parseOpeningHours(values.opening_hours);
+    if (parsed) {
+      setHours(parsed);
+    } else {
+      setHours(defaultOpeningHours());
+      // Distinguish "never set anything" from "there's an old free-text
+      // value that couldn't convert" — only the second case needs a note,
+      // so the person knows their old hours text didn't just vanish
+      // silently, it needs re-entering in the new day-by-day form.
+      setHoursWasFreeText(!!values.opening_hours);
+    }
+  }, [loading, values.opening_hours]);
 
   const setField = (key, val) => {
     setValues((v) => ({ ...v, [key]: val }));
+    setSaved(false);
+  };
+
+  const setDay = (dayKey, patch) => {
+    setHours((h) => h.map((d) => (d.day === dayKey ? { ...d, ...patch } : d)));
     setSaved(false);
   };
 
@@ -714,11 +794,13 @@ function RestaurantInfoSettings({ token }) {
     try {
       const body = {};
       SETTINGS_FIELDS.forEach((f) => { body[f.key] = values[f.key] || ''; });
+      body.opening_hours = JSON.stringify(hours);
       await fetch('/api/admin/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
+      setHoursWasFreeText(false);
       setSaved(true);
     } finally {
       setSaving(false);
@@ -779,6 +861,49 @@ function RestaurantInfoSettings({ token }) {
             </label>
           ))}
         </div>
+
+        <h3 style={{ margin: '24px 0 4px', fontSize: 15 }}>Opening hours</h3>
+        {hoursWasFreeText && (
+          <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#E3A73B' }}>
+            Your previous opening-hours text couldn't be converted automatically — filled in with placeholder times below, please set each day correctly and save.
+          </p>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {OPENING_HOURS_DAYS.map((d) => {
+            const row = hours.find((h) => h.day === d.key) || { open: '11:00', close: '22:00', closed: false };
+            return (
+              <div key={d.key} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ width: 96, fontSize: 13.5 }}>{d.label}</span>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--muted)' }}>
+                  <input
+                    type="checkbox"
+                    checked={row.closed}
+                    onChange={(e) => setDay(d.key, { closed: e.target.checked })}
+                  />
+                  Closed all day
+                </label>
+                {!row.closed && (
+                  <>
+                    <input
+                      type="time"
+                      value={row.open}
+                      onChange={(e) => setDay(d.key, { open: e.target.value })}
+                      style={{ ...inputStyle, width: 'auto', marginTop: 0 }}
+                    />
+                    <span style={{ color: 'var(--muted)' }}>–</span>
+                    <input
+                      type="time"
+                      value={row.close}
+                      onChange={(e) => setDay(d.key, { close: e.target.value })}
+                      style={{ ...inputStyle, width: 'auto', marginTop: 0 }}
+                    />
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
         <div style={{ marginTop: 16 }}>
           <button type="submit" style={btnPrimary} disabled={saving}>{saving ? 'Saving…' : 'Save settings'}</button>
           {saved && <span style={{ marginLeft: 12, color: 'var(--gold)' }}>Saved ✓</span>}
@@ -1349,6 +1474,25 @@ function StaffRow({ member, onChanged }) {
       </td>
       <td style={td}>{member.active ? '🟢 Active' : '⚪ Inactive'}</td>
       <td style={td}>
+        {member.totp_enabled ? (
+          <button
+            type="button"
+            style={{ ...btn, fontSize: 12, padding: '5px 10px' }}
+            disabled={busy}
+            onClick={() => {
+              // Phase 7.9 lockout recovery — see this feature's summary
+              // for why this exists: without it, a staff member who
+              // loses their authenticator device has no way back in.
+              if (window.confirm(`Force-disable 2FA on ${member.name}'s account? They'll be able to log in with just their password again.`)) {
+                patch({ disable2fa: true });
+              }
+            }}
+          >
+            🔒 On — force off
+          </button>
+        ) : '—'}
+      </td>
+      <td style={td}>
         <button
           type="button"
           style={member.active ? btnDanger : btnPrimary}
@@ -1385,13 +1529,14 @@ function StaffManagementTab({ token }) {
                 <th style={th}>Email</th>
                 <th style={th}>Role</th>
                 <th style={th}>Status</th>
+                <th style={th}>2FA</th>
                 <th style={th}></th>
               </tr>
             </thead>
             <tbody>
               {staff.map((m) => <StaffRow key={m.id} member={m} onChanged={reload} />)}
               {!staff.length && (
-                <tr><td style={td} colSpan={5}>No staff accounts yet.</td></tr>
+                <tr><td style={td} colSpan={6}>No staff accounts yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -1459,6 +1604,212 @@ function ActivityLogTab({ token }) {
   );
 }
 
+/* ---------------- Coupons (Phase 7.6, Manager+Owner) ---------------- */
+
+function useCoupons(token) {
+  const [coupons, setCoupons] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = () => {
+    if (!token) return;
+    setLoading(true);
+    setError('');
+    fetch('/api/admin/coupons')
+      .then((res) => {
+        if (!res.ok) throw new Error('Could not load coupons.');
+        return res.json();
+      })
+      .then((data) => setCoupons(Array.isArray(data) ? data : []))
+      .catch(() => setError('Could not load coupons.'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, [token]);
+
+  return { coupons, loading, error, reload: load };
+}
+
+function AddCouponForm({ onAdded }) {
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState('');
+  const [discountType, setDiscountType] = useState('percent');
+  const [discountValue, setDiscountValue] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
+  const [minOrderAmount, setMinOrderAmount] = useState('');
+  const [usageLimit, setUsageLimit] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const reset = () => {
+    setCode(''); setDiscountType('percent'); setDiscountValue('');
+    setExpiresAt(''); setMinOrderAmount(''); setUsageLimit(''); setError('');
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const res = await fetch('/api/admin/coupons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code,
+          discount_type: discountType,
+          discount_value: Number(discountValue),
+          expires_at: expiresAt || null,
+          min_order_amount: minOrderAmount === '' ? null : Number(minOrderAmount),
+          usage_limit: usageLimit === '' ? null : Number(usageLimit),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not create coupon.');
+      reset();
+      setOpen(false);
+      onAdded();
+    } catch (err) {
+      setError(err.message || 'Could not create coupon.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!open) {
+    return <button type="button" style={btnPrimary} onClick={() => setOpen(true)}>+ New coupon</button>;
+  }
+
+  return (
+    <form onSubmit={submit} style={{ ...card, marginBottom: 20 }}>
+      <h3 style={cardTitle}>New coupon</h3>
+      {error && <p style={{ color: '#FF8A75', marginTop: 0 }}>{error}</p>}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
+        <label>
+          Code
+          <input style={inputStyle} value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="SAVE10" required />
+        </label>
+        <label>
+          Type
+          <select style={inputStyle} value={discountType} onChange={(e) => setDiscountType(e.target.value)}>
+            <option value="percent">Percent off</option>
+            <option value="amount">Amount off (€)</option>
+          </select>
+        </label>
+        <label>
+          Value {discountType === 'percent' ? '(%)' : '(€)'}
+          <input style={inputStyle} type="number" min="0.01" step="0.01" value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} required />
+        </label>
+        <label>
+          Expires (optional)
+          <input style={inputStyle} type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
+        </label>
+        <label>
+          Minimum order € (optional)
+          <input style={inputStyle} type="number" min="0" step="0.01" value={minOrderAmount} onChange={(e) => setMinOrderAmount(e.target.value)} />
+        </label>
+        <label>
+          Usage limit (optional)
+          <input style={inputStyle} type="number" min="1" step="1" value={usageLimit} onChange={(e) => setUsageLimit(e.target.value)} placeholder="Unlimited" />
+        </label>
+      </div>
+      <div style={{ marginTop: 8 }}>
+        <button type="submit" style={btnPrimary} disabled={saving}>{saving ? 'Creating…' : 'Create coupon'}</button>
+        <button type="button" style={btn} onClick={() => { reset(); setOpen(false); }}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
+function CouponRow({ coupon, onChanged }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const toggleActive = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/admin/coupons/${coupon.code}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: coupon.active ? 0 : 1 }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Update failed.');
+      onChanged();
+    } catch (err) {
+      setError(err.message || 'Update failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const valueLabel = coupon.discount_type === 'percent' ? `${coupon.discount_value}%` : `${Number(coupon.discount_value).toFixed(2)} €`;
+  const usageLabel = coupon.usage_limit != null ? `${coupon.times_used} / ${coupon.usage_limit}` : `${coupon.times_used}`;
+  const expiredAlready = coupon.expires_at && new Date(coupon.expires_at).getTime() < Date.now() - 24 * 60 * 60 * 1000;
+
+  return (
+    <tr>
+      <td style={td}><strong>{coupon.code}</strong></td>
+      <td style={td}>{valueLabel}</td>
+      <td style={td}>{coupon.min_order_amount != null ? `${Number(coupon.min_order_amount).toFixed(2)} €` : '—'}</td>
+      <td style={td}>{usageLabel}</td>
+      <td style={td}>{coupon.expires_at || '—'}{expiredAlready ? ' (expired)' : ''}</td>
+      <td style={td}>{coupon.active ? '🟢 Active' : '⚪ Inactive'}</td>
+      <td style={td}>
+        <button
+          type="button"
+          style={coupon.active ? btnDanger : btnPrimary}
+          disabled={busy}
+          onClick={toggleActive}
+        >
+          {coupon.active ? 'Deactivate' : 'Reactivate'}
+        </button>
+        {error && <div style={{ color: '#FF8A75', fontSize: 12, marginTop: 4 }}>{error}</div>}
+      </td>
+    </tr>
+  );
+}
+
+function CouponsTab({ token }) {
+  const { coupons, loading, error, reload } = useCoupons(token);
+
+  return (
+    <div style={box}>
+      <h2 style={{ marginTop: 0 }}>Coupons</h2>
+      <p style={{ color: 'var(--muted)', fontSize: 13.5 }}>
+        Customers enter a code at checkout — every code is re-checked (validity, expiry, minimum order, usage limit)
+        and the discount recalculated on our server when the order is actually placed, never trusted from the browser.
+      </p>
+      <div style={{ marginBottom: 20 }}>
+        <AddCouponForm onAdded={reload} />
+      </div>
+      {loading ? <p>Loading…</p> : error ? <p style={{ color: '#FF8A75' }}>{error}</p> : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={th}>Code</th>
+                <th style={th}>Discount</th>
+                <th style={th}>Min. order</th>
+                <th style={th}>Used</th>
+                <th style={th}>Expires</th>
+                <th style={th}>Status</th>
+                <th style={th}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {coupons.map((c) => <CouponRow key={c.code} coupon={c} onChanged={reload} />)}
+              {!coupons.length && (
+                <tr><td style={td} colSpan={7}>No coupons yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---------------- Root ---------------- */
 
 // Which top-level tabs each role can see — mirrors the requireRole()
@@ -1468,8 +1819,8 @@ function ActivityLogTab({ token }) {
 // enforcement, not a substitute for it.
 const ROLE_TABS = {
   kitchen: ['orders'],
-  manager: ['overview', 'orders', 'menu', 'homepage', 'customers', 'reports'],
-  owner: ['overview', 'orders', 'menu', 'homepage', 'customers', 'reports', 'tracking', 'settings', 'staff', 'activity'],
+  manager: ['overview', 'orders', 'menu', 'coupons', 'homepage', 'customers', 'reports'],
+  owner: ['overview', 'orders', 'menu', 'coupons', 'homepage', 'customers', 'reports', 'tracking', 'settings', 'staff', 'activity'],
 };
 
 export default function AdminDashboard() {
@@ -1479,6 +1830,7 @@ export default function AdminDashboard() {
   const [token, setToken] = useState('');
   const [ready, setReady] = useState(false);
   const [tab, setTab] = useState(null); // set once we know the role — see checkSession below
+  const [showMyAccount, setShowMyAccount] = useState(false); // Phase 7.9 — visible to every role
 
   // See app/admin/page.js for the matching check on the login page, and
   // why it's written to always resolve `ready` one way or another instead
@@ -1554,6 +1906,7 @@ export default function AdminDashboard() {
     { id: 'overview', label: '🏠 Dashboard' },
     { id: 'orders', label: '📦 Orders', badge: pendingCount },
     { id: 'menu', label: '🍕 Menu & Pricing' },
+    { id: 'coupons', label: '🏷️ Coupons' },
     { id: 'homepage', label: '🖼️ Homepage Display' },
     { id: 'customers', label: '👥 Customers' },
     { id: 'reports', label: '📊 Reports' },
@@ -1581,8 +1934,13 @@ export default function AdminDashboard() {
               {role && <span style={{ marginLeft: 8, opacity: 0.7 }}>· {ROLE_LABEL[role] || role}</span>}
             </p>
           </div>
-          <button onClick={logout} style={btn}>Logout</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setShowMyAccount(true)} style={btn}>My Account</button>
+            <button onClick={logout} style={btn}>Logout</button>
+          </div>
         </header>
+
+        {showMyAccount && <MyAccountModal onClose={() => setShowMyAccount(false)} />}
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
           {TOP_TABS.map((t) => (
@@ -1612,6 +1970,7 @@ export default function AdminDashboard() {
         )}
         {tab === 'orders' && <OrdersTab token={token} />}
         {tab === 'menu' && <MenuTabs token={token} />}
+        {tab === 'coupons' && <CouponsTab token={token} />}
         {tab === 'homepage' && <HomepageDisplaySettings token={token} />}
         {tab === 'customers' && <CustomersTab token={token} />}
         {tab === 'reports' && <ReportsTab analytics={analytics} loading={analyticsLoading} />}
