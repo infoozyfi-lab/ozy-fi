@@ -64,17 +64,18 @@ CREATE TABLE addons (
 );
 
 CREATE TABLE orders (
-  id             INTEGER PRIMARY KEY AUTOINCREMENT,
-  order_num      TEXT NOT NULL UNIQUE,
-  customer_name  TEXT NOT NULL,
-  address        TEXT NOT NULL,
-  email          TEXT NOT NULL,
-  phone          TEXT NOT NULL,
-  notes          TEXT,
-  total          REAL NOT NULL DEFAULT 0,
-  status         TEXT NOT NULL DEFAULT 'received',
-  payment_method TEXT NOT NULL DEFAULT 'cod',
-  created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_num          TEXT NOT NULL UNIQUE,
+  customer_name      TEXT NOT NULL,
+  address            TEXT NOT NULL,
+  email              TEXT NOT NULL,
+  phone              TEXT NOT NULL,
+  notes              TEXT,
+  total              REAL NOT NULL DEFAULT 0,
+  status             TEXT NOT NULL DEFAULT 'received',
+  payment_method     TEXT NOT NULL DEFAULT 'cod',
+  estimated_ready_at TEXT,
+  created_at         TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE order_items (
