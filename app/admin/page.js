@@ -10,15 +10,19 @@ export default function AdminPage() {
   const [checking, setChecking] = useState(true);
 
   // If a valid session already exists (e.g. the user hit the browser
-  // "back" button from the dashboard), skip the login form instead of
-  // making it look like they got logged out.
+  // "back" button from the dashboard, or opened a new tab), skip the
+  // login form instead of making it look like they got logged out.
   useEffect(() => {
     const t = sessionStorage.getItem('ozy_admin_token');
     if (t) {
       window.location.href = '/admin/dashboard';
       return;
     }
-    setChecking(false);
+    // No token in this tab yet — check whether the httpOnly session
+    // cookie from an earlier login (possibly in another tab) is valid.
+    fetch('/api/admin/me')
+      .then((r) => (r.ok ? window.location.href = '/admin/dashboard' : setChecking(false)))
+      .catch(() => setChecking(false));
   }, []);
 
   const handleLogin = async (e) => {
