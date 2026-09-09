@@ -222,6 +222,52 @@ export default function ResourceManager({ token, table, title, fields, displayCo
     }
   };
 
+  // One-tap "in stock" / "out of stock" toggle — no need to open the full
+  // edit form just to hide something that's temporarily unavailable.
+  const toggleActive = async (row) => {
+    try {
+      const res = await fetch(`/api/admin/${table}/${encodeURIComponent(row.id)}`, {
+        method: 'PUT',
+        headers: authHeaders,
+        body: JSON.stringify({ active: row.active ? 0 : 1 }),
+      });
+      if (!res.ok) throw new Error('Update failed.');
+      setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, active: row.active ? 0 : 1 } : r)));
+      if (onChanged) onChanged();
+    } catch (err) {
+      setError(err.message || 'Update failed.');
+    }
+  };
+
+  // Copies every field except id/name into a new row, so starting a
+  // similar product doesn't mean re-typing everything from scratch.
+  const duplicate = async (row) => {
+    setError('');
+    try {
+      const body = {};
+      fields.forEach((f) => {
+        if (f.key === 'id') return;
+        body[f.key] = f.key === 'name' ? `${row.name} (copy)` : row[f.key];
+      });
+      body.id = `${row.id}-copy-${Date.now().toString(36)}`;
+      const res = await fetch(`/api/admin/${table}`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Duplicate failed.');
+      }
+      const data = await res.json().catch(() => null);
+      load();
+      if (onChanged) onChanged();
+      if (data) startEdit({ ...body, id: body.id });
+    } catch (err) {
+      setError(err.message || 'Duplicate failed.');
+    }
+  };
+
   const cols = displayCols || fields.map((f) => f.key).slice(0, 4);
 
   return (
@@ -376,13 +422,26 @@ export default function ResourceManager({ token, table, title, fields, displayCo
                 <tr key={row.id}>
                   {cols.map((c) => (
                     <td style={td} key={c}>
-                      {typeof row[c] === 'number' && (c.includes('price') || c === 'price_delta')
+                      {c === 'active' ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleActive(row)}
+                          style={{
+                            border: 'none', borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                            background: row.active ? 'rgba(124,184,106,0.18)' : 'rgba(255,106,92,0.18)',
+                            color: row.active ? '#7CB86A' : '#FF6A5C',
+                          }}
+                        >
+                          {row.active ? 'In stock' : 'Out of stock'}
+                        </button>
+                      ) : typeof row[c] === 'number' && (c.includes('price') || c === 'price_delta')
                         ? `€${Number(row[c]).toFixed(2)}`
                         : String(row[c] ?? '')}
                     </td>
                   ))}
                   <td style={td}>
                     <button type="button" style={btn} onClick={() => startEdit(row)}>Edit</button>
+                    <button type="button" style={btn} onClick={() => duplicate(row)}>Duplicate</button>
                     <button type="button" style={btnDanger} onClick={() => remove(row)}>Delete</button>
                   </td>
                 </tr>
