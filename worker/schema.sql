@@ -11,6 +11,8 @@ DROP TABLE IF EXISTS orders;
 DROP TABLE IF EXISTS order_items;
 DROP TABLE IF EXISTS admin_settings;
 DROP TABLE IF EXISTS bundles;
+DROP TABLE IF EXISTS staff;
+DROP TABLE IF EXISTS audit_log;
 
 CREATE TABLE categories (
   id         TEXT PRIMARY KEY,
@@ -126,3 +128,40 @@ CREATE TABLE login_attempts (
   attempted_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX idx_login_attempts_ip ON login_attempts(ip, attempted_at);
+
+-- Individual staff accounts, replacing the single shared ADMIN_EMAIL/
+-- ADMIN_PASSWORD login. password_hash is "<saltB64url>:<iterations>:
+-- <hashB64url>" — see lib/adminAuth.js's hashPassword/verifyPassword,
+-- never a plaintext password.
+-- role: 'kitchen' | 'manager' | 'owner' — see lib/adminAuth.js's ROLES
+-- and the per-route requireRole() calls for exactly what each can do.
+CREATE TABLE staff (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  name          TEXT NOT NULL,
+  email         TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  role          TEXT NOT NULL CHECK (role IN ('kitchen', 'manager', 'owner')),
+  active        INTEGER NOT NULL DEFAULT 1,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Who did what, when. Written by lib/auditLog.js's logActivity() from
+-- the handful of routes that mutate something worth attributing to a
+-- person (order status changes, menu/settings edits, staff changes).
+-- staff_id is nullable and has no ON DELETE behavior specified (D1/
+-- SQLite default: deleting a still-referenced staff row does not cascade
+-- or block — the FK is descriptive here, not enforced unless the
+-- connection has `PRAGMA foreign_keys = ON`); staff_name is denormalized
+-- specifically so history still reads correctly if a staff row is later
+-- removed. A NULL staff_id with a "(legacy admin login)" suffix on
+-- staff_name marks an action taken through the transitional shared
+-- ADMIN_EMAIL/ADMIN_PASSWORD login rather than a real staff account.
+CREATE TABLE audit_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  staff_id   INTEGER REFERENCES staff(id),
+  staff_name TEXT NOT NULL,
+  action     TEXT NOT NULL,
+  detail     TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_audit_log_created ON audit_log(created_at);
