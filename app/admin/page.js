@@ -10,11 +10,10 @@ export default function AdminPage() {
   const [checking, setChecking] = useState(true);
 
   // If a valid session already exists, skip the login form instead of
-  // making it look like they got logged out. Two ways that can be true:
-  // a sessionStorage token from this same tab (checked first — no network
-  // round trip needed), or an httpOnly cookie from a previous visit that
-  // outlived the tab that created it (a fresh tab has no sessionStorage,
-  // so /api/admin/me is what can still tell us "yes, still signed in").
+  // making it look like they got logged out. Phase 5b: cookie-only, so
+  // there's no sessionStorage fast path anymore — /api/admin/me (reading
+  // the httpOnly cookie) is the one and only source of truth for "are we
+  // signed in", on every load of this page.
   //
   // This whole check is wrapped so `checking` is *guaranteed* to end up
   // false one way or another — a version of this that let a network
@@ -24,12 +23,6 @@ export default function AdminPage() {
     let cancelled = false;
 
     async function checkExistingSession() {
-      const t = sessionStorage.getItem('ozy_admin_token');
-      if (t) {
-        window.location.href = '/admin/dashboard';
-        return;
-      }
-
       try {
         const res = await fetch('/api/admin/me');
         const data = await res.json().catch(() => ({ authenticated: false }));
@@ -77,9 +70,10 @@ export default function AdminPage() {
         return;
       }
 
-      sessionStorage.setItem('ozy_admin_token', data.token);
-      sessionStorage.setItem('ozy_admin_email', data.email);
-
+      // Phase 5b: the login response no longer carries a token to store —
+      // the httpOnly cookie the response just set is the entire session.
+      // The dashboard's own /api/admin/me check (next page load) confirms
+      // it from the cookie.
       window.location.href = '/admin/dashboard';
     } catch (err) {
       setError('Unable to connect to server.');
