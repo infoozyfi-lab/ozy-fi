@@ -11,22 +11,16 @@ export default function KitchenPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Same sessionStorage-first, cookie-fallback check as the main admin
-  // gates (app/admin/page.js, app/admin/dashboard/page.js) — a kitchen
-  // tablet is exactly the case this was for: signed in once, tab/browser
-  // left open or reopened later, no sessionStorage left but the httpOnly
-  // cookie is still good.
+  // Phase 5b: cookie-only, same as the main admin gates (app/admin/page.js,
+  // app/admin/dashboard/page.js) — no sessionStorage anymore, /api/admin/me
+  // (reading the httpOnly cookie) is the only source of truth. A kitchen
+  // tablet is exactly the case this matters for: signed in once, then left
+  // open or reopened later with no client-side state left at all except
+  // the cookie itself.
   useEffect(() => {
     let cancelled = false;
 
     async function checkSession() {
-      const t = sessionStorage.getItem('ozy_admin_token');
-      if (t) {
-        setToken(t);
-        setChecking(false);
-        return;
-      }
-
       try {
         const res = await fetch('/api/admin/me');
         const data = await res.json().catch(() => ({ authenticated: false }));
@@ -60,9 +54,10 @@ export default function KitchenPage() {
         setError(data.error || 'Login failed');
         return;
       }
-      sessionStorage.setItem('ozy_admin_token', data.token);
-      sessionStorage.setItem('ozy_admin_email', data.email);
-      setToken(data.token);
+      // Phase 5b: no token in the response to store — the httpOnly cookie
+      // the response just set is the whole session. `token` here is just
+      // the same "are we authenticated" flag used elsewhere on this page.
+      setToken('cookie-session');
     } catch {
       setError('Unable to connect to server.');
     } finally {
@@ -71,8 +66,6 @@ export default function KitchenPage() {
   };
 
   const logout = () => {
-    sessionStorage.removeItem('ozy_admin_token');
-    sessionStorage.removeItem('ozy_admin_email');
     fetch('/api/admin/logout', { method: 'POST' }).finally(() => {
       setToken(null);
     });
