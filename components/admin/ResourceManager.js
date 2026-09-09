@@ -110,6 +110,18 @@ export default function ResourceManager({ token, table, title, fields, displayCo
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState({});
 
+  // Bulk actions — only offered for tables with a price + active field
+  // (products, addons); doesn't make sense for categories/options.
+  const supportsBulk = fields.some((f) => f.key === 'price') && fields.some((f) => f.key === 'active');
+  const categoryField = fields.find((f) => f.key === 'category_id');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkPriceOp, setBulkPriceOp] = useState('percent'); // 'percent' | 'amount' | 'set'
+  const [bulkPriceValue, setBulkPriceValue] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState('');
+
   const authHeaders = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
@@ -268,18 +280,151 @@ export default function ResourceManager({ token, table, title, fields, displayCo
     }
   };
 
+  const toggleSelected = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllVisible = () => {
+    if (selectedIds.size === visibleRows.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(visibleRows.map((r) => r.id)));
+    }
+  };
+
+  const exitBulkMode = () => {
+    setBulkMode(false);
+    setSelectedIds(new Set());
+    setBulkMsg('');
+  };
+
+  // Reuses the same single-item PUT endpoint per selected row — simplest
+  // reliable approach without a dedicated bulk API, and fast enough for
+  // a menu-sized list (tens of items, not thousands).
+  const applyBulkStock = async (makeActive) => {
+    if (selectedIds.size === 0) return;
+    setBulkBusy(true);
+    setBulkMsg('');
+    try {
+      await Promise.all(
+        [...selectedIds].map((id) =>
+          fetch(`/api/admin/${table}/${encodeURIComponent(id)}`, {
+            method: 'PUT', headers: authHeaders, body: JSON.stringify({ active: makeActive ? 1 : 0 }),
+          })
+        )
+      );
+      setRows((rs) => rs.map((r) => (selectedIds.has(r.id) ? { ...r, active: makeActive ? 1 : 0 } : r)));
+      setBulkMsg(`Updated ${selectedIds.size} item${selectedIds.size === 1 ? '' : 's'}.`);
+      if (onChanged) onChanged();
+    } catch {
+      setBulkMsg('Some updates may have failed — check the list and try again.');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const applyBulkPrice = async () => {
+    const num = Number(bulkPriceValue);
+    if (selectedIds.size === 0 || !Number.isFinite(num)) return;
+    setBulkBusy(true);
+    setBulkMsg('');
+    try {
+      const targets = rows.filter((r) => selectedIds.has(r.id));
+      const updates = targets.map((r) => {
+        const current = Number(r.price) || 0;
+        let next = current;
+        if (bulkPriceOp === 'percent') next = current * (1 + num / 100);
+        else if (bulkPriceOp === 'amount') next = current + num;
+        else if (bulkPriceOp === 'set') next = num;
+        next = Math.max(0, Math.round(next * 100) / 100);
+        return { id: r.id, price: next };
+      });
+      await Promise.all(
+        updates.map((u) =>
+          fetch(`/api/admin/${table}/${encodeURIComponent(u.id)}`, {
+            method: 'PUT', headers: authHeaders, body: JSON.stringify({ price: u.price }),
+          })
+        )
+      );
+      setRows((rs) => rs.map((r) => {
+        const u = updates.find((x) => x.id === r.id);
+        return u ? { ...r, price: u.price } : r;
+      }));
+      setBulkMsg(`Updated the price on ${updates.length} item${updates.length === 1 ? '' : 's'}.`);
+      setBulkPriceValue('');
+      if (onChanged) onChanged();
+    } catch {
+      setBulkMsg('Some updates may have failed — check the list and try again.');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   const cols = displayCols || fields.map((f) => f.key).slice(0, 4);
+  const visibleRows = categoryField && categoryFilter !== 'all' ? rows.filter((r) => r.category_id === categoryFilter) : rows;
 
   return (
     <div style={box}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <h2 style={{ margin: 0 }}>{title}</h2>
-        {editingId === null && (
-          <button type="button" style={btnPrimary} onClick={startCreate}>
-            + Add new
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          {categoryField && (
+            <select style={{ ...inputStyle, width: 'auto', marginTop: 0, padding: '8px 10px' }} value={categoryFilter} onChange={(e) => { setCategoryFilter(e.target.value); setSelectedIds(new Set()); }}>
+              <option value="all">All categories</option>
+              {(categoryField.options || []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          )}
+          {supportsBulk && (
+            <button type="button" style={bulkMode ? btnPrimary : btn} onClick={() => (bulkMode ? exitBulkMode() : setBulkMode(true))}>
+              {bulkMode ? 'Done selecting' : 'Select multiple'}
+            </button>
+          )}
+          {editingId === null && !bulkMode && (
+            <button type="button" style={btnPrimary} onClick={startCreate}>
+              + Add new
+            </button>
+          )}
+        </div>
       </div>
+
+      {bulkMode && (
+        <div style={{ marginBottom: 16, padding: 14, borderRadius: 10, background: 'var(--bg-alt)', border: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+              <input type="checkbox" checked={selectedIds.size === visibleRows.length && visibleRows.length > 0} onChange={selectAllVisible} />
+              {selectedIds.size} of {visibleRows.length} selected
+            </label>
+          </div>
+
+          {selectedIds.size > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+              <button type="button" style={btn} disabled={bulkBusy} onClick={() => applyBulkStock(true)}>Mark in stock</button>
+              <button type="button" style={btn} disabled={bulkBusy} onClick={() => applyBulkStock(false)}>Mark out of stock</button>
+
+              <span style={{ color: 'var(--line)' }}>|</span>
+
+              <select style={{ ...inputStyle, width: 'auto', marginTop: 0, padding: '8px 10px' }} value={bulkPriceOp} onChange={(e) => setBulkPriceOp(e.target.value)}>
+                <option value="percent">Adjust by %</option>
+                <option value="amount">Adjust by €</option>
+                <option value="set">Set price to €</option>
+              </select>
+              <input
+                type="number" step="0.1" placeholder={bulkPriceOp === 'percent' ? 'e.g. 10 or -5' : 'e.g. 1.5'}
+                style={{ ...inputStyle, width: 110, marginTop: 0, padding: '8px 10px' }}
+                value={bulkPriceValue} onChange={(e) => setBulkPriceValue(e.target.value)}
+              />
+              <button type="button" style={btnPrimary} disabled={bulkBusy || bulkPriceValue === ''} onClick={applyBulkPrice}>
+                {bulkBusy ? 'Applying…' : 'Apply price change'}
+              </button>
+            </div>
+          )}
+          {bulkMsg && <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--gold)' }}>{bulkMsg}</p>}
+        </div>
+      )}
 
       {error && (
         <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: '#3A1712', color: '#FF8A75', border: '1px solid #5A2A1F' }}>
@@ -406,20 +551,26 @@ export default function ResourceManager({ token, table, title, fields, displayCo
 
       {loading ? (
         <p>Loading…</p>
-      ) : rows.length === 0 ? (
-        <p>No entries yet.</p>
+      ) : visibleRows.length === 0 ? (
+        <p>{categoryFilter !== 'all' ? 'No entries in this category.' : 'No entries yet.'}</p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
+                {bulkMode && <th style={th}></th>}
                 {cols.map((c) => <th style={th} key={c}>{c}</th>)}
                 <th style={th}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {visibleRows.map((row) => (
                 <tr key={row.id}>
+                  {bulkMode && (
+                    <td style={td}>
+                      <input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => toggleSelected(row.id)} />
+                    </td>
+                  )}
                   {cols.map((c) => (
                     <td style={td} key={c}>
                       {c === 'active' ? (
