@@ -22,7 +22,7 @@ function setUrl(path) {
 // UI never crashes on first paint. Real values always come from the DB.
 const FALLBACK_OPTION = [{ id: 'default', label: 'Default', delta: 0 }];
 
-export function StoreProvider({ children }) {
+export function StoreProvider({ children, initialData }) {
   const router = useRouter();
 
   // Used by every "close this overlay" action (product page, checkout,
@@ -67,10 +67,17 @@ export function StoreProvider({ children }) {
   const [confirmedOrder, setConfirmedOrder] = useState(null);
 
   // ---- Menu data, loaded once from the database (/api/menu). ----
-  const [menuLoading, setMenuLoading] = useState(true);
+  // If a Server Component already fetched categories/products (see
+  // app/menu/page.js etc.), seed state with them directly so the very
+  // first render — including the server-rendered HTML search engines
+  // see — already has real menu content, not an empty loading state.
+  // The fetch effect below still runs afterward to pick up anything not
+  // seeded (toppings, drinks, option groups) and to catch any changes
+  // since the page was rendered.
+  const [menuLoading, setMenuLoading] = useState(!initialData);
   const [menuError, setMenuError] = useState('');
-  const [categories, setCategories] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState(initialData?.categories || []);
+  const [products, setProducts] = useState(initialData?.products || []);
   const [baseOptions, setBaseOptions] = useState(FALLBACK_OPTION);
   const [sauceOptions, setSauceOptions] = useState(FALLBACK_OPTION);
   const [cheeseOptions, setCheeseOptions] = useState(FALLBACK_OPTION);
@@ -103,7 +110,10 @@ export function StoreProvider({ children }) {
   useEffect(() => {
     async function loadMenu() {
       try {
-        setMenuLoading(true);
+        // Only show the loading state if we don't already have seeded
+        // data from the server — otherwise this background refresh
+        // would flash the UI back to "loading" for no visible reason.
+        if (!initialData) setMenuLoading(true);
         setMenuError('');
 
         const res = await fetch('/api/menu');
