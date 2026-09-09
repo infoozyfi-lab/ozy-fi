@@ -74,6 +74,7 @@ const btn = {
   marginRight: 8,
 };
 const btnPrimary = { ...btn, background: 'var(--ember)', color: '#1A0D06', border: 'none', fontWeight: 700 };
+const btnDanger = { ...btn, background: '#FF6A5C', color: '#1A0D06', border: 'none', fontWeight: 700 };
 
 const th = { textAlign: 'left', padding: '10px', color: 'var(--muted)', fontSize: 12.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' };
 const td = { padding: '12px 10px', borderTop: '1px solid var(--line)', fontSize: 13.5 };
