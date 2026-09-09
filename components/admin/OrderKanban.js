@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency } from '@/components/admin/charts/colors';
 
 const COLUMNS = [
@@ -92,6 +92,9 @@ function OrderDetailModal({ token, order, onClose, onAdvance, onCancel, movingId
               <p style={{ margin: '4px 0 0', fontSize: 15, color: 'var(--cream)' }}>📍 {detail.address}</p>
               {detail.notes && (
                 <p style={{ margin: '10px 0 0', fontSize: 14, color: '#E3A73B' }}>📝 {detail.notes}</p>
+              )}
+              {detail.driver_name && (
+                <p style={{ margin: '10px 0 0', fontSize: 14 }}>🛵 Driver: <strong>{detail.driver_name}</strong></p>
               )}
             </div>
 
@@ -239,6 +242,70 @@ function EtaPromptModal({ token, order, onConfirm, onClose }) {
   );
 }
 
+// Phase 7.1 — shown when sending an order out ("on_the_way"), mirroring
+// EtaPromptModal's UX above (same overlay/card shape, same "quick presets
+// + free entry" pattern — recent driver names instead of minute presets).
+// Skippable: nobody's forced to name a driver before the order can move,
+// since a small team might not always have that info handy at send-out
+// time.
+function DriverPromptModal({ order, recentDrivers, onConfirm, onSkip, onClose }) {
+  const [name, setName] = useState('');
+
+  return (
+    <div
+      role="dialog"
+      aria-label="Who's delivering this?"
+      style={{ position: 'fixed', inset: 0, zIndex: 950, background: 'rgba(10,6,4,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--line)', borderRadius: 14, padding: 22, width: '100%', maxWidth: 380, maxHeight: '85vh', overflowY: 'auto' }}
+      >
+        <h3 style={{ margin: '0 0 4px' }}>Send out {order.order_num}</h3>
+        <p style={{ margin: '0 0 16px', color: 'var(--muted)', fontSize: 14 }}>Who's delivering this?</p>
+
+        {recentDrivers.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+            {recentDrivers.map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => onConfirm(d)}
+                style={{ background: 'var(--bg-alt)', color: 'var(--cream)', border: '1px solid var(--line)', borderRadius: 999, padding: '8px 14px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="text"
+            placeholder="Driver name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            style={{ flex: 1, padding: 12, border: '1px solid var(--line)', borderRadius: 8, background: 'var(--bg-alt)', color: 'var(--cream)', fontSize: 15 }}
+          />
+          <button
+            type="button"
+            disabled={!name.trim()}
+            onClick={() => onConfirm(name.trim())}
+            style={{ background: 'var(--ember)', color: '#1A0D06', border: 'none', borderRadius: 8, padding: '12px 18px', fontWeight: 700, cursor: 'pointer' }}
+          >
+            Confirm
+          </button>
+        </div>
+
+        <button type="button" onClick={onSkip} style={{ marginTop: 14, background: 'none', border: 'none', color: 'var(--muted)', textDecoration: 'underline', fontSize: 13, cursor: 'pointer', padding: 0 }}>
+          Send without a driver
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function OrderKanban({ token, size = 'normal' }) {
   const large = size === 'large';
   const [orders, setOrders] = useState([]);
@@ -246,6 +313,7 @@ export default function OrderKanban({ token, size = 'normal' }) {
   const [movingId, setMovingId] = useState(null);
   const [viewingOrder, setViewingOrder] = useState(null);
   const [etaOrder, setEtaOrder] = useState(null); // order currently being accepted (ETA prompt open)
+  const [driverOrder, setDriverOrder] = useState(null); // order currently being sent out (driver prompt open)
   const [soundOn, setSoundOn] = useState(true);
   const [soundUnlocked, setSoundUnlocked] = useState(false);
   const [showCancelled, setShowCancelled] = useState(false);
@@ -338,29 +406,53 @@ export default function OrderKanban({ token, size = 'normal' }) {
     }
     setSoundUnlocked(true);
   };
-  const advance = async (order, nextStatus, etaMinutes) => {
+  const advance = async (order, nextStatus, etaMinutes, driverName) => {
     setMovingId(order.id);
     try {
       const body = { status: nextStatus };
       if (etaMinutes) body.estimated_minutes = etaMinutes;
+      if (driverName) body.driver_name = driverName;
       await fetch(`/api/admin/orders/${order.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      setOrders((list) => list.map((o) => (o.id === order.id ? { ...o, status: nextStatus } : o)));
+      setOrders((list) => list.map((o) => (o.id === order.id ? { ...o, status: nextStatus, ...(driverName ? { driver_name: driverName } : {}) } : o)));
       if (seenIds.current) seenIds.current.add(order.id);
     } finally {
       setMovingId(null);
     }
   };
 
+  // Recently-used driver names (most recent first, deduped) — shown as
+  // quick-pick buttons in DriverPromptModal so the same few drivers don't
+  // need retyping order after order. Derived from whatever's already
+  // loaded (no extra request).
+  const recentDrivers = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    orders
+      .slice()
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .forEach((o) => {
+        if (o.driver_name && !seen.has(o.driver_name)) {
+          seen.add(o.driver_name);
+          out.push(o.driver_name);
+        }
+      });
+    return out.slice(0, 6);
+  }, [orders]);
+
   // "Start preparing" on a brand-new order means accepting it — ask for an
   // ETA first instead of advancing immediately, so the customer can see it
-  // on /track. Any other column's "next" action advances right away.
+  // on /track. "Send out" (→ on_the_way) similarly asks who's delivering
+  // (Phase 7.1) — skippable, see DriverPromptModal. Any other column's
+  // "next" action advances right away.
   const handleAdvanceClick = (order, nextStatus) => {
     if (order.status === 'received' && nextStatus === 'preparing') {
       setEtaOrder(order);
+    } else if (order.status === 'preparing' && nextStatus === 'on_the_way') {
+      setDriverOrder(order);
     } else {
       advance(order, nextStatus);
     }
@@ -468,6 +560,12 @@ export default function OrderKanban({ token, size = 'normal' }) {
                             {formatCurrency(order.total)}
                           </div>
 
+                          {order.driver_name && (
+                            <div style={{ fontSize: large ? 14 : 11.5, color: 'var(--muted)', marginBottom: large ? 8 : 4 }}>
+                              🛵 {order.driver_name}
+                            </div>
+                          )}
+
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                             {col.next && (
                               <button
@@ -553,6 +651,22 @@ export default function OrderKanban({ token, size = 'normal' }) {
           onConfirm={(minutes) => {
             advance(etaOrder, 'preparing', minutes);
             setEtaOrder(null);
+          }}
+        />
+      )}
+
+      {driverOrder && (
+        <DriverPromptModal
+          order={driverOrder}
+          recentDrivers={recentDrivers}
+          onClose={() => setDriverOrder(null)}
+          onConfirm={(name) => {
+            advance(driverOrder, 'on_the_way', null, name);
+            setDriverOrder(null);
+          }}
+          onSkip={() => {
+            advance(driverOrder, 'on_the_way');
+            setDriverOrder(null);
           }}
         />
       )}
