@@ -508,15 +508,55 @@ function CustomersTab({ token }) {
 function ReportsTab({ analytics, loading }) {
   if (loading || !analytics) return <p>Loading…</p>;
 
-  const { summary, bestSellers, categoryBreakdown, statusBreakdown } = analytics;
+  const { summary, bestSellers, todayBestSellers = [], todayStatusBreakdown = [], categoryBreakdown, statusBreakdown } = analytics;
   const totalCategoryRevenue = categoryBreakdown.reduce((s, c) => s + c.revenue, 0) || 1;
   const totalStatusCount = statusBreakdown.reduce((s, st) => s + st.count, 0) || 1;
 
   const weekDelta = percentChange(summary.last7Days.revenue, summary.prev7Days.revenue);
   const monthDelta = percentChange(summary.last30Days.revenue, summary.prev30Days.revenue);
 
+  const todayDelivered = todayStatusBreakdown.find((s) => s.status === 'delivered')?.count || 0;
+  const todayCancelled = todayStatusBreakdown.find((s) => s.status === 'cancelled')?.count || 0;
+  const todayInProgress = todayStatusBreakdown
+    .filter((s) => ['received', 'preparing', 'on_the_way'].includes(s.status))
+    .reduce((sum, s) => sum + s.count, 0);
+
   return (
     <>
+      <div style={{ ...card, marginBottom: 20, border: `1px solid ${BRAND}` }}>
+        <h2 style={cardTitle}>📋 Today&apos;s Closing Summary</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16, marginBottom: 18 }}>
+          <StatTile label="Today's Revenue" value={formatCurrency(summary.today.revenue)} accent={BRAND} />
+          <StatTile label="Today's Orders" value={formatNumber(summary.today.orders)} />
+          <StatTile label="Delivered" value={formatNumber(todayDelivered)} />
+          <StatTile label="Still in progress" value={formatNumber(todayInProgress)} />
+          <StatTile label="Cancelled" value={formatNumber(todayCancelled)} goodDirection="down" />
+        </div>
+        <h3 style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--muted)' }}>Today&apos;s best sellers</h3>
+        {todayBestSellers.length === 0 ? (
+          <p style={{ color: 'var(--muted)', fontSize: 14 }}>No sales yet today.</p>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={th}>Item</th>
+                <th style={th}>Qty sold</th>
+                <th style={th}>Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {todayBestSellers.map((p) => (
+                <tr key={p.name}>
+                  <td style={td}>{p.name}</td>
+                  <td style={td}>{formatNumber(p.qty)}</td>
+                  <td style={td}>{formatCurrency(p.revenue)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
       <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
         <StatTile label="Sales, Last 7 Days" value={formatCurrency(summary.last7Days.revenue)} delta={weekDelta} deltaLabel="vs the 7 days before" accent={BRAND} />
         <StatTile label="Sales, Last 30 Days" value={formatCurrency(summary.last30Days.revenue)} delta={monthDelta} deltaLabel="vs the 30 days before" accent={GOLD} />
@@ -698,10 +738,47 @@ function SettingsTab({ token }) {
   if (loading) return <p>Loading…</p>;
 
   const featuredType = values.featured_type || 'none';
+  const isClosed = values.store_closed === '1';
+
+  const toggleStoreClosed = async () => {
+    const next = isClosed ? '0' : '1';
+    setField('store_closed', next);
+    await fetch('/api/admin/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ store_closed: next }),
+    });
+  };
 
   return (
     <div style={box}>
       <h2 style={{ marginTop: 0 }}>Restaurant Settings</h2>
+
+      <div
+        style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12,
+          padding: 16, marginBottom: 24, borderRadius: 10,
+          background: isClosed ? 'rgba(255,106,92,0.12)' : 'var(--bg-alt)',
+          border: `1px solid ${isClosed ? '#5A2A1F' : 'var(--line)'}`,
+        }}
+      >
+        <div>
+          <strong style={{ color: isClosed ? '#FF6A5C' : 'var(--cream)' }}>
+            {isClosed ? '🔴 Store is closed — not taking orders' : '🟢 Store is open — taking orders normally'}
+          </strong>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--muted)' }}>
+            For emergencies (kitchen issue, fully booked, closing early). Takes effect immediately.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={toggleStoreClosed}
+          style={isClosed ? btnPrimary : btnDanger}
+        >
+          {isClosed ? 'Reopen store' : 'Close store now'}
+        </button>
+      </div>
+
       <form onSubmit={save}>
         <h3 style={{ marginBottom: 4 }}>Homepage featured card</h3>
         <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
@@ -809,6 +886,63 @@ function SettingsTab({ token }) {
             </label>
           ))}
         </div>
+
+        <h3 style={{ marginBottom: 4, marginTop: 28 }}>Tracking &amp; Analytics</h3>
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
+          Optional — only fill these in once you&apos;ve created the matching ad/analytics
+          accounts. Leaving a field blank means that platform stays completely off; nothing
+          fires until its ID (and, for Meta/TikTok, its access token) is set here. Takes
+          effect immediately on save — no redeploy needed.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 12 }}>
+          <label>
+            GA4 Measurement ID
+            <input style={inputStyle} type="text" placeholder="G-XXXXXXXXXX" value={values.ga4_measurement_id || ''} onChange={(e) => setField('ga4_measurement_id', e.target.value)} />
+          </label>
+          <label>
+            GA4 API Secret
+            <input style={inputStyle} type="password" placeholder="For server-side purchase/refund events" value={values.secret_ga4_api_secret || ''} onChange={(e) => setField('secret_ga4_api_secret', e.target.value)} />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 22 }}>
+            <input type="checkbox" checked={values.ga4_debug_mode === '1'} onChange={(e) => setField('ga4_debug_mode', e.target.checked ? '1' : '0')} />
+            <span>GA4 Debug Mode <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(shows in DebugView, doesn&apos;t count as real data — turn off once verified)</span></span>
+          </label>
+          <label>
+            Meta (Facebook/Instagram) Pixel ID
+            <input style={inputStyle} type="text" placeholder="e.g. 123456789012345" value={values.meta_pixel_id || ''} onChange={(e) => setField('meta_pixel_id', e.target.value)} />
+          </label>
+          <label>
+            Meta Conversions API Access Token
+            <input style={inputStyle} type="password" value={values.secret_meta_access_token || ''} onChange={(e) => setField('secret_meta_access_token', e.target.value)} />
+          </label>
+          <label>
+            Meta Test Event Code <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(from Events Manager → Test Events — leave blank once verified)</span>
+            <input style={inputStyle} type="text" placeholder="e.g. TEST12345" value={values.meta_test_event_code || ''} onChange={(e) => setField('meta_test_event_code', e.target.value)} />
+          </label>
+          <label>
+            TikTok Pixel ID
+            <input style={inputStyle} type="text" value={values.tiktok_pixel_id || ''} onChange={(e) => setField('tiktok_pixel_id', e.target.value)} />
+          </label>
+          <label>
+            TikTok Events API Access Token
+            <input style={inputStyle} type="password" value={values.secret_tiktok_access_token || ''} onChange={(e) => setField('secret_tiktok_access_token', e.target.value)} />
+          </label>
+          <label>
+            TikTok Test Event Code <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(from TikTok Events Manager — leave blank once verified)</span>
+            <input style={inputStyle} type="text" value={values.tiktok_test_event_code || ''} onChange={(e) => setField('tiktok_test_event_code', e.target.value)} />
+          </label>
+          <label>
+            Microsoft Clarity Project ID
+            <input style={inputStyle} type="text" placeholder="e.g. abcd1234ef" value={values.clarity_id || ''} onChange={(e) => setField('clarity_id', e.target.value)} />
+          </label>
+        </div>
+        <p style={{ color: 'var(--muted)', fontSize: 12, marginTop: 0 }}>
+          🔒 The two Pixel IDs, Measurement ID, and Clarity ID are visible in the site&apos;s
+          public data (this is normal — every site&apos;s pixel ID is visible in its own page
+          source). The Access Token/API Secret fields are never exposed publicly — they&apos;re
+          only used from the server when sending order events.
+        </p>
+
         <div style={{ marginTop: 16 }}>
           <button type="submit" style={btnPrimary} disabled={saving}>{saving ? 'Saving…' : 'Save settings'}</button>
           {saved && <span style={{ marginLeft: 12, color: 'var(--gold)' }}>Saved ✓</span>}
