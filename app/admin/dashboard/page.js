@@ -1239,7 +1239,9 @@ export default function AdminDashboard() {
   const logout = () => {
     sessionStorage.removeItem('ozy_admin_token');
     sessionStorage.removeItem('ozy_admin_email');
-    window.location.href = '/admin';
+    fetch('/api/admin/logout', { method: 'POST' }).finally(() => {
+      window.location.href = '/admin';
+    });
   };
 
   if (!ready) return null;
