@@ -1,42 +1,12 @@
-'use client';
+import { getCloudflareContext } from '@opennextjs/cloudflare';
+import HomePageClient from '@/components/HomePageClient';
+import { loadMenuData } from '@/lib/menu-data';
 
-import { StoreProvider } from '@/context/StoreContext';
-import Header from '@/components/Header';
-import Hero from '@/components/Hero';
-import FeaturedCard from '@/components/FeaturedCard';
-import MenuTeaser from '@/components/MenuTeaser';
-import Story from '@/components/Story';
-import MenuSection from '@/components/MenuSection';
-import Visit from '@/components/Visit';
-import CtaStrip from '@/components/CtaStrip';
-import Footer from '@/components/Footer';
-import ProductPage from '@/components/ProductPage';
-import BundleModal from '@/components/BundleModal';
-import DrinkUpsellModal from '@/components/DrinkUpsellModal';
-import CheckoutModal from '@/components/CheckoutModal';
-import ConfirmModal from '@/components/ConfirmModal';
-import OrderBar from '@/components/OrderBar';
+export const dynamic = 'force-dynamic';
 
-export default function Home() {
-  return (
-    <StoreProvider>
-      <div id="top" />
-      <Header />
-      <Hero />
-      <FeaturedCard />
-      <MenuTeaser />
-      <Story />
-      <MenuSection />
-      <Visit />
-      <CtaStrip />
-      <Footer />
+export default async function Home() {
+  const { env } = await getCloudflareContext({ async: true });
+  const initialData = await loadMenuData(env);
 
-      <ProductPage />
-      <BundleModal />
-      <DrinkUpsellModal />
-      <CheckoutModal />
-      <ConfirmModal />
-      <OrderBar />
-    </StoreProvider>
-  );
+  return <HomePageClient initialData={initialData} />;
 }
