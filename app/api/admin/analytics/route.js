@@ -1,6 +1,6 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { json } from '@/lib/api-helpers';
-import { requireAdmin } from '@/lib/adminAuth';
+import { requireRole } from '@/lib/adminAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,9 +48,11 @@ async function loadSummary(env) {
   };
 }
 
+// Powers the Overview/Dashboard KPI tiles and the Reports tab — both
+// Manager and Owner territory; Kitchen only ever sees the Orders board.
 export async function GET(request) {
   const { env } = await getCloudflareContext({ async: true });
-  const denied = await requireAdmin(request, env);
+  const denied = await requireRole(request, env, ['manager', 'owner']);
   if (denied) return denied;
 
   const [summary, revenueByDayRows, bestSellersRows, todayBestSellersRows, categoryRows, statusRows, hourlyRows] = await Promise.all([
