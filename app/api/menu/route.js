@@ -46,6 +46,11 @@ export async function GET(request) {
 
   const settings = {};
   for (const row of settingsRows.results) {
+    // Keys prefixed "secret_" (access tokens etc.) never reach the
+    // client — /api/menu is public, so anything here is effectively
+    // world-readable. See app/api/admin/settings/route.js for where
+    // secret_* keys are actually used (server-side only).
+    if (row.key.startsWith('secret_')) continue;
     settings[row.key] = row.value;
   }
 
