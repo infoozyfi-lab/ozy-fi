@@ -23,6 +23,23 @@ export async function PUT(request, { params }) {
     return json({ error: 'Nothing to update' }, 400);
   }
 
+  // Products only: an offer price is meant to be a discount off the
+  // regular price — never higher, since that would be confusing (or
+  // worse, a discount that isn't one). Check against the FINAL values
+  // (this update merged with whatever wasn't touched), not just what's
+  // in this specific request, since a bulk price-only edit (see
+  // components/admin/ResourceManager.js's bulk actions) can lower
+  // `price` below an existing `offer_price` without ever touching
+  // `offer_price` in the same request.
+  if (params.table === 'products' && ('price' in body || 'offer_price' in body)) {
+    const current = await env.DB.prepare('SELECT price, offer_price FROM products WHERE id = ?').bind(params.id).first();
+    const finalPrice = 'price' in body ? Number(body.price) : Number(current?.price);
+    const finalOfferPrice = 'offer_price' in body ? body.offer_price : current?.offer_price;
+    if (finalOfferPrice !== null && finalOfferPrice !== undefined && finalOfferPrice !== '' && Number(finalOfferPrice) > finalPrice) {
+      return json({ error: 'Offer price cannot be higher than the regular price.' }, 400);
+    }
+  }
+
   const setClause = cols.map((c) => `${c} = ?`).join(', ');
   const values = cols.map((c) => body[c]);
 
