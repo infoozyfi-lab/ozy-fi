@@ -27,7 +27,7 @@ function StepIndicator({ step, stepLabels }) {
               </div>
               <span className={`checkout-step-label${isActive ? ' active' : ''}`}>{label}</span>
             </div>
-            {n < STEP_LABELS.length && (
+            {n < stepLabels.length && (
               <div className={`checkout-step-line${step > n ? ' done' : ''}`} />
             )}
           </div>
