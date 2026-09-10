@@ -15,6 +15,11 @@ function detectLocale() {
   return window.location.pathname.startsWith('/en') ? 'en' : 'fi';
 }
 
+// See app/(site)/[locale]/error.js's identical constant for why this
+// exists — bump it whenever this file changes so a screenshot proves
+// which version is actually live.
+const DEBUG_BUILD = 'DEBUG-BUILD-3 (not-found.js relocated + version banner) — 2026-09-10';
+
 export default function GlobalError({ error, reset }) {
   const [locale, setLocale] = useState('fi');
 
@@ -38,6 +43,9 @@ export default function GlobalError({ error, reset }) {
             fontFamily: 'sans-serif',
           }}
         >
+          <div style={{ background: '#FFD400', color: '#000', fontWeight: 700, fontSize: 13, padding: '8px 12px', borderRadius: 6, marginBottom: 16 }}>
+            {DEBUG_BUILD}
+          </div>
           <p style={{ fontSize: '1.4rem', fontWeight: 700, margin: '0 0 10px' }}>{t.heading}</p>
           <p style={{ color: '#B8A99C', margin: '0 0 24px', maxWidth: 340 }}>
             {t.body}
