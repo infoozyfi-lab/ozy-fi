@@ -466,6 +466,14 @@ export function StoreProvider({ children, initialData }) {
       customer,
       total: cartTotal,
       couponCode: couponCode || undefined,
+      // Whether this customer consented to marketing/analytics cookies
+      // (see components/CookieBanner.js) — read fresh at order time
+      // rather than trusted from anywhere else, so the server knows
+      // whether it's allowed to fire ad-platform conversion events for
+      // this specific order. Defaults to false (no consent) if the
+      // banner hasn't been shown/answered yet for some reason, which is
+      // the safe default.
+      marketingConsent: typeof window !== 'undefined' && localStorage.getItem('ozy_cookie_consent') === 'all',
       items: cart.map((line) => ({
         productId: line.productId || null,
         name: line.name,
