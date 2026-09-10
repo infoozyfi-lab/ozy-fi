@@ -114,6 +114,13 @@ CREATE TABLE orders (
   -- other query (analytics, refund tracking, /track) already reads.
   coupon_code        TEXT,
   discount_amount    REAL NOT NULL DEFAULT 0,
+  -- Whether this customer had chosen "Accept all" (not "Necessary
+  -- only") in the cookie banner at the moment they checked out — see
+  -- context/StoreContext.js's placeOrder(). Server-side ad-platform
+  -- tracking (lib/server-tracking.js) checks this before firing, both
+  -- at purchase time and again at refund/cancel time, so consent is
+  -- respected consistently rather than only at the initial moment.
+  marketing_consent  INTEGER NOT NULL DEFAULT 0,
   created_at         TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
