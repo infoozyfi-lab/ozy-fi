@@ -3,6 +3,12 @@
 import { useEffect } from 'react';
 import { useTranslations, useLocalePath } from '@/lib/i18n';
 
+// Bumped every time this file changes, so a screenshot immediately shows
+// whether the currently-deployed code is actually this version or an
+// older/stale one — see the DEBUG_BUILD banner below. Change this string
+// whenever you edit this file for a diagnostic round.
+const DEBUG_BUILD = 'DEBUG-BUILD-3 (not-found.js relocated + version banner) — 2026-09-10';
+
 // Bug-fix (bilingual-site crash, Sept 2026): this file did NOT exist
 // before — there was no error.js anywhere under app/(site)/[locale]/, so
 // ANY thrown error, anywhere in ANY page's component tree (a bad D1 call,
@@ -39,6 +45,16 @@ export default function LocaleError({ error, reset }) {
         justifyContent: 'center', padding: 24, textAlign: 'center',
       }}
     >
+      {/* Unmissable version banner — deliberately the FIRST thing on the
+          page, above the normal error text, so it's visible even without
+          scrolling. If a screenshot of this page does NOT show this
+          banner at all, the code actually running is older than this
+          file (a stale build, wrong branch, or a cache) — that's
+          diagnostic information on its own. Remove together with the
+          debug block below once the bug is confirmed fixed. */}
+      <div style={{ background: '#FFD400', color: '#000', fontWeight: 700, fontSize: 13, padding: '8px 12px', borderRadius: 6, marginBottom: 16 }}>
+        {DEBUG_BUILD}
+      </div>
       <p style={{ fontSize: '1.4rem', fontWeight: 700, margin: '0 0 10px' }}>{t.error.heading}</p>
       <p style={{ color: '#6b6b6b', margin: '0 0 24px', maxWidth: 340 }}>{t.error.body}</p>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
