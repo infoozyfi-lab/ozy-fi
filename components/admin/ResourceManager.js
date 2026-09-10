@@ -106,7 +106,7 @@ function formToBody(form, fields) {
 // phase 5b — see jsonHeaders below), so it's dropped rather than kept as
 // a no-op prop. If you're looking for auth, the httpOnly admin cookie is
 // what every fetch() below actually relies on.
-export default function ResourceManager({ table, title, fields, displayCols, onChanged }) {
+export default function ResourceManager({ table, title, fields, displayCols, onChanged, parentFilter }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -150,7 +150,13 @@ export default function ResourceManager({ table, title, fields, displayCols, onC
   }, [table]);
 
   const startCreate = () => {
-    setForm(emptyForm(fields));
+    const empty = emptyForm(fields);
+    // Pre-fill the parent reference (e.g. group_id) when this manager
+    // was opened by drilling into a specific option group — one less
+    // field the admin has to remember to set correctly by hand, and it
+    // can't accidentally end up in the wrong group.
+    if (parentFilter) empty[parentFilter.field] = parentFilter.value;
+    setForm(empty);
     setEditingId('new');
   };
 
@@ -368,7 +374,11 @@ export default function ResourceManager({ table, title, fields, displayCols, onC
   };
 
   const cols = displayCols || fields.map((f) => f.key).slice(0, 4);
-  const visibleRows = categoryField && categoryFilter !== 'all' ? rows.filter((r) => r.category_id === categoryFilter) : rows;
+  const visibleRows = parentFilter
+    ? rows.filter((r) => r[parentFilter.field] === parentFilter.value)
+    : categoryField && categoryFilter !== 'all'
+      ? rows.filter((r) => r.category_id === categoryFilter)
+      : rows;
 
   return (
     <div style={box}>
