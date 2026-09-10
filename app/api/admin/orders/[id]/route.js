@@ -81,7 +81,14 @@ export async function PATCH(request, { params }) {
   // reports and campaign optimization don't count it — see the "Refund
   // tracking" note in the roadmap for why this can only be done
   // server-side. Safely does nothing until ad-account secrets exist.
-  if (body.status === 'cancelled' && order) {
+  // Gated on the SAME consent choice stored on the order at checkout
+  // time (order.marketing_consent) — if the customer hadn't consented
+  // to marketing/analytics cookies, their order was never sent to these
+  // platforms in the first place, so there's nothing to "un-send" here
+  // either; firing a refund event for an order that was never tracked
+  // would be meaningless (and would itself be a new, separate send of
+  // their data without consent).
+  if (body.status === 'cancelled' && order && order.marketing_consent) {
     ctx.waitUntil(
       trackRefundServerSide(
         env,
