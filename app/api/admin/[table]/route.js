@@ -42,6 +42,14 @@ export async function POST(request, { params }) {
     return json({ error: 'id (or name/label) required' }, 400);
   }
 
+  // Same rule as the PUT route (app/api/admin/[table]/[id]/route.js) —
+  // an offer price is a discount off the regular price, never higher.
+  if (params.table === 'products' && body.offer_price !== null && body.offer_price !== undefined && body.offer_price !== '') {
+    if (Number(body.offer_price) > Number(body.price || 0)) {
+      return json({ error: 'Offer price cannot be higher than the regular price.' }, 400);
+    }
+  }
+
   const cols = table.cols.filter((c) => c in body);
   const placeholders = cols.map(() => '?').join(', ');
   const values = cols.map((c) => body[c]);
