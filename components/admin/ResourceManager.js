@@ -352,18 +352,48 @@ export default function ResourceManager({ table, title, fields, displayCols, onC
         next = Math.max(0, Math.round(next * 100) / 100);
         return { id: r.id, price: next };
       });
-      await Promise.all(
-        updates.map((u) =>
-          fetch(`/api/admin/${table}/${encodeURIComponent(u.id)}`, {
-            method: 'PUT', headers: jsonHeaders, body: JSON.stringify({ price: u.price }),
-          })
-        )
+
+      // Each item is checked individually server-side (e.g. products:
+      // an offer price can't end up higher than the new regular price —
+      // see app/api/admin/[table]/[id]/route.js). A bulk price DROP
+      // can trigger this for any item whose existing offer price is now
+      // higher than its new price, so this can't just assume every
+      // request succeeded — each response is checked, and only the
+      // ones that actually saved get reflected in the UI.
+      const results = await Promise.all(
+        updates.map(async (u) => {
+          try {
+            const res = await fetch(`/api/admin/${table}/${encodeURIComponent(u.id)}`, {
+              method: 'PUT', headers: jsonHeaders, body: JSON.stringify({ price: u.price }),
+            });
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              return { ...u, ok: false, error: data.error };
+            }
+            return { ...u, ok: true };
+          } catch {
+            return { ...u, ok: false };
+          }
+        })
       );
+
+      const succeeded = results.filter((r) => r.ok);
+      const failed = results.filter((r) => !r.ok);
+
       setRows((rs) => rs.map((r) => {
-        const u = updates.find((x) => x.id === r.id);
+        const u = succeeded.find((x) => x.id === r.id);
         return u ? { ...r, price: u.price } : r;
       }));
-      setBulkMsg(`Updated the price on ${updates.length} item${updates.length === 1 ? '' : 's'}.`);
+
+      if (failed.length === 0) {
+        setBulkMsg(`Updated the price on ${succeeded.length} item${succeeded.length === 1 ? '' : 's'}.`);
+      } else {
+        const reason = failed[0].error ? ` (${failed[0].error})` : '';
+        setBulkMsg(
+          `Updated ${succeeded.length} item${succeeded.length === 1 ? '' : 's'}. `
+          + `${failed.length} skipped${reason} — e.g. "${failed[0].id}". Check those individually.`
+        );
+      }
       setBulkPriceValue('');
       if (onChanged) onChanged();
     } catch {
