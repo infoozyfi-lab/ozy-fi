@@ -117,10 +117,10 @@ export async function POST(request) {
 
   const insertOrder = await env.DB.prepare(
     `INSERT INTO orders
-      (order_num, customer_name, address, email, phone, notes, total, status, payment_method, coupon_code, discount_amount)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'received', 'cod', ?, ?)`
+      (order_num, customer_name, address, email, phone, notes, total, status, payment_method, coupon_code, discount_amount, marketing_consent)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'received', 'cod', ?, ?, ?)`
   )
-    .bind(orderNum, customer.name, customer.address, email, customer.phone, customer.notes || '', finalTotal, appliedCouponCode, discountAmount)
+    .bind(orderNum, customer.name, customer.address, email, customer.phone, customer.notes || '', finalTotal, appliedCouponCode, discountAmount, body.marketingConsent ? 1 : 0)
     .run();
 
   const orderId = insertOrder.meta.last_row_id;
@@ -158,13 +158,20 @@ export async function POST(request) {
   // Safely does nothing until the matching ad-account secrets exist.
   // Uses the final (post-discount) total — what actually gets paid is
   // what ad platforms should count as the conversion value.
-  ctx.waitUntil(
-    trackPurchaseServerSide(
-      env,
-      { orderNum, total: finalTotal, email, phone: customer.phone, items },
-      request
-    )
-  );
+  //
+  // Gated on marketing_consent — a customer who chose "Necessary only"
+  // in the cookie banner should not have their order sent to Meta/
+  // TikTok/GA4 server-side either; the earlier version of this code
+  // fired regardless of that choice, which was a real compliance gap.
+  if (body.marketingConsent) {
+    ctx.waitUntil(
+      trackPurchaseServerSide(
+        env,
+        { orderNum, total: finalTotal, email, phone: customer.phone, items },
+        request
+      )
+    );
+  }
 
   return json({ orderNum, id: orderId, status: 'received', total: finalTotal, discountAmount }, 201);
 }
