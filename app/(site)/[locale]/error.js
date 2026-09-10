@@ -56,6 +56,35 @@ export default function LocaleError({ error, reset }) {
           {t.error.goHome}
         </a>
       </div>
+
+      {/* TEMPORARY DEBUG BLOCK (added Sept 2026) — deliberately shown in
+          production, not just dev, because `wrangler tail` (OAuth login
+          times out on this mobile-only Codespaces setup) and the
+          Cloudflare dashboard's live Logs stream have both failed to
+          surface the real error, twice. Screenshotting this block is the
+          fallback way to get the actual message/digest/stack off the
+          screen with no terminal or dashboard needed.
+          NOTE: if this error originated during server-side rendering,
+          Next.js may replace `error.message` with a generic production
+          message and only keep `error.digest` real (this is intentional
+          Next.js behavior — it redacts server error details by default so
+          they don't leak to visitors) — the digest is still a useful
+          clue even then. A client-side-only error (thrown after
+          hydration) will show its full real message here.
+          REMOVE THIS BLOCK once the underlying bug is found, fixed, and
+          confirmed stable on a real deploy — it should not stay visible
+          to real customers once ssr-migration goes live as production. */}
+      <pre
+        style={{
+          marginTop: 20, padding: 12, background: '#f5f5f5', color: '#900', fontSize: 12,
+          maxWidth: '90vw', overflow: 'auto', textAlign: 'left', whiteSpace: 'pre-wrap',
+          border: '1px solid #d99', borderRadius: 6,
+        }}
+      >
+        {'message: '}{error?.message || '(none)'}
+        {error?.digest ? `\ndigest: ${error.digest}` : '\ndigest: (none)'}
+        {error?.stack ? `\n\nstack:\n${error.stack}` : ''}
+      </pre>
     </div>
   );
 }

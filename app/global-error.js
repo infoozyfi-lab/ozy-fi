@@ -57,6 +57,30 @@ export default function GlobalError({ error, reset }) {
               {t.goHome}
             </a>
           </div>
+
+          {/* TEMPORARY DEBUG BLOCK (added Sept 2026) — same reasoning as
+              app/(site)/[locale]/error.js's identical block: wrangler
+              tail and the Cloudflare dashboard Logs stream have both
+              failed to surface the real error on this mobile-only setup,
+              twice. If something is still escaping all the way to THIS
+              boundary (rather than being caught by the scoped
+              app/(site)/[locale]/error.js), seeing it here on-screen
+              means an error is happening somewhere even error.js can't
+              catch (e.g. in app/(site)/[locale]/layout.js itself, or in
+              this global-error.js's own rendering).
+              REMOVE THIS BLOCK once the underlying bug is found, fixed,
+              and confirmed stable on a real deploy. */}
+          <pre
+            style={{
+              marginTop: 20, padding: 12, background: '#2A1C12', color: '#FFB199', fontSize: 12,
+              maxWidth: '90vw', overflow: 'auto', textAlign: 'left', whiteSpace: 'pre-wrap',
+              border: '1px solid #5A3B28', borderRadius: 6,
+            }}
+          >
+            {'message: '}{error?.message || '(none)'}
+            {error?.digest ? `\ndigest: ${error.digest}` : '\ndigest: (none)'}
+            {error?.stack ? `\n\nstack:\n${error.stack}` : ''}
+          </pre>
         </div>
       </body>
     </html>
