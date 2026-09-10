@@ -1190,6 +1190,123 @@ function TrackingAnalyticsSettings({ token }) {
 
 /* ---------------- Menu & Pricing (Categories/Products/Options/Add-ons) ---------------- */
 
+/* ---------------- Options & Toppings — grouped landing page ---------------- */
+// Previously this screen just stacked two flat tables (all option groups,
+// then every single option from every group mixed together in one long
+// list) — confusing once there were more than a couple of groups, since
+// Base/Sauce/Cheese/Topping/Dip choices all ran together. This groups
+// them the same way Product Management does: pick a group first (as a
+// card), then see only that group's choices.
+// Maps each option group's `kind` to the exact heading text a customer
+// actually sees on the product customization page (components/
+// ProductPage.js) — so the admin card for, say, the "toppings" group
+// shows the same "Finish — tap to add toppings" wording the customer
+// sees, instead of only the internal group name. Base/Sauce/Cheese
+// don't have their own on-page heading (they show as a collapsed row
+// that just displays whichever choice is currently selected), so those
+// three get a short plain description instead of a quoted heading.
+const GROUP_KIND_CUSTOMER_VIEW = {
+  base: 'Shown on the site as: a "Bottom" row — tap to change the crust',
+  sauce: 'Shown on the site as: a "Sauce" row — tap to change the sauce',
+  cheese: 'Shown on the site as: a "Cheese" row — tap to change the cheese',
+  sauce_stripe: 'Shown on the site as: "Finish with sauce stripes"',
+  dip: 'Shown on the site as: "Dip the edges"',
+  topping: 'Shown on the site as: "Finish — tap to add toppings"',
+  filling: 'Shown on the site as: "Fillings"',
+};
+
+function OptionsManager({ optionGroupFields, optionFields, onChanged }) {
+  const [groups, setGroups] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState(null); // null = show the group picker
+
+  const loadGroups = () => {
+    setLoading(true);
+    setError('');
+    fetch('/api/admin/option_groups')
+      .then((res) => res.json())
+      .then((data) => setGroups(Array.isArray(data) ? data : []))
+      .catch(() => setError('Could not load option groups.'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(loadGroups, []);
+
+  // Bump both this screen's own group list (in case a group was renamed/
+  // added/removed) and the parent Menu & Pricing screen's shared reload
+  // trigger (other tabs, like Products, also read option groups).
+  const handleChanged = () => {
+    loadGroups();
+    if (onChanged) onChanged();
+  };
+
+  if (selectedGroup) {
+    return (
+      <div>
+        <button type="button" style={{ ...btn, marginBottom: 16 }} onClick={() => setSelectedGroup(null)}>
+          ← Back to Options & Toppings
+        </button>
+        <ResourceManager
+          table="options"
+          title={`${selectedGroup.title} — choices`}
+          fields={optionFields}
+          displayCols={['id', 'label', 'label_fi', 'price_delta']}
+          onChanged={handleChanged}
+          parentFilter={{ field: 'group_id', value: selectedGroup.id }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h2 style={{ marginTop: 0, marginBottom: 4 }}>Options & Toppings</h2>
+      <p style={{ color: 'var(--muted)', fontSize: 13.5, marginTop: 0, marginBottom: 16 }}>
+        Pick a group below to see and edit just its choices (e.g. only the toppings, not the sauces mixed in too).
+      </p>
+
+      {loading && <p>Loading…</p>}
+      {error && <p style={{ color: '#FF8A75' }}>{error}</p>}
+
+      {!loading && !error && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 28 }}>
+          {groups.map((g) => (
+            <button
+              key={g.id}
+              type="button"
+              onClick={() => setSelectedGroup(g)}
+              style={{
+                textAlign: 'left', background: 'var(--bg-card)', border: '1px solid var(--line)', borderRadius: 12,
+                padding: 16, cursor: 'pointer', color: 'var(--cream)',
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{g.title}</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                {GROUP_KIND_CUSTOMER_VIEW[g.kind] || g.kind}
+              </div>
+            </button>
+          ))}
+          {groups.length === 0 && <p style={{ color: 'var(--muted)' }}>No option groups yet — add one below.</p>}
+        </div>
+      )}
+
+      <h3 style={{ marginBottom: 8 }}>Option groups</h3>
+      <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0, marginBottom: 12 }}>
+        The categories themselves (Base, Sauce, Cheese, Toppings, Fillings…) — add or rename a group here, then click its card above to manage its individual choices.
+      </p>
+      <ResourceManager
+        table="option_groups"
+        title="Option Groups"
+        fields={optionGroupFields}
+        displayCols={['id', 'title', 'kind', 'sort_order']}
+        onChanged={handleChanged}
+      />
+    </div>
+  );
+}
+
+
 function MenuTabs({ token }) {
   const [categories, setCategories] = useState([]);
   const [optionGroups, setOptionGroups] = useState([]);
@@ -1317,13 +1434,7 @@ function MenuTabs({ token }) {
         <ResourceManager table="products" title="Products" fields={productFields} displayCols={['id', 'category_id', 'name', 'price', 'active']} onChanged={bump} />
       )}
       {tab === 'options' && (
-        <>
-          <div style={{ ...box, marginBottom: 16, padding: 16 }}>
-            <strong>Option groups</strong> (Base, Sauce, Cheese, Toppings, Fillings…)
-          </div>
-          <ResourceManager table="option_groups" title="Option Groups" fields={optionGroupFields} displayCols={['id', 'title', 'kind', 'sort_order']} onChanged={bump} />
-          <ResourceManager table="options" title="Options (individual choices within a group)" fields={optionFields} displayCols={['id', 'group_id', 'label', 'price_delta']} onChanged={bump} />
-        </>
+        <OptionsManager optionGroupFields={optionGroupFields} optionFields={optionFields} onChanged={bump} />
       )}
       {tab === 'addons' && (
         <ResourceManager table="addons" title="Add-ons (drinks, dips, snacks)" fields={addonFields} displayCols={['id', 'type', 'name', 'price', 'active']} onChanged={bump} />
