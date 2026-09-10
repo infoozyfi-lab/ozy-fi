@@ -37,8 +37,25 @@ export function generateMetadata({ params }) {
 }
 
 export default async function Home({ params }) {
-  const { env } = await getCloudflareContext({ async: true });
-  const initialData = await loadMenuData(env);
+  // Bug-fix (bilingual-site crash, Sept 2026): this D1/Cloudflare-context
+  // call used to be unguarded. It's the one call in this render path that
+  // talks to live infrastructure rather than local logic, and it now runs
+  // right after middleware.js (new this deploy) touches every request —
+  // if that combination ever misbehaves post-deploy in a way local
+  // `next dev` can't reproduce, this used to throw uncaught and take down
+  // the whole page (see app/(site)/[locale]/error.js's comment for what
+  // "uncaught" meant before this fix existed). Falling back to
+  // initialData=null instead means the page still renders — the customer
+  // just gets the client-side /api/menu fetch (context/StoreContext.js
+  // already handles initialData being absent) instead of pre-seeded SSR
+  // content for that one request.
+  let initialData = null;
+  try {
+    const { env } = await getCloudflareContext({ async: true });
+    initialData = await loadMenuData(env);
+  } catch (err) {
+    console.error(`[/${params?.locale}] Home: failed to load SSR menu data:`, err);
+  }
 
   return <HomePageClient initialData={initialData} />;
 }

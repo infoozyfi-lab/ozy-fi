@@ -47,14 +47,27 @@ export async function generateMetadata({ params }) {
 
 export default async function ProductDetailPage({ params }) {
   const { locale, id } = params;
+  // Not wrapped in try/catch — see the identical note in
+  // app/(site)/[locale]/menu/[category]/page.js: a real D1 failure here
+  // must not be mistaken for "this product doesn't exist" and silently
+  // turned into a 404. It now propagates to
+  // app/(site)/[locale]/error.js instead (bug-fix, bilingual-site crash,
+  // Sept 2026).
   const product = await getProduct(id);
 
   if (!product) {
     notFound();
   }
 
-  const { env } = await getCloudflareContext({ async: true });
-  const initialData = await loadMenuData(env);
+  // Same defensive fallback as the other page.js files for this second,
+  // non-essential D1 call — see app/(site)/[locale]/page.js.
+  let initialData = null;
+  try {
+    const { env } = await getCloudflareContext({ async: true });
+    initialData = await loadMenuData(env);
+  } catch (err) {
+    console.error(`[/${locale}/product/${id}] failed to load SSR menu data:`, err);
+  }
 
   const name = resolveText(product.name, product.name_fi, locale);
   const description = resolveText(product.description, product.description_fi, locale);

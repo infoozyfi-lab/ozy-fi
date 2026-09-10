@@ -25,9 +25,16 @@ export function generateMetadata({ params }) {
   };
 }
 
-export default async function MenuPage() {
-  const { env } = await getCloudflareContext({ async: true });
-  const initialData = await loadMenuData(env);
+export default async function MenuPage({ params }) {
+  // See app/(site)/[locale]/page.js for why this is wrapped — same fix,
+  // same reasoning (bug-fix, bilingual-site crash, Sept 2026).
+  let initialData = null;
+  try {
+    const { env } = await getCloudflareContext({ async: true });
+    initialData = await loadMenuData(env);
+  } catch (err) {
+    console.error(`[/${params?.locale}/menu] failed to load SSR menu data:`, err);
+  }
 
   return <MenuPageClient initialData={initialData} />;
 }
