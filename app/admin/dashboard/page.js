@@ -660,6 +660,10 @@ const SETTINGS_FIELDS = [
   { key: 'address', label: 'Address' },
   { key: 'minimum_order', label: 'Minimum order (€)', number: true },
   { key: 'delivery_fee', label: 'Delivery fee (€)', number: true },
+  {
+    key: 'size_large_upcharge', label: 'Large size upcharge (€) — added to any pizza when a customer picks Large instead of Medium',
+    number: true,
+  },
 ];
 
 // Phase 7.7 — per-day opening hours, replacing the old single free-text
