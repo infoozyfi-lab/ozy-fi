@@ -23,7 +23,7 @@ function money(n) {
 
 function BottomRow({ label, options, current, onChange, t }) {
   const [open, setOpen] = useState(false);
-  const selected = options.find((o) => o.id === current);
+  const selected = options.find((o) => o.id === current) || options[0];
   return (
     <div className="pp-bottom-row">
       <button type="button" className="pp-bottom-row-head" onClick={() => setOpen((v) => !v)}>
