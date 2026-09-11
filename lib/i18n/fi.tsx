@@ -30,6 +30,7 @@ const fi = {
     findUs: 'Löydä meidät',
     contactHeading: 'Yhteystiedot',
     privacyPolicy: 'Tietosuojaseloste',
+    faq: 'UKK',
     terms: 'Käyttöehdot',
     rights: (year: number) => `© ${year} ozy.fi. Kaikki oikeudet pidätetään.`,
     demoNotice: 'Demosivusto.',
@@ -347,6 +348,46 @@ const fi = {
     body: 'Sivun lataamisessa tapahtui virhe. Yritä uudelleen — jos ongelma jatkuu, palaa etusivulle.',
     tryAgain: 'Yritä uudelleen',
     goHome: 'Etusivulle',
+  },
+
+  faq: {
+    metaTitle: 'UKK — Toimitus, Maksutavat ja Tilaaminen | ozy.fi',
+    title: 'Usein kysytyt kysymykset',
+    intro: 'Nopeita vastauksia toimituksesta, maksutavoista ja tilaamisesta ozy.fi:ssä Helsingissä. Etkö löytänyt etsimääsi? Ota suoraan yhteyttä.',
+    items: [
+      {
+        q: 'Mille alueille toimitatte?',
+        a: 'Toimitamme tiettyihin Helsingin postinumeroihin. Syötä postinumerosi kassalla, niin näet heti kuuluuko osoitteesi toimitusalueeseemme.',
+      },
+      {
+        q: 'Paljonko toimitus maksaa?',
+        a: 'Toimitusmaksu näkyy selkeästi ostoskorissa ennen tilauksen vahvistamista — ei yllätyskuluja jälkikäteen.',
+      },
+      {
+        q: 'Onko tilauksella minimisumma?',
+        a: 'Kyllä, kotiinkuljetuksella on minimitilaussumma. Se näkyy ostoskorissasi, samoin kuin kuinka paljon sinun tarvitsee vielä lisätä sen täyttämiseksi.',
+      },
+      {
+        q: 'Miten voin maksaa?',
+        a: 'Käteisellä kuljettajalle toimituksen yhteydessä. Verkkomaksu kortilla on tulossa pian.',
+      },
+      {
+        q: 'Kuinka kauan toimitus kestää?',
+        a: 'Useimmat tilaukset saapuvat 30-45 minuutissa, riippuen ruuhkasta ja etäisyydestäsi ravintolaan. Näet arvioidun toimitusajan tilausta tehdessäsi.',
+      },
+      {
+        q: 'Voinko seurata tilaustani?',
+        a: 'Kyllä — tilauksen tekemisen jälkeen voit seurata sen tilaa seurantasivullamme tilausnumerolla ja puhelinnumerolla.',
+      },
+      {
+        q: 'Voinko muokata täytteitä tai kysyä allergioista?',
+        a: 'Kyllä, jokaisen pizzan, kebabin ja burgerin voi muokata valitsemallasi pohjalla, kastikkeella, juustolla ja täytteillä tilatessasi. Erityisistä allergiakysymyksistä ota suoraan yhteyttä ennen tilaamista.',
+      },
+      {
+        q: 'Voinko muuttaa tai peruuttaa tilaukseni sen tekemisen jälkeen?',
+        a: 'Soita meille mahdollisimman pian — voimme usein tehdä muutoksia, jos tilauksesi valmistus ei ole vielä alkanut, mutta emme voi taata sitä valmistuksen jo alettua.',
+      },
+    ],
   },
 
   notFound: {

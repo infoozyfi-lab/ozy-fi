@@ -28,6 +28,7 @@ const en = {
     findUs: 'Find us',
     contactHeading: 'Contact',
     privacyPolicy: 'Privacy Policy',
+    faq: 'FAQ',
     terms: 'Terms & Conditions',
     rights: (year: number) => `© ${year} ozy.fi. All rights reserved.`,
     demoNotice: 'Demo website.',
@@ -344,6 +345,46 @@ const en = {
     body: 'That page hit a snag. Please try again — if it keeps happening, head back to the homepage.',
     tryAgain: 'Try again',
     goHome: 'Go to homepage',
+  },
+
+  faq: {
+    metaTitle: 'FAQ — Delivery, Payment & Ordering | ozy.fi',
+    title: 'Frequently asked questions',
+    intro: 'Quick answers about delivery, payment, and ordering from ozy.fi in Helsinki. Can\'t find what you\'re looking for? Contact us directly.',
+    items: [
+      {
+        q: 'Which areas do you deliver to?',
+        a: 'We deliver to a set list of Helsinki postal codes. Enter your postal code at checkout and we\'ll let you know right away if your address is within our delivery area.',
+      },
+      {
+        q: 'How much is delivery?',
+        a: 'The delivery fee is shown clearly in your cart before you confirm the order — no surprise charges added afterward.',
+      },
+      {
+        q: 'Is there a minimum order amount?',
+        a: 'Yes, a minimum order amount applies for delivery. It\'s shown in your cart, along with how much more you\'d need to add to reach it, if anything.',
+      },
+      {
+        q: 'How can I pay?',
+        a: 'Cash on delivery — you pay the driver when your order arrives. Online card payment is coming soon.',
+      },
+      {
+        q: 'How long does delivery take?',
+        a: 'Most orders arrive within 30-45 minutes, depending on how busy we are and your distance from the restaurant. You\'ll see an estimated time when you place your order.',
+      },
+      {
+        q: 'Can I track my order?',
+        a: 'Yes — after ordering, use our order tracking page with your order number and phone number to see its current status.',
+      },
+      {
+        q: 'Can I customize toppings, or ask about allergies?',
+        a: 'Yes, every pizza, kebab, and burger can be customized with your choice of base, sauce, cheese, and toppings when you order. For specific allergy questions, please contact us directly before ordering.',
+      },
+      {
+        q: 'Can I change or cancel my order after placing it?',
+        a: 'Please call us as soon as possible — we can often make changes if your order hasn\'t started preparing yet, but we can\'t guarantee it once the kitchen has started.',
+      },
+    ],
   },
 
   notFound: {
