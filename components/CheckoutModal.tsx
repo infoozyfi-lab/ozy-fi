@@ -5,11 +5,12 @@ import { useStore } from '@/context/StoreContext';
 import { useTranslations } from '@/lib/i18n';
 import type { Addon, CartLine, Customer } from '@/lib/types';
 
-const EMPTY: Customer = { name: '', address: '', email: '', phone: '', notes: '' };
+const EMPTY: Customer = { name: '', address: '', postalCode: '', email: '', phone: '', notes: '' };
 
 interface CustomerErrors {
   name?: string | null;
   address?: string | null;
+  postalCode?: string | null;
   email?: string | null;
   phone?: string | null;
 }
@@ -179,6 +180,9 @@ export default function CheckoutModal() {
     const next: CustomerErrors = {};
     if (!customer.name.trim()) next.name = t.checkout.errorName;
     if (!customer.address.trim()) next.address = t.checkout.errorAddress;
+    if (!/^\d{5}$/.test(customer.postalCode.trim())) {
+      next.postalCode = t.checkout.errorPostalCode;
+    }
     // Email is optional (not legally required for a cash-on-delivery order
     // in Finland) — an empty field passes straight through, but if the
     // customer does type something, it's still format-checked so we don't
@@ -314,6 +318,11 @@ export default function CheckoutModal() {
                 {t.checkout.deliveryAddress}
                 <input type="text" value={customer.address} onChange={onField('address')} placeholder={t.checkout.deliveryAddressPlaceholder} />
                 {errors.address && <span className="field-error">{errors.address}</span>}
+              </label>
+              <label className={errors.postalCode ? 'has-error' : ''}>
+                {t.checkout.postalCode}
+                <input type="text" inputMode="numeric" maxLength={5} value={customer.postalCode} onChange={onField('postalCode')} placeholder={t.checkout.postalCodePlaceholder} />
+                {errors.postalCode && <span className="field-error">{errors.postalCode}</span>}
               </label>
               <label className={errors.email ? 'has-error' : ''}>
                 {t.checkout.emailOptional}

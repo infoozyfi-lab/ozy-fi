@@ -2,6 +2,9 @@ import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { json, makeOrderNum } from '@/lib/api-helpers';
 import { trackPurchaseServerSide } from '@/lib/server-tracking';
 import { validateCoupon, normalizeCouponCode } from '@/lib/coupons';
+import { loadMenuData } from '@/lib/menu-data';
+import { normalizeMenuBlob } from '@/lib/menu-i18n';
+import { verifyCartLine } from '@/lib/pricing';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,11 +14,21 @@ interface OrderItemInput {
   qty: number;
   lineTotal: number;
   details?: string[];
+  // Structured pricing data (money-correctness pass) — see lib/pricing.ts.
+  // Left as `unknown` here (not the real CartLineSelectionData/
+  // CartLineBundleItem[] shape) because this is untrusted request JSON —
+  // lib/pricing.ts's verifyCartLine() is what actually validates its
+  // shape before trusting anything in it, same principle as `lineTotal`
+  // itself never being trusted at face value.
+  selection?: unknown;
+  bundleId?: string;
+  bundleItems?: unknown;
 }
 
 interface OrderCustomerInput {
   name: string;
   address: string;
+  postalCode: string;
   phone: string;
   email?: string;
   notes?: string;
@@ -37,8 +50,17 @@ export async function POST(request: Request) {
     return json({ error: 'Invalid order payload' }, 400);
   }
 
-  const closedSetting = await env.DB.prepare("SELECT value FROM admin_settings WHERE key = 'store_closed'").first();
-  if (closedSetting && closedSetting.value === '1') {
+  // One D1 round trip for everything price verification below needs
+  // (products/addons/option deltas/bundles/settings) — the exact same
+  // data source + shaping (lib/menu-data.ts + lib/menu-i18n.ts) that
+  // /api/menu and the SSR pages already use, so "what should this cost"
+  // is computed identically everywhere rather than re-derived separately
+  // here. `store_closed` also lives in this same settings blob, so the
+  // separate single-key query this replaced is no longer needed either.
+  const rawMenu = await loadMenuData(env);
+  const menu = normalizeMenuBlob(rawMenu, 'en'); // locale only affects display labels, never prices/ids — irrelevant here.
+
+  if (menu.storeClosed) {
     return json({ error: "We're temporarily closed and not taking orders right now." }, 403);
   }
 
@@ -47,45 +69,44 @@ export async function POST(request: Request) {
   // Email removed from this check — it's optional at checkout now (not
   // legally required in Finland for a cash-on-delivery order). Phone
   // remains required and is the primary contact/tracking method either
-  // way. NOTE: the brief for this change assumed a `postalCode` field was
-  // already required here too ("keep the... postalCode requirement that
-  // was just added") — it isn't present anywhere in this codebase (no
-  // `postalCode` in CheckoutModal.js's customer state, no column in
-  // worker/schema.sql). Flagging rather than inventing it — see this
-  // change's summary.
-  if (!customer.name || !customer.address || !customer.phone) {
+  // way. Postal code is required (used for the delivery-zone check
+  // below) — restored here after being found missing during the price-
+  // verification work; see CheckoutModal.tsx for the matching form field.
+  if (!customer.name || !customer.address || !customer.postalCode || !customer.phone) {
     return json({ error: 'Missing customer details' }, 400);
   }
 
-  // --- Server-side price/quantity validation ---
-  // The client computes prices (base + toppings + size upcharge) for a
-  // responsive UI, but that number must never be trusted as-is — anyone
-  // can edit the request before it reaches this route. We re-check each
-  // line against the real product/addon price in D1.
+  // Delivery zone check — only enforced if the admin has actually listed
+  // any postal codes/prefixes in Settings. Leaving that field blank (the
+  // default) means no restriction at all, so this never blocks anyone
+  // until the business deliberately turns it on.
   //
-  // Known limitation: for customizable items (toppings, size, sauces),
-  // we only enforce a *floor* — lineTotal can't be below qty × the
-  // product's base price — rather than recomputing the exact expected
-  // total, because topping/size price deltas aren't sent as structured
-  // data in the cart line (only human-readable strings like "Extra
-  // cheese"). This still blocks the obvious attack (setting an item's
-  // price to near-zero) without needing to duplicate the full topping
-  // pricing engine here. Bundle line items (no matching product/addon
-  // row) are checked for sane qty/price shape only — full bundle price
-  // verification is a follow-up.
-  const productIds = [...new Set(items.map((l) => l.productId).filter(Boolean))];
-  const priceByProductId: Record<string, number> = {};
-  if (productIds.length) {
-    const placeholders = productIds.map(() => '?').join(',');
-    const [productRows, addonRows] = await Promise.all([
-      env.DB.prepare(`SELECT id, price FROM products WHERE id IN (${placeholders})`).bind(...productIds).all<{ id: string; price: number }>(),
-      env.DB.prepare(`SELECT id, price FROM addons WHERE id IN (${placeholders})`).bind(...productIds).all<{ id: string; price: number }>(),
-    ]);
-    for (const r of [...productRows.results, ...addonRows.results]) {
-      priceByProductId[r.id] = Number(r.price) || 0;
-    }
+  // Entries can be a full 5-digit postal code (exact match) or a short
+  // 2-3 digit prefix (matches anything starting with it) — e.g. "00"
+  // covers every Helsinki postal code (00100–00990) without having to
+  // list all ~90 of them individually. Reads straight from rawMenu's
+  // settings blob (already fetched above for pricing) rather than a
+  // separate query.
+  const allowedZones = String(rawMenu.settings?.delivery_postal_codes || '')
+    .split(',')
+    .map((z) => z.trim())
+    .filter(Boolean);
+  const customerPostal = String(customer.postalCode).trim();
+  const zoneOk = allowedZones.length === 0 || allowedZones.some((zone) =>
+    zone.length <= 3 ? customerPostal.startsWith(zone) : customerPostal === zone
+  );
+  if (!zoneOk) {
+    return json({ error: "Sorry, we don't currently deliver to that postal code." }, 400);
   }
 
+  // --- Server-side price/quantity validation (money-correctness pass) ---
+  // The client computes prices (base + toppings + size upcharge, or a
+  // bundle's base + each filled slot's customization extra) for a
+  // responsive UI, but that number must never be trusted as-is — anyone
+  // can edit the request before it reaches this route. Every line is now
+  // recomputed EXACTLY (not just floor-checked) from real D1 data via
+  // lib/pricing.ts — see that file's header for the previous floor-only
+  // limitation this replaces, for both customizable products and bundles.
   let recomputedTotal = 0;
   for (const line of items) {
     const qty = Number(line.qty);
@@ -98,9 +119,19 @@ export async function POST(request: Request) {
       return json({ error: 'Invalid item price.' }, 400);
     }
 
-    const basePrice = line.productId ? priceByProductId[line.productId] : undefined;
-    if (basePrice !== undefined && lineTotal < qty * basePrice - 0.01) {
-      return json({ error: 'Item price could not be verified. Please refresh your cart and try again.' }, 400);
+    const result = verifyCartLine(
+      {
+        productId: line.productId,
+        bundleId: line.bundleId,
+        qty,
+        lineTotal,
+        selection: line.selection,
+        bundleItems: line.bundleItems,
+      },
+      menu
+    );
+    if (!result.ok) {
+      return json({ error: result.error || 'Item price could not be verified. Please refresh your cart and try again.' }, 400);
     }
 
     recomputedTotal += lineTotal;

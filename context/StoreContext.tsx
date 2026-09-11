@@ -19,6 +19,8 @@ import type {
   Featured,
   OpeningHours,
   CartLine,
+  CartLineSelectionData,
+  CartLineBundleItem,
   Selection,
   Customer,
   ConfirmedOrder,
@@ -458,6 +460,26 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       if (dipOpt && dipOpt.id !== dipOptions[0]?.id) details.push(dipOpt.label);
     }
 
+    // Structured pricing data (money-correctness pass) — the actual
+    // option/size/filling IDs behind the `details` display strings above,
+    // so POST /api/orders can recompute the exact price from real D1
+    // option deltas instead of trusting `unitPrice`/`lineTotal` as sent.
+    // Only set for a customizable product — a plain (non-toppingsEnabled)
+    // product's price is just its base price, nothing to verify beyond
+    // that, and the server already checks that independently.
+    const selectionData: CartLineSelectionData | undefined = selection.toppingsEnabled
+      ? {
+          size: selection.size,
+          toppingIds: selection.toppings,
+          baseId: selection.base,
+          sauceId: selection.sauce,
+          cheeseId: selection.cheese,
+          fillings: selection.fillings,
+          sauceStripeId: selection.sauceStripe,
+          dipId: selection.dip,
+        }
+      : undefined;
+
     if (selection.bundleSlotIndex != null) {
       // Filling a bundle slot: only the customization *extra* (over the
       // product's base price) adds to the bundle total — the base price
@@ -479,7 +501,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
           ...slot,
           filled: [
             ...slot.filled,
-            { key: `${activeProduct.id}-${Date.now()}`, productId: activeProduct.id, name: activeProduct.name, details, extra },
+            { key: `${activeProduct.id}-${Date.now()}`, productId: activeProduct.id, name: activeProduct.name, details, extra, selection: selectionData },
           ],
         };
         return next;
@@ -500,6 +522,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         qty: selection.qty,
         unitPrice,
         lineTotal,
+        selection: selectionData,
       },
     ]);
     trackAddToCart({ productId: activeProduct.id, name: activeProduct.name, details, qty: selection.qty, unitPrice, lineTotal });
@@ -608,6 +631,14 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         qty: line.qty,
         lineTotal: line.lineTotal,
         details: line.details || [],
+        // Structured pricing data (money-correctness pass) — see
+        // lib/pricing.ts / app/api/orders/route.ts for how the server
+        // uses these to recompute and verify lineTotal above, instead of
+        // trusting it. Omitted (undefined) for a plain product or addon
+        // line, which has nothing beyond its base price to verify.
+        selection: line.selection,
+        bundleId: line.bundleId,
+        bundleItems: line.bundleItems,
       })),
     };
 
@@ -749,6 +780,17 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     const details = bundleSlots.flatMap((s) =>
       s.filled.map((it) => (it.details.length ? `${it.name} (${it.details.join(', ')})` : it.name))
     );
+    // Structured pricing data (money-correctness pass) — one entry per
+    // filled slot unit (fixed and choice alike, same flattening as
+    // `details` above), each carrying the same `selection` a full
+    // ProductPage customization set (see addToCart's bundleSlotIndex
+    // branch) or nothing for a quick-pick/fixed item (always uncustomized
+    // — extra 0). Lets POST /api/orders recompute this bundle's total
+    // (base price + each item's real customization extra) instead of
+    // trusting `bundleTotal` as sent.
+    const bundleItems: CartLineBundleItem[] = bundleSlots.flatMap((s) =>
+      s.filled.map((it) => ({ productId: it.productId, selection: it.selection }))
+    );
     setCart((c) => [
       ...c,
       {
@@ -760,6 +802,8 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         qty: 1,
         unitPrice: bundleTotal,
         lineTotal: bundleTotal,
+        bundleId: activeBundle.id,
+        bundleItems,
       },
     ]);
     closeBundleModal();

@@ -200,6 +200,16 @@ export interface BundleSlotFilledItem {
   name: string;
   details: string[];
   extra: number;
+  // Structured pricing data for this filled unit — set only when it went
+  // through the full ProductPage customization flow (StoreContext.tsx's
+  // addToCart, bundleSlotIndex branch), matching `extra` (the customer-
+  // visible upcharge over this product's base price). Absent for a
+  // quick-pick or fixed-slot item, which is always uncustomized (extra 0).
+  // Carried through to CartLine.bundleItems (see addBundleToCart) so
+  // POST /api/orders can recompute `extra` itself from real D1 option
+  // data instead of trusting the number the client already computed —
+  // see money-correctness pass, lib/pricing.ts.
+  selection?: CartLineSelectionData;
 }
 
 export interface BundleSlot extends BundleSlotDef {
@@ -271,6 +281,32 @@ export interface MenuBlob {
 // what lib/analytics.ts's trackX() functions accept.
 // ---------------------------------------------------------------------
 
+// Structured pricing selection carried alongside a customizable product's
+// cart line — the actual option/size/filling IDs chosen (mirrors
+// context/StoreContext.tsx's Selection, minus the fields calcUnitPrice's
+// formula doesn't need) — so the server can recompute the exact price
+// from real D1 option deltas (lib/pricing.ts) instead of trusting the
+// client's number, or trying to reverse-engineer it from the
+// human-readable `details` strings (which is all the cart line carried
+// before this money-correctness pass — see CartLine.details below).
+export interface CartLineSelectionData {
+  size: 'M' | 'L';
+  toppingIds: string[];
+  baseId?: string;
+  sauceId?: string;
+  cheeseId?: string;
+  fillings: Record<string, number>;
+  sauceStripeId?: string;
+  dipId?: string;
+}
+
+// One filled bundle-slot unit, as sent to POST /api/orders — see
+// CartLine.bundleItems below.
+export interface CartLineBundleItem {
+  productId: string;
+  selection?: CartLineSelectionData;
+}
+
 export interface CartLine {
   key: string;
   productId?: string | null;
@@ -281,6 +317,26 @@ export interface CartLine {
   qty: number;
   unitPrice: number;
   lineTotal: number;
+  // --- Structured pricing data (money-correctness pass) ---
+  // Everything below is ADDITIVE — existing consumers of CartLine that
+  // only read the fields above (analytics, /track, the admin order view,
+  // CartDrawer/CheckoutModal display) are unaffected. Only
+  // app/api/orders/route.ts (via lib/pricing.ts) reads these, to verify
+  // `lineTotal` server-side instead of trusting it.
+  //
+  // Set for a customizable product line (toppingsEnabled) — undefined for
+  // a plain product, a drink/dip/snack addon line, or a bundle line
+  // (which carries its own per-slot-item selections in `bundleItems`).
+  selection?: CartLineSelectionData;
+  // Set to the bundle's id for a bundle line — an explicit, unambiguous
+  // discriminator (rather than overloading `productId`, which this line
+  // also sets to the same value for display/analytics) that tells the
+  // server to verify this line as a bundle rather than a regular product.
+  bundleId?: string;
+  // One entry per filled bundle-slot unit (fixed and choice slots alike),
+  // in the same order CartLine.details' bundle text is built from
+  // (addBundleToCart) — only set on a bundle line.
+  bundleItems?: CartLineBundleItem[];
 }
 
 // Looser variant used where a cart-shaped object is built inline just to
@@ -318,6 +374,7 @@ export interface Selection {
 export interface Customer {
   name: string;
   address: string;
+  postalCode: string;
   email: string;
   phone: string;
   notes: string;
