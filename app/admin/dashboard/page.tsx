@@ -828,20 +828,37 @@ function parseOpeningHours(raw: string | undefined | null): OpeningHoursDay[] | 
 function useSettingsValues(token: string) {
   const [values, setValues] = useState<RawSettings>({});
   const [loading, setLoading] = useState(true);
+  // Additive — existing callers that destructure only { values, setValues,
+  // loading } are unaffected. Added so a caller that used to render nothing
+  // at all on failure (return null while loading, forever, on a request
+  // that never settles or a non-OK response) can instead show a visible
+  // "why" — see PricingRulesBox below, added while diagnosing a report of
+  // its box silently never appearing.
+  const [error, setError] = useState('');
 
   useEffect(() => {
+    setLoading(true);
+    setError('');
     fetch('/api/admin/settings')
-      .then((r) => r.json())
+      .then((r) => {
+        // Previously any non-OK response (401/403/500) still had its JSON
+        // body parsed and handed to setValues() as if it were real settings
+        // (e.g. a 403's `{ error: "..." }` became the entire `values`
+        // object) — silently wrong rather than surfaced. Now it's a
+        // rejection, so it lands in .catch() below and sets `error` instead.
+        if (!r.ok) throw new Error(`Settings request failed (HTTP ${r.status})`);
+        return r.json();
+      })
       // r.json() resolves to `unknown` under real @types/node fetch typings;
       // cast to RawSettings (the shape the settings API always returns) so
       // this is assignable to setValues' state type — same fallback-to-{}
       // behavior as before.
       .then((d) => setValues((d as RawSettings) || {}))
-      .catch(() => {})
+      .catch(() => setError('Could not load settings.'))
       .finally(() => setLoading(false));
   }, [token]);
 
-  return { values, setValues, loading };
+  return { values, setValues, loading, error };
 }
 
 function SettingsTab({ token }: { token: string }) {
@@ -923,6 +940,16 @@ function RestaurantInfoSettings({ token }: { token: string }) {
 
   return (
     <div style={box}>
+      {/* TEMPORARY DIAGNOSTIC — placed here on purpose to compare against
+          the same component's behavior in Menu & Pricing's landing page,
+          which is reportedly showing nothing at all. Remove once the
+          Menu & Pricing issue is resolved. */}
+      <div style={{ border: '2px dashed #FF6A3D', padding: 8, marginBottom: 16 }}>
+        <p style={{ margin: '0 0 8px', fontSize: 12, color: '#FF6A3D' }}>
+          ⬇ DIAGNOSTIC COPY (Settings tab) — compare against Menu &amp; Pricing
+        </p>
+        <PricingRulesBox token={token} />
+      </div>
       <h2 style={{ marginTop: 0 }}>Restaurant Settings</h2>
 
       <div
@@ -1348,7 +1375,7 @@ const GROUP_KIND_CUSTOMER_VIEW: Record<string, string> = {
 // info. Was originally added under Settings; moved here per the
 // business owner's feedback.
 function PricingRulesBox({ token }: { token: string }) {
-  const { values, setValues, loading } = useSettingsValues(token);
+  const { values, setValues, loading, error } = useSettingsValues(token);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -1367,7 +1394,28 @@ function PricingRulesBox({ token }: { token: string }) {
     }
   };
 
-  if (loading) return null;
+  // Was `if (loading) return null;` — while settings were loading (or on
+  // any fetch/HTTP error, previously swallowed silently — see
+  // useSettingsValues above), this box rendered nothing at all: no
+  // heading, no error, just an empty gap indistinguishable from the box
+  // not existing. That made a real failure here look identical to "this
+  // never shipped." Now every state is visible, so if this box goes
+  // missing again there will be an on-page message to report back
+  // instead of just silence.
+  if (loading) {
+    return (
+      <div style={{ ...box, marginBottom: 20, padding: 16, color: 'var(--muted)' }}>
+        Loading pricing rules…
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div style={{ ...box, marginBottom: 20, padding: 16, color: '#FF8A75' }}>
+        Pricing rules: {error}
+      </div>
+    );
+  }
 
   return (
     <div style={{ ...box, marginBottom: 20, padding: 16 }}>
