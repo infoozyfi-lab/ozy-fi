@@ -940,6 +940,16 @@ function RestaurantInfoSettings({ token }: { token: string }) {
 
   return (
     <div style={box}>
+      {/* TEMPORARY DIAGNOSTIC — placed here on purpose to compare against
+          the same component's behavior in Menu & Pricing's landing page,
+          which is reportedly showing nothing at all. Remove once the
+          Menu & Pricing issue is resolved. */}
+      <div style={{ border: '2px dashed #FF6A3D', padding: 8, marginBottom: 16 }}>
+        <p style={{ margin: '0 0 8px', fontSize: 12, color: '#FF6A3D' }}>
+          ⬇ DIAGNOSTIC COPY (Settings tab) — compare against Menu &amp; Pricing
+        </p>
+        <PricingRulesBox token={token} />
+      </div>
       <h2 style={{ marginTop: 0 }}>Restaurant Settings</h2>
 
       <div
