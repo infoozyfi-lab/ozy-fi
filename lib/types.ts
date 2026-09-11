@@ -185,6 +185,12 @@ export interface BundleSlotDef {
   productId?: string;
   label?: string;
   qty?: number;
+  // A "choice" slot picks from one or more menu categories — components/
+  // BundleModal.js falls back from categoryIds to a single categoryId
+  // when the former is absent/empty (older bundle data may only have
+  // the singular field).
+  categoryIds?: string[];
+  categoryId?: string;
   [key: string]: unknown;
 }
 
@@ -225,7 +231,17 @@ export interface Featured {
   bundleId?: string;
 }
 
-export type OpeningHours = unknown[] | null;
+// Phase 7.7 — structured per-day opening hours (see lib/menu-i18n.ts's
+// normalizeMenuBlob and components/Visit.js's formatHoursRows). `day` is
+// a translation-dictionary key (t.visit.days[d.day]), not a display string.
+export interface OpeningHoursDay {
+  day: string;
+  closed: boolean;
+  open?: string;
+  close?: string;
+}
+
+export type OpeningHours = OpeningHoursDay[] | null;
 
 export interface MenuBlob {
   categories: Category[];
@@ -332,5 +348,320 @@ declare global {
       track: (...args: unknown[]) => void;
       [key: string]: unknown;
     };
+    // components/TrackingScripts.js's own load-once guards + the vendor
+    // snippets' own globals (gtag's dataLayer, TikTok's object-name
+    // pointer). Loose types on purpose — these are third-party vendor
+    // snippets, copied verbatim; not worth modeling precisely.
+    __ga4Loaded?: boolean;
+    __metaPixelLoaded?: boolean;
+    __ttqLoaded?: boolean;
+    __clarityLoaded?: boolean;
+    dataLayer?: unknown[];
+    TiktokAnalyticsObject?: string;
+    clarity?: (...args: unknown[]) => void;
+    _fbq?: unknown;
+    [key: string]: any;
+  }
+
+  // The global `caches` object itself ("dom" lib, via CacheStorage) is
+  // already declared — this only adds the Cloudflare Workers runtime's
+  // `.default` named cache (used by lib/api-helpers.js's
+  // purgeMenuCache() and app/api/menu/route.js) via interface merging,
+  // rather than redeclaring `caches` itself (which "dom" already owns
+  // as a `var`, and can't be redeclared `const`). `.default` isn't part
+  // of the standard (browser) Cache API this project's tsconfig `lib`
+  // array pulls in, and there's no @cloudflare/workers-types dependency
+  // per this migration's "no new dependencies" rule — merged in
+  // minimally here instead.
+  interface CacheStorage {
+    default: Cache;
   }
 }
+
+// ---------------------------------------------------------------------
+// Stage A additions — order-tracking (components/TrackPageClient.js) and
+// the "recent orders" shortcut it shares with StoreContext.placeOrder().
+// Mirrors the D1 `orders`/`order_items` columns (worker/schema.sql) as
+// returned by app/api/orders/[orderNum]/route.js (spreads the raw order
+// row + `items`) and app/api/orders/by-phone/route.js (a small projection).
+// ---------------------------------------------------------------------
+
+export type OrderStatus = 'received' | 'preparing' | 'on_the_way' | 'delivered' | 'cancelled';
+
+export interface OrderTrackingItem {
+  id: number;
+  order_id?: number;
+  product_id?: string | null;
+  name: string;
+  qty: number;
+  line_total: number | string;
+  details?: string | null; // JSON-encoded string[] — see parseDetails()
+}
+
+// The full row app/api/orders/[orderNum]/route.js returns: the raw
+// `orders` table row (worker/schema.sql) spread together with `items`.
+export interface OrderTrackingResult {
+  id: number;
+  order_num: string;
+  customer_name: string;
+  address: string;
+  email: string;
+  phone: string;
+  notes?: string | null;
+  total: number | string;
+  status: OrderStatus;
+  payment_method: string;
+  estimated_ready_at?: string | null;
+  driver_name?: string | null;
+  coupon_code?: string | null;
+  discount_amount: number | string;
+  marketing_consent?: number;
+  created_at: string;
+  items: OrderTrackingItem[];
+}
+
+// app/api/orders/by-phone/route.js's small projection.
+export interface OrderPhoneMatch {
+  orderNum: string;
+  status: OrderStatus;
+  total: number | string;
+  createdAt: string;
+}
+
+// Saved to localStorage('ozy_recent_orders') by StoreContext.placeOrder()
+// and read back by TrackPageClient's RecentOrderShortcut.
+export interface RecentOrder {
+  orderNum: string;
+  phone: string;
+  placedAt: string;
+}
+
+// ---------------------------------------------------------------------
+// Stage B — auth/session, D1 row shapes (orders, coupons, staff,
+// audit_log — see worker/schema.sql), and server-side tracking payloads.
+// ---------------------------------------------------------------------
+
+// lib/adminAuth.js's ROLES array, in the exact order the DB CHECK
+// constraint (worker/schema.sql, `staff.role`) lists them.
+export type StaffRole = 'kitchen' | 'manager' | 'owner';
+
+// Returned by lib/adminAuth.js's getSession(). staffId is null exactly
+// when isLegacy is true (the fallback ADMIN_EMAIL/ADMIN_PASSWORD login
+// isn't backed by a staff row) — see that file's header comment.
+export interface StaffSession {
+  staffId: number | null;
+  role: StaffRole;
+  name: string;
+  isLegacy: boolean;
+}
+
+// Minimal shape lib/adminAuth.js's createStaffToken() needs from a caller
+// — usually a full StaffRow, but callers only ever read these three
+// fields when minting a token.
+export interface StaffTokenInput {
+  id: number;
+  role: StaffRole;
+  name?: string;
+}
+
+// worker/schema.sql's `staff` table.
+export interface StaffRow {
+  id: number;
+  name: string;
+  email: string;
+  password_hash: string;
+  role: StaffRole;
+  active: number;
+  totp_secret?: string | null;
+  totp_enabled?: number;
+  created_at: string;
+}
+
+// worker/schema.sql's `coupons` table (code is the primary key).
+export interface CouponRow {
+  code: string;
+  discount_type: 'percent' | 'amount';
+  discount_value: number;
+  active: number;
+  expires_at?: string | null;
+  min_order_amount?: number | null;
+  usage_limit?: number | null;
+  times_used: number;
+  created_at: string;
+}
+
+// lib/coupons.js's validateCoupon() result — a discriminated-ish shape
+// (only `error` is guaranteed on failure; `coupon`/discountAmount/
+// finalTotal are only guaranteed once `valid` is true), left as optional
+// fields rather than a true discriminated union since the JS callers
+// (app/api/coupons/validate, app/api/orders) narrow on `.valid` at the
+// call site, not via a `kind`/`type` tag.
+export interface CouponValidationResult {
+  valid: boolean;
+  error?: string;
+  coupon?: CouponRow;
+  discountAmount?: number;
+  finalTotal?: number;
+}
+
+// worker/schema.sql's `orders` table — the exact D1 row shape, as opposed
+// to OrderTrackingResult above (that one is /api/orders/[orderNum]'s
+// derived response, which leaves total/discount_amount as `number |
+// string` because that route never re-coerces them). Rows read straight
+// back from D1 (admin order list/detail, order-creation insert) get real
+// numbers for REAL/INTEGER columns.
+export interface OrderRow {
+  id: number;
+  order_num: string;
+  customer_name: string;
+  address: string;
+  email: string;
+  phone: string;
+  notes?: string | null;
+  total: number;
+  status: OrderStatus;
+  payment_method: string;
+  estimated_ready_at?: string | null;
+  driver_name?: string | null;
+  coupon_code?: string | null;
+  discount_amount: number;
+  marketing_consent?: number;
+  created_at: string;
+}
+
+// worker/schema.sql's `order_items` table.
+export interface OrderItemRow {
+  id: number;
+  order_id: number;
+  product_id?: string | null;
+  name: string;
+  qty: number;
+  line_total: number;
+  details?: string | null;
+}
+
+// worker/schema.sql's `audit_log` table — see lib/auditLog.js.
+export interface AuditLogRow {
+  id: number;
+  staff_id: number | null;
+  staff_name: string;
+  action: string;
+  detail?: string | null;
+  created_at: string;
+}
+
+// lib/server-tracking.js's loadTrackingSettings() result — Meta/TikTok/
+// GA4 credentials, all sourced from admin_settings (never env vars).
+export interface TrackingSettings {
+  ga4MeasurementId: string | null;
+  ga4ApiSecret: string | null;
+  ga4DebugMode: boolean;
+  metaPixelId: string | null;
+  metaAccessToken: string | null;
+  metaTestEventCode: string | null;
+  tiktokPixelId: string | null;
+  tiktokAccessToken: string | null;
+  tiktokTestEventCode: string | null;
+}
+
+// The minimal order shape lib/server-tracking.js's
+// trackPurchaseServerSide()/trackRefundServerSide() read from — a subset
+// of OrderRow plus the line items, in the units those functions actually
+// use (order.total as a number, not the D1-string-or-number union).
+export interface TrackingOrderItem {
+  productId?: string | null;
+  name?: string;
+  qty: number;
+  unitPrice?: number;
+}
+
+export interface TrackingOrder {
+  orderNum: string;
+  email?: string | null;
+  phone?: string | null;
+  total: number;
+  items?: TrackingOrderItem[];
+}
+
+// ---------------------------------------------------------------------
+// Stage C — admin panel (BundleManager, ResourceManager, OrderKanban).
+// ---------------------------------------------------------------------
+
+// worker/schema.sql's `bundles` table, as returned by GET
+// /api/admin/bundles — `slots` is stored as a JSON-encoded string
+// (BundleSlotDef[], same slot shape components/BundleModal.js reads at
+// checkout time), not parsed server-side.
+export interface BundleRow {
+  id: string;
+  title: string;
+  title_fi?: string | null;
+  description?: string | null;
+  description_fi?: string | null;
+  image?: string | null;
+  price: number;
+  slots: string;
+  active: number;
+  sort_order?: number;
+}
+
+// components/admin/ResourceManager.js's field-config prop — one generic
+// admin CRUD form/table, reused for categories/products/option_groups/
+// options/addons/bundles (each with its own `fields` array, built in
+// app/admin/dashboard/page.js). A real discriminated union on `type`
+// (rather than one loose object with every field's optional properties
+// mixed together) so e.g. accessing `.options` only type-checks on a
+// 'select' field, and a typo'd type string is a compile error rather
+// than a field silently rendering as plain text.
+interface ResourceFieldBase {
+  key: string;
+  label: string;
+  required?: boolean;
+}
+
+export interface ResourceTextField extends ResourceFieldBase {
+  type?: 'text';
+  placeholder?: string;
+  default?: string;
+}
+
+export interface ResourceNumberField extends ResourceFieldBase {
+  type: 'number';
+  step?: string;
+  placeholder?: string;
+  default?: number;
+}
+
+export interface ResourceSelectOption {
+  value: string;
+  label: string;
+}
+
+export interface ResourceSelectField extends ResourceFieldBase {
+  type: 'select';
+  options: ResourceSelectOption[];
+  default?: string;
+}
+
+export interface ResourceCheckboxField extends ResourceFieldBase {
+  type: 'checkbox';
+  default?: boolean;
+}
+
+export interface ResourceImageField extends ResourceFieldBase {
+  type: 'image';
+  default?: string;
+}
+
+export interface ResourceTextareaField extends ResourceFieldBase {
+  type: 'textarea';
+  placeholder?: string;
+  default?: string;
+}
+
+export type ResourceField =
+  | ResourceTextField
+  | ResourceNumberField
+  | ResourceSelectField
+  | ResourceCheckboxField
+  | ResourceImageField
+  | ResourceTextareaField;

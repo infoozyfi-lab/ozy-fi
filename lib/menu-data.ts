@@ -23,13 +23,16 @@ export async function loadMenuData(env: LoadMenuDataEnv): Promise<MenuData> {
     bundles,
     settingsRows,
   ] = await Promise.all([
-    env.DB.prepare<RawCategory>('SELECT * FROM categories ORDER BY sort_order').all(),
-    env.DB.prepare<RawProduct>('SELECT * FROM products WHERE active = 1 ORDER BY sort_order').all(),
-    env.DB.prepare<RawOptionGroup>('SELECT * FROM option_groups ORDER BY sort_order').all(),
-    env.DB.prepare<RawOption>('SELECT * FROM options ORDER BY sort_order').all(),
-    env.DB.prepare<RawAddon>('SELECT * FROM addons WHERE active = 1 ORDER BY sort_order').all(),
-    env.DB.prepare<RawBundle>('SELECT * FROM bundles WHERE active = 1 ORDER BY sort_order').all(),
-    env.DB.prepare<{ key: string; value: string }>('SELECT key, value FROM admin_settings').all(),
+    // D1's generic type parameter belongs on the terminal call (.all<T>() /
+    // .first<T>() / .run<T>()), not on .prepare() — .prepare() itself takes
+    // no type argument in the real @cloudflare/workers-types.
+    env.DB.prepare('SELECT * FROM categories ORDER BY sort_order').all<RawCategory>(),
+    env.DB.prepare('SELECT * FROM products WHERE active = 1 ORDER BY sort_order').all<RawProduct>(),
+    env.DB.prepare('SELECT * FROM option_groups ORDER BY sort_order').all<RawOptionGroup>(),
+    env.DB.prepare('SELECT * FROM options ORDER BY sort_order').all<RawOption>(),
+    env.DB.prepare('SELECT * FROM addons WHERE active = 1 ORDER BY sort_order').all<RawAddon>(),
+    env.DB.prepare('SELECT * FROM bundles WHERE active = 1 ORDER BY sort_order').all<RawBundle>(),
+    env.DB.prepare('SELECT key, value FROM admin_settings').all<{ key: string; value: string }>(),
   ]);
 
   const optionsByGroup: Record<string, RawOption[]> = {};

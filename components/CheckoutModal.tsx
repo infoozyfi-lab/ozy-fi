@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ChangeEvent, type FormEvent } from 'react';
+import { useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react';
 import { useStore } from '@/context/StoreContext';
 import { useTranslations } from '@/lib/i18n';
 import type { Addon, CartLine, Customer } from '@/lib/types';
@@ -146,15 +146,23 @@ export default function CheckoutModal() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, subtotal: cartTotal }),
       });
-      const data = await res.json().catch(() => ({ valid: false }));
+      // res.json() resolves to `unknown` under real fetch typings — cast to
+      // this endpoint's actual response shape (app/api/coupons/validate).
+      const data = (await res.json().catch(() => ({ valid: false }))) as {
+        valid: boolean;
+        error?: string;
+        code?: string;
+        discountAmount?: number;
+        finalTotal?: number;
+      };
       if (!data.valid) {
         setCouponStatus('error');
         setCouponError(data.error || t.checkout.couponGenericError);
         return;
       }
-      setCouponCode(data.code);
-      setCouponDiscount(data.discountAmount);
-      setCouponFinalTotal(data.finalTotal);
+      setCouponCode(data.code || '');
+      setCouponDiscount(data.discountAmount ?? 0);
+      setCouponFinalTotal(data.finalTotal ?? null);
       setCouponStatus('applied');
     } catch {
       setCouponStatus('error');
@@ -234,7 +242,7 @@ export default function CheckoutModal() {
               <div className="checkout-summary">
                 {cart.map((l) => (
                   <div className="cs-row cs-row-editable" key={l.key}>
-                    <img src={l.image} alt={l.name} className="cs-thumb" />
+                    <img src={l.image ?? undefined} alt={l.name} className="cs-thumb" />
                     <div className="cs-body">
                       <span className="cs-name">{l.name}</span>
                       {l.details && l.details.length > 0 && (
@@ -264,7 +272,7 @@ export default function CheckoutModal() {
                   const line = cart.find((l) => l.drinkId === d.id);
                   return (
                     <button type="button" className="drink-tile" key={d.id} onClick={() => addDrinkToCart(d)}>
-                      <img src={d.image} alt={d.name} />
+                      <img src={d.image ?? undefined} alt={d.name} />
                       <span className="dname">{d.name}</span>
                       <span className="dprice">{line ? t.checkout.inCart(line.qty) : `${d.price.toFixed(2)} €`}</span>
                       <span className="drink-add-btn">+</span>
@@ -283,7 +291,7 @@ export default function CheckoutModal() {
                   >
                     <span className="shortcut-thumbs">
                       {section.items.slice(0, 2).map((it) => (
-                        <img key={it.id} src={it.image} alt="" />
+                        <img key={it.id} src={it.image ?? undefined} alt="" />
                       ))}
                     </span>
                     {section.label}
@@ -343,7 +351,7 @@ export default function CheckoutModal() {
                         type="text"
                         placeholder={t.checkout.couponPlaceholder}
                         value={couponInput}
-                        onChange={(e) => { setCouponInput(e.target.value); if (couponStatus === 'error') setCouponStatus('idle'); }}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => { setCouponInput(e.target.value); if (couponStatus === 'error') setCouponStatus('idle'); }}
                         style={{ flex: 1 }}
                       />
                       <button
@@ -402,7 +410,12 @@ export default function CheckoutModal() {
             style={{ flex: 1 }}
             disabled={submitting}
           >
-            {t.checkout.placeOrder(`${(couponStatus === 'applied' ? couponFinalTotal : cartTotal).toFixed(2)} €`)}
+            {/* couponFinalTotal is typed number | null, but applyCoupon() always sets it via
+                setCouponFinalTotal(data.finalTotal) in the same batch just before
+                setCouponStatus('applied') (see applyCoupon above) — so whenever couponStatus
+                is 'applied', couponFinalTotal is guaranteed non-null. Non-null assertion is a
+                no-op fix under strict mode, same convention as elsewhere in this migration. */}
+            {t.checkout.placeOrder(`${(couponStatus === 'applied' ? couponFinalTotal! : cartTotal).toFixed(2)} €`)}
           </button>
         </div>
       )}
@@ -428,9 +441,9 @@ export default function CheckoutModal() {
                         role="button"
                         tabIndex={0}
                         onClick={() => handleAdd(item)}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleAdd(item); }}
+                        onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => { if (e.key === 'Enter' || e.key === ' ') handleAdd(item); }}
                       >
-                        <img src={item.image} alt={item.name} />
+                        <img src={item.image ?? undefined} alt={item.name} />
                         {isJustAdded ? (
                           <div className="extra-list-body extra-list-added">
                             <span className="extra-added-check">✓</span>

@@ -25,6 +25,8 @@ import type {
   OpenProductOptions,
   RawCategory,
   RawProduct,
+  RecentOrder,
+  MenuData,
 } from '@/lib/types';
 
 interface StoreContextValue {
@@ -118,7 +120,7 @@ function setUrl(path: string) {
 // UI never crashes on first paint. Real values always come from the DB.
 const FALLBACK_OPTION: OptionItem[] = [{ id: 'default', label: 'Default', delta: 0 }];
 
-interface StoreProviderInitialData {
+export interface StoreProviderInitialData {
   categories?: RawCategory[];
   products?: RawProduct[];
 }
@@ -248,7 +250,10 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
 
         const res = await fetch('/api/menu');
         if (!res.ok) throw new Error('Failed to load menu');
-        const data = await res.json();
+        // res.json() resolves to `unknown` under real fetch typings — cast
+        // to MenuData, the shape /api/menu actually returns (and the shape
+        // normalizeMenuBlob has always expected).
+        const data = (await res.json()) as MenuData;
 
         // /api/menu itself stays raw/unlocalized (it's aggressively
         // cached — see app/api/menu/route.js — so it must not vary by
@@ -350,7 +355,9 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       setActiveProduct(item);
       if (bundleSlotIndex == null) trackViewItem(item);
       setSelection({
-        basePrice: item.price,
+        // price is typed optional (Product.price?) but always populated for
+        // a real product — non-null assertion is a no-op fix under strict mode.
+        basePrice: item.price!,
         // `item` here is sometimes the already-processed product from the
         // `products` list (has a real toppingsEnabled boolean, set by
         // lib/menu-i18n.js's normalize function), and sometimes a raw D1
@@ -401,9 +408,16 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     });
   }, []);
 
-  const setSize = useCallback((size: 'M' | 'L') => setSelection((s) => ({ ...s, size })), []);
-  const setQty = useCallback((fn: (qty: number) => number) => setSelection((s) => ({ ...s, qty: Math.max(1, fn(s.qty)) })), []);
-  const setOption = useCallback((key: string, id: string) => setSelection((s) => ({ ...(s as any), [key]: id })), []);
+  // setSize/setQty/setOption are only ever invoked while the ProductPage is
+  // open, i.e. selection is already set — same invariant the original JS
+  // relied on implicitly (s.qty etc. would already throw at runtime if s
+  // were null here). `s as Selection` tells the type checker what the
+  // runtime already assumes, without adding a behavior-changing null guard;
+  // matches the existing `(s as any)` cast setOption already used before
+  // this pass, just narrowed to a real type instead of `any`.
+  const setSize = useCallback((size: 'M' | 'L') => setSelection((s) => ({ ...(s as Selection), size })), []);
+  const setQty = useCallback((fn: (qty: number) => number) => setSelection((s) => ({ ...(s as Selection), qty: Math.max(1, fn((s as Selection).qty)) })), []);
+  const setOption = useCallback((key: string, id: string) => setSelection((s) => ({ ...(s as Selection), [key]: id })), []);
 
   const setFillingQty = useCallback((fillingId: string, nextQty: number) => {
     setSelection((s) => {
@@ -449,12 +463,19 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       // product's base price) adds to the bundle total — the base price
       // is already covered by the bundle's flat price. Qty isn't used
       // here; each bundle slot unit is added one at a time.
-      const extra = unitPrice - activeProduct.basePrice;
+      // basePrice is typed optional (Product.basePrice?) but always populated
+      // for a real product — non-null assertion is a no-op fix under strict mode.
+      const extra = unitPrice - activeProduct.basePrice!;
+      // Captured to a local const — same closure-narrowing reason as
+      // elsewhere in this migration: the `!= null` check above narrows the
+      // `selection.bundleSlotIndex` *property access*, but that narrowing
+      // doesn't survive into this nested setBundleSlots callback.
+      const bundleSlotIndex = selection.bundleSlotIndex;
       setBundleSlots((slots) => {
         const next = [...slots];
-        const slot = next[selection.bundleSlotIndex];
+        const slot = next[bundleSlotIndex];
         if (!slot) return slots;
-        next[selection.bundleSlotIndex] = {
+        next[bundleSlotIndex] = {
           ...slot,
           filled: [
             ...slot.filled,
@@ -597,17 +618,19 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     });
 
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
       throw new Error(body.error || t.checkout.genericOrderError);
     }
 
-    const data = await res.json();
+    // res.json() resolves to `unknown` under real fetch typings — cast to
+    // the shape POST /api/orders actually returns.
+    const data = (await res.json()) as { orderNum: string; total?: number; discountAmount?: number };
 
     // Remember this order on the customer's own device — /track can then
     // offer it as a one-tap shortcut without them needing to note down
     // the order number themselves.
     try {
-      const saved = JSON.parse(localStorage.getItem('ozy_recent_orders') || '[]');
+      const saved: RecentOrder[] = JSON.parse(localStorage.getItem('ozy_recent_orders') || '[]');
       const next = [
         { orderNum: data.orderNum, phone: customer.phone, placedAt: new Date().toISOString() },
         ...saved.filter((o) => o.orderNum !== data.orderNum),
@@ -645,10 +668,16 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
           const product = products.find((p) => p.id === s.productId);
           return {
             ...s,
+            // A 'fixed' slot always names its product (that's what makes it
+            // fixed rather than a customer choice) — s.productId is typed
+            // optional on the shared BundleSlotDef only because 'choice'
+            // slots don't set it. Non-null assertions here are a no-op fix
+            // under strict mode, matching BundleSlotFilledItem's required
+            // (non-optional) productId/name fields.
             filled: Array.from({ length: s.qty || 1 }, (_, i) => ({
               key: `${s.productId}-fixed-${i}`,
-              productId: s.productId,
-              name: product?.name || s.label || s.productId,
+              productId: s.productId!,
+              name: product?.name || s.label || s.productId!,
               details: [],
               extra: 0,
             })),

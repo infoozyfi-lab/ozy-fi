@@ -276,7 +276,7 @@ export default function ProductPage() {
 
       <div className="pp-scroll">
         <div className="pp-hero">
-          <img className="pp-hero-img" src={activeProduct.image} alt={activeProduct.name} />
+          <img className="pp-hero-img" src={activeProduct.image ?? undefined} alt={activeProduct.name} />
           <div className="pp-price-badge">
             <div className="pp-price-row">
               <span>{intPart}</span>
@@ -377,9 +377,12 @@ export default function ProductPage() {
           </div>
         )}
         <button className="btn-primary pp-add-btn" type="button" onClick={addToCart}>
+          {/* basePrice is typed optional (Product.basePrice?) but always populated
+              once a product is active/selected here — non-null assertions are a
+              no-op fix under strict mode, same behavior as before. */}
           {isBundleSlot
-            ? unitPrice > activeProduct.basePrice
-              ? t.productPage.addToBundleExtra(money(unitPrice - activeProduct.basePrice))
+            ? unitPrice > activeProduct.basePrice!
+              ? t.productPage.addToBundleExtra(money(unitPrice - activeProduct.basePrice!))
               : t.productPage.addToBundle
             : t.productPage.addToOrder(money(lineTotal))}
         </button>
