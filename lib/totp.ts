@@ -93,8 +93,12 @@ function counterToBytes(counter: number): Uint8Array {
 
 async function hotp(secretBase32: string, counter: number): Promise<string> {
   const keyBytes = base32Decode(secretBase32);
-  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
-  const signature = new Uint8Array(await crypto.subtle.sign('HMAC', key, counterToBytes(counter)));
+  // Real DOM + @types/node lib combo types Uint8Array with a stricter
+  // ArrayBufferLike parameter than Web Crypto's BufferSource expects —
+  // cast rather than restructure the (already-correct, runtime-safe)
+  // Uint8Array values these helpers produce.
+  const key = await crypto.subtle.importKey('raw', keyBytes as BufferSource, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+  const signature = new Uint8Array(await crypto.subtle.sign('HMAC', key, counterToBytes(counter) as BufferSource));
 
   // Dynamic truncation (RFC 4226 §5.3).
   const offset = signature[signature.length - 1] & 0x0f;

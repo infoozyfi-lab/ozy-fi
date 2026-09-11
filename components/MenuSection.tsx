@@ -175,9 +175,9 @@ export default function MenuSection({ onlyCategory = null }: { onlyCategory?: st
               <button
                 key={cat.id}
                 type="button"
-                ref={(el: HTMLButtonElement | null) =>
-                  (tabRefs.current[cat.id] = el)
-                }
+                ref={(el: HTMLButtonElement | null) => {
+                  tabRefs.current[cat.id] = el;
+                }}
                 className={`cat-tab${
                   cat.id === categories[0]?.id
                     ? ' active'
@@ -198,9 +198,9 @@ export default function MenuSection({ onlyCategory = null }: { onlyCategory?: st
             key={cat.id}
             id={cat.id}
             className="menu-category"
-            ref={(el: HTMLDivElement | null) =>
-              (sectionRefs.current[cat.id] = el)
-            }
+            ref={(el: HTMLDivElement | null) => {
+              sectionRefs.current[cat.id] = el;
+            }}
           >
             <h3 className="cat-title">
               {cat.title}

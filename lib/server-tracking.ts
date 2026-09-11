@@ -11,7 +11,14 @@ import type { TrackingSettings, TrackingOrder } from '@/lib/types';
 // missing, so this file is safe to call right now, before any ad
 // accounts exist.
 
-export async function loadTrackingSettings(env: any): Promise<TrackingSettings> {
+// `env: any` used to make the D1 generic call below (`.all<T>()`) a real
+// compile error: TypeScript rejects explicit type arguments on a call whose
+// callee resolves to `any` ("Untyped function calls may not accept type
+// arguments", TS2347) — `any` skips argument checking but there's no actual
+// generic signature to instantiate. CloudflareEnv (global ambient, see
+// cloudflare-env.d.ts) gives `.all<T>()` a real generic D1 signature to
+// resolve against.
+export async function loadTrackingSettings(env: CloudflareEnv): Promise<TrackingSettings> {
   const rows = await env.DB.prepare(
     `SELECT key, value FROM admin_settings WHERE key IN (
       'ga4_measurement_id', 'secret_ga4_api_secret', 'ga4_debug_mode',

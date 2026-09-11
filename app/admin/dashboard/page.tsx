@@ -194,7 +194,7 @@ function useAnalytics(token: string | null) {
         if (!res.ok) throw new Error('Could not load analytics.');
         return res.json();
       })
-      .then(setData)
+      .then((d) => setData(d as AnalyticsData | null))
       .catch(() => setError('Could not load analytics.'))
       .finally(() => setLoading(false));
   };
@@ -383,7 +383,7 @@ function OrderDetailRow({ token, order }: { token: string; order: OrderRow }) {
   useEffect(() => {
     fetch(`/api/admin/orders/${order.id}`)
       .then((r) => r.json())
-      .then(setDetail)
+      .then((d) => setDetail(d as OrderDetailData | null))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [token, order.id]);
@@ -782,10 +782,6 @@ const SETTINGS_FIELDS: SettingsField[] = [
   { key: 'address', label: 'Address' },
   { key: 'minimum_order', label: 'Minimum order (€)', number: true },
   { key: 'delivery_fee', label: 'Delivery fee (€)', number: true },
-  {
-    key: 'size_large_upcharge', label: 'Large size upcharge (€) — added to any pizza when a customer picks Large instead of Medium',
-    number: true,
-  },
 ];
 
 // Phase 7.7 — per-day opening hours, replacing the old single free-text

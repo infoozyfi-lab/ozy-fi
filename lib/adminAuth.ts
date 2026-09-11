@@ -93,7 +93,9 @@ async function pbkdf2(password: string, saltBytes: Uint8Array, iterations: numbe
     ['deriveBits']
   );
   const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt: saltBytes, iterations, hash: 'SHA-256' },
+    // Real DOM + @types/node lib combo types Uint8Array with a stricter
+    // ArrayBufferLike parameter than Web Crypto's BufferSource expects.
+    { name: 'PBKDF2', salt: saltBytes as BufferSource, iterations, hash: 'SHA-256' },
     keyMaterial,
     256
   );
@@ -222,7 +224,11 @@ export async function getSession(request: Request, env: any): Promise<StaffSessi
 
     const key = await getSessionSecretKey(env);
     const signature = base64UrlToBytes(parts[1]);
-    const valid = await crypto.subtle.verify('HMAC', key, signature, new TextEncoder().encode(payload));
+    // `signature` (from base64UrlToBytes(), a plain user function) infers as
+    // Uint8Array<ArrayBufferLike> under the real DOM + @types/node lib combo
+    // — TextEncoder().encode()'s result doesn't need this (lib.dom.d.ts
+    // already types it concretely), only this one does.
+    const valid = await crypto.subtle.verify('HMAC', key, signature as BufferSource, new TextEncoder().encode(payload));
     if (!valid) return null;
 
     const isLegacy = idPart === 'legacy';
@@ -300,7 +306,11 @@ export async function verifyPending2faToken(env: any, token?: string | null): Pr
 
     const key = await getSessionSecretKey(env);
     const signature = base64UrlToBytes(parts[1]);
-    const valid = await crypto.subtle.verify('HMAC', key, signature, new TextEncoder().encode(payload));
+    // `signature` (from base64UrlToBytes(), a plain user function) infers as
+    // Uint8Array<ArrayBufferLike> under the real DOM + @types/node lib combo
+    // — TextEncoder().encode()'s result doesn't need this (lib.dom.d.ts
+    // already types it concretely), only this one does.
+    const valid = await crypto.subtle.verify('HMAC', key, signature as BufferSource, new TextEncoder().encode(payload));
     if (!valid) return null;
 
     return Number(idPart);

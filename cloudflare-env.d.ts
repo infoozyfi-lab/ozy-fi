@@ -16,4 +16,23 @@
 // bindings to CloudflareEnv"). It must stay a global ambient declaration
 // (no top-level import/export) so `interface` here merges with the package's
 // own global `CloudflareEnv`, not shadow it as a module-local type.
-interface CloudflareEnv extends Env {}
+interface CloudflareEnv extends Env {
+  // Secrets set via `wrangler secret put` — none of these are declared
+  // under wrangler.jsonc's bindings (that's normal; secrets usually aren't),
+  // so `wrangler types` never picks any of them up on `Env`/`Cloudflare.Env`.
+  // (Round 3 guessed SESSION_SECRET was already covered via `.dev.vars`
+  // scanning — round 4's real tsc run shows that guess was wrong; it needs
+  // declaring here too, same as the other two.) Declared here by hand.
+  ADMIN_EMAIL?: string;
+  ADMIN_PASSWORD?: string;
+  SESSION_SECRET?: string;
+
+  // wrangler.jsonc correctly declares IMAGES under r2_buckets (bucket_name
+  // "ozyfi-images") — but the generated Env interface inferred it as a
+  // Cloudflare Images product binding instead of a real R2Bucket, so
+  // app/api/admin/upload/route.ts's `.put()` and app/images/[...key]/
+  // route.ts's `.get()`/`.writeHttpMetadata()`/`.httpEtag`/`.body` (all
+  // real R2Bucket/R2Object API) didn't type-check. Overridden here to the
+  // real binding type instead of re-running `wrangler types` per machine.
+  IMAGES: R2Bucket;
+}

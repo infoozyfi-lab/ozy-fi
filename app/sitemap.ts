@@ -37,9 +37,13 @@ function entry(path: string, { lastModified, changeFrequency, priority }: Sitema
 export default async function sitemap() {
   const { env } = await getCloudflareContext({ async: true });
 
+  // Typed generics so `c`/`p` below are real { id: string } rows, not
+  // Record<string, unknown> — an explicitly-narrower callback parameter
+  // annotation isn't reliably enough on its own for .flatMap() under the
+  // real @cloudflare/workers-types + strict mode.
   const [categories, products] = await Promise.all([
-    env.DB.prepare('SELECT id FROM categories').all(),
-    env.DB.prepare('SELECT id FROM products WHERE active = 1').all(),
+    env.DB.prepare('SELECT id FROM categories').all<{ id: string }>(),
+    env.DB.prepare('SELECT id FROM products WHERE active = 1').all<{ id: string }>(),
   ]);
 
   const now = new Date();

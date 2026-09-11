@@ -23,7 +23,12 @@ export function normalizeCouponCode(raw: unknown): string {
 // real product prices by the caller, for the real /api/orders call — or a
 // client-reported cart total for the advisory preview call, which is fine
 // since nothing is committed at preview time).
-export async function validateCoupon(env: any, rawCode: unknown, subtotal: number): Promise<CouponValidationResult> {
+// `env: any` used to make the D1 generic call below (`.first<T>()`) a real
+// compile error — same TS2347 ("Untyped function calls may not accept type
+// arguments") as lib/server-tracking.ts's loadTrackingSettings(). Typing
+// `env` as the real bridged CloudflareEnv (global ambient, see
+// cloudflare-env.d.ts) fixes it.
+export async function validateCoupon(env: CloudflareEnv, rawCode: unknown, subtotal: number): Promise<CouponValidationResult> {
   const code = normalizeCouponCode(rawCode);
   if (!code) return { valid: false, error: 'Enter a coupon code.' };
 

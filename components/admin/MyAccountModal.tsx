@@ -42,7 +42,10 @@ export default function MyAccountModal({ onClose }: { onClose: () => void }) {
         if (!res.ok) throw new Error();
         return res.json();
       })
-      .then((data) => setStatus(data))
+      // data is `unknown` (real fetch typings) — setStatus(data) is a direct
+      // call, so (unlike a bare `.then(setStatus)` reference) it needs its
+      // own cast rather than relying on .then()'s own lenient callback typing.
+      .then((data) => setStatus(data as TwoFaStatus | null))
       .catch(() => setStatusError('Could not load your account status.'));
   };
 

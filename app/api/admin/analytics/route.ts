@@ -7,7 +7,11 @@ export const dynamic = 'force-dynamic';
 // One conditional-aggregation pass over `orders` for every headline KPI +
 // period-over-period comparison the dashboard needs (today vs yesterday,
 // last 7 days vs the 7 before that, last 30 days vs the 30 before that).
-async function loadSummary(env: any) {
+// `env: any` used to make the D1 generic call below (`.first<T>()`) a real
+// compile error (TS2347, "Untyped function calls may not accept type
+// arguments") — same root cause as lib/coupons.ts / lib/server-tracking.ts.
+// CloudflareEnv (global ambient, see cloudflare-env.d.ts) fixes it.
+async function loadSummary(env: CloudflareEnv) {
   // A bare aggregate SELECT with no GROUP BY always returns exactly one row
   // (SUM/COUNT return 0/NULL, never zero rows) — the non-null assertion
   // below reflects that guarantee rather than changing behavior.

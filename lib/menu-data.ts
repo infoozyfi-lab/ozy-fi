@@ -3,7 +3,6 @@
 // uses for cart interactivity) and Server Components that need the same
 // data to render real, crawlable HTML on first paint.
 import type {
-  LoadMenuDataEnv,
   MenuData,
   RawCategory,
   RawProduct,
@@ -13,7 +12,19 @@ import type {
   RawBundle,
 } from './types';
 
-export async function loadMenuData(env: LoadMenuDataEnv): Promise<MenuData> {
+// `env` is the real bridged Cloudflare env (see cloudflare-env.d.ts) — every
+// caller passes the `env` returned by getCloudflareContext(), which is typed
+// CloudflareEnv. This used to take a hand-rolled `LoadMenuDataEnv` (a
+// minimal, approximate D1 shape defined in lib/types.ts) instead, which
+// didn't structurally match the real D1Database/D1PreparedStatement API
+// (its `.prepare()` took a generic, its `.all()` didn't — the reverse of
+// the real bindings) — every call site here already used the correct real
+// D1 shape (`.prepare(...).all<T>()`), so that mismatch surfaced as
+// "Argument of type 'CloudflareEnv' is not assignable to parameter of type
+// 'LoadMenuDataEnv'" wherever this function was called, plus a cascade of
+// downstream errors inside this file itself. CloudflareEnv (global ambient,
+// no import needed) is the fix — no other change needed in this file.
+export async function loadMenuData(env: CloudflareEnv): Promise<MenuData> {
   const [
     categories,
     products,

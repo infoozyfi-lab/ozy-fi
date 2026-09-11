@@ -60,7 +60,7 @@ function SauceStripeRow({ options, current, onChange, t }: { options: OptionItem
     <div className="pp-section">
       <p className="pp-label">{t.productPage.sauceStripesHeading}</p>
       <div className="pp-swatch-row">
-        <span className="pp-swatch" style={{ background: selected.color }} aria-hidden="true" />
+        <span className="pp-swatch" style={{ background: selected.color ?? undefined }} aria-hidden="true" />
         <span className="pp-swatch-label">{selected.label}</span>
         <button type="button" className="change-btn" onClick={() => setOpen((v) => !v)}>
           {t.productPage.change} <span className={`chev${open ? ' up' : ''}`}>▾</span>
@@ -76,7 +76,7 @@ function SauceStripeRow({ options, current, onChange, t }: { options: OptionItem
                 checked={opt.id === current}
                 onChange={() => { onChange(opt.id); setOpen(false); }}
               />
-              <span className="pp-swatch pp-swatch-sm" style={{ background: opt.color }} />
+              <span className="pp-swatch pp-swatch-sm" style={{ background: opt.color ?? undefined }} />
               <span>{opt.label}</span>
               {opt.delta > 0 && <span className="opt-delta">+{opt.delta.toFixed(2)} €</span>}
             </label>
