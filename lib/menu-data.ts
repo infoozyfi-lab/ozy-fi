@@ -10,6 +10,7 @@ import type {
   RawOption,
   RawAddon,
   RawBundle,
+  RawScheduledOffer,
 } from './types';
 
 // `env` is the real bridged Cloudflare env (see cloudflare-env.d.ts) — every
@@ -33,6 +34,7 @@ export async function loadMenuData(env: CloudflareEnv): Promise<MenuData> {
     addons,
     bundles,
     settingsRows,
+    scheduledOffers,
   ] = await Promise.all([
     // D1's generic type parameter belongs on the terminal call (.all<T>() /
     // .first<T>() / .run<T>()), not on .prepare() — .prepare() itself takes
@@ -44,6 +46,13 @@ export async function loadMenuData(env: CloudflareEnv): Promise<MenuData> {
     env.DB.prepare('SELECT * FROM addons WHERE active = 1 ORDER BY sort_order').all<RawAddon>(),
     env.DB.prepare('SELECT * FROM bundles WHERE active = 1 ORDER BY sort_order').all<RawBundle>(),
     env.DB.prepare('SELECT key, value FROM admin_settings').all<{ key: string; value: string }>(),
+    // Growth features batch 2 (Feature 5) — only active=1 offers are ever
+    // relevant client- or server-side (an admin who's toggled an offer
+    // off shouldn't have it show up anywhere, same as inactive
+    // products/addons/bundles above); whether one is active RIGHT NOW
+    // (day/time window) is evaluated separately, see
+    // lib/scheduledOffers.ts.
+    env.DB.prepare('SELECT * FROM scheduled_offers WHERE active = 1 ORDER BY sort_order').all<RawScheduledOffer>(),
   ]);
 
   const optionsByGroup: Record<string, RawOption[]> = {};
@@ -71,5 +80,6 @@ export async function loadMenuData(env: CloudflareEnv): Promise<MenuData> {
     addons: addons.results,
     bundles: bundles.results,
     settings,
+    scheduledOffers: scheduledOffers.results,
   };
 }

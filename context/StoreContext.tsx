@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { trackViewItem, trackAddToCart, trackBeginCheckout, trackPurchase } from '@/lib/analytics';
 import { useLocale, useLocalePath, useTranslations } from '@/lib/i18n';
 import { normalizeCategories, normalizeProducts, normalizeMenuBlob } from '@/lib/menu-i18n';
+import { findBestActiveScheduledOffer } from '@/lib/scheduledOffers';
 import type {
   Product,
   Category,
@@ -29,6 +30,7 @@ import type {
   RawProduct,
   RecentOrder,
   MenuData,
+  ScheduledOffer,
 } from '@/lib/types';
 
 interface StoreContextValue {
@@ -86,6 +88,20 @@ interface StoreContextValue {
   drinks: Addon[];
   dipCups: Addon[];
   snacks: Addon[];
+  // Growth features — admin-configurable, 0 means "not configured" (see
+  // lib/menu-i18n.ts's normalizeMenuBlob). firstOrderDiscountPercent
+  // drives CheckoutModal.tsx's welcome-discount banner.
+  firstOrderDiscountPercent: number;
+  // Growth features batch 2 (Feature 5) — the scheduled offer that's
+  // active RIGHT NOW (Helsinki day/time), recomputed every minute (see
+  // the ticking effect below) so the Header/CheckoutModal banners appear
+  // and disappear on their own without a page reload — same
+  // once-a-minute precision already used by components/TrackPageClient's
+  // EtaCountdown. null when no configured offer is active. This is
+  // advisory/display-only: app/api/orders/route.ts independently
+  // re-evaluates and enforces the real discount server-side at the
+  // actual moment of checkout, never trusting this client-side value.
+  activeScheduledOffer: ScheduledOffer | null;
 
   // Bundles/combos + featured-card settings.
   bundles: Bundle[];
@@ -182,6 +198,30 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     }
   }, [cart]);
 
+  // Growth features (Feature 1 — reorder) — a one-shot flag set by
+  // TrackPageClient.tsx right before it writes a reordered cart into
+  // `ozy_cart` (above) and navigates to /menu. Consumed here, once, on
+  // this fresh StoreProvider's first mount (every top-level page gets its
+  // own StoreProvider instance — see this file's header — so /track's
+  // "Reorder this" button can't just call setCheckoutOpen(true) directly,
+  // it has no StoreContext in common with the page it's navigating to).
+  // Removed immediately so a later reload of /menu (or navigating back to
+  // it normally) never re-opens checkout unexpectedly.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('ozy_open_checkout') === '1') {
+        sessionStorage.removeItem('ozy_open_checkout');
+        setCheckoutOpen(true);
+        setUrl(lp('/checkout'));
+      }
+    } catch {
+      // Storage unavailable — reorder still lands the cart (see above),
+      // just without auto-opening checkout; the customer can open it
+      // themselves from the cart icon.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [isProductPageOpen, setProductPageOpen] = useState(false);
@@ -225,6 +265,12 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
   const [drinks, setDrinks] = useState<Addon[]>([]);
   const [dipCups, setDipCups] = useState<Addon[]>([]);
   const [snacks, setSnacks] = useState<Addon[]>([]);
+  const [firstOrderDiscountPercent, setFirstOrderDiscountPercent] = useState(0);
+  const [scheduledOffers, setScheduledOffers] = useState<ScheduledOffer[]>([]);
+  // Ticks once a minute so activeScheduledOffer (below) is recomputed
+  // without requiring a menu refetch or page reload — same pattern as
+  // components/TrackPageClient.tsx's EtaCountdown.
+  const [offerClockTick, setOfferClockTick] = useState(0);
 
   // ---- Bundles/combos (e.g. "3 Pizza + 1.5L Lemonade — €45"). ----
   const [bundles, setBundles] = useState<Bundle[]>([]);
@@ -239,6 +285,17 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
   const allFillings = useMemo(
     () => fillingCategories.flatMap((c) => c.items),
     [fillingCategories]
+  );
+
+  useEffect(() => {
+    const id = setInterval(() => setOfferClockTick((n) => n + 1), 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- offerClockTick is a deliberate re-evaluation trigger, not a real dependency of the computation.
+  const activeScheduledOffer = useMemo(
+    () => findBestActiveScheduledOffer(scheduledOffers),
+    [scheduledOffers, offerClockTick]
   );
 
   useEffect(() => {
@@ -283,6 +340,8 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         setOpeningHours(blob.openingHours);
         setFeatured(blob.featured);
         setPopularProductIds(blob.popularProductIds);
+        setFirstOrderDiscountPercent(blob.firstOrderDiscountPercent);
+        setScheduledOffers(blob.scheduledOffers);
       } catch (err) {
         console.error('Menu loading error:', err);
         setMenuError(t.menuSection.loadError);
@@ -655,7 +714,15 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
 
     // res.json() resolves to `unknown` under real fetch typings — cast to
     // the shape POST /api/orders actually returns.
-    const data = (await res.json()) as { orderNum: string; total?: number; discountAmount?: number };
+    const data = (await res.json()) as {
+      orderNum: string;
+      total?: number;
+      discountAmount?: number;
+      welcomeDiscountApplied?: boolean;
+      scheduledOfferApplied?: { id: string; label: string } | null;
+      loyalty?: { orderCount: number; rewardCode: string | null };
+      wowMomentRewardCode?: string | null;
+    };
 
     // Remember this order on the customer's own device — /track can then
     // offer it as a one-tap shortcut without them needing to note down
@@ -682,6 +749,10 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       total: finalTotal,
       discountAmount: data.discountAmount || 0,
       items: cart,
+      loyalty: data.loyalty,
+      welcomeDiscountApplied: data.welcomeDiscountApplied,
+      scheduledOfferApplied: data.scheduledOfferApplied,
+      wowMomentRewardCode: data.wowMomentRewardCode,
     });
     setCheckoutOpen(false);
     setCart([]);
@@ -869,6 +940,8 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     drinks,
     dipCups,
     snacks,
+    firstOrderDiscountPercent,
+    activeScheduledOffer,
 
     // Bundles/combos + featured-card settings.
     bundles,

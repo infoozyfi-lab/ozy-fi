@@ -21,6 +21,7 @@ const fi = {
     cartAriaLabel: 'Ostoskori',
     openMenuAriaLabel: 'Avaa valikko',
     storeClosedBanner: 'Olemme tilapäisesti suljettu emmekä ota juuri nyt vastaan uusia tilauksia.',
+    scheduledOfferBanner: (label: string, pct: number) => `🔥 ${label}: ${pct}% alennus juuri nyt!`,
   },
 
   footer: {
@@ -30,9 +31,21 @@ const fi = {
     findUs: 'Löydä meidät',
     contactHeading: 'Yhteystiedot',
     privacyPolicy: 'Tietosuojaseloste',
+    faq: 'UKK',
     terms: 'Käyttöehdot',
     rights: (year: number) => `© ${year} ozy.fi. Kaikki oikeudet pidätetään.`,
     demoNotice: 'Demosivusto.',
+    // Growth features (Feature 4 — referral program).
+    referralColumnHeading: 'Suosittele ystävälle',
+    referralHeading: 'Hanki alennuskoodi ystävällesi',
+    referralEmailPlaceholder: 'sinun@sahkoposti.fi',
+    referralSubmit: 'Hae koodi',
+    referralSubmitting: 'Lähetetään…',
+    referralError: 'Koodia ei juuri nyt saatu haettua. Yritä uudelleen.',
+    referralSuccess: 'Tässä koodisi — jaa se ystävällesi!',
+    referralAlreadyHad: 'Sinulla on jo koodi:',
+    referralCopy: 'Kopioi koodi',
+    referralCopied: 'Kopioitu!',
   },
 
   cookieBanner: {
@@ -240,6 +253,9 @@ const fi = {
     dipsShortcut: 'Reunatäyte',
     snacks: 'Naposteltavat',
     added: 'Lisätty',
+    // Growth features (Feature 2 — first-order welcome discount).
+    welcomeDiscountBanner: (pct: number) => `🎉 Ensimmäinen tilaus? Saat ${pct}% alennuksen — lisätään automaattisesti kassalla!`,
+    scheduledOfferBanner: (label: string, pct: number) => `🔥 ${label}: ${pct}% alennus — lisätään automaattisesti kassalla!`,
   },
 
   confirm: {
@@ -247,6 +263,9 @@ const fi = {
     thanks: (name: string | undefined) => `Kiitos${name ? `, ${name}` : ''}! Tilauksesi on matkalla.`,
     eta: 'Arvioitu valmistumisaika: 25–35 minuuttia',
     couponApplied: (amount: string) => `Alennuskoodi käytössä: −${amount}`,
+    // Growth features (Feature 2 — first-order welcome discount).
+    welcomeDiscountApplied: (amount: string) => `Ensitilausalennus käytössä: −${amount}`,
+    scheduledOfferApplied: (label: string, amount: string) => `${label}-alennus käytössä: −${amount}`,
     codNote: (total: ReactNode) => (
       <>Maksa <b>{total}</b> käteisellä, kun tilauksesi saapuu.</>
     ),
@@ -255,6 +274,13 @@ const fi = {
     ),
     trackLinkText: 'Seuraa tilausta',
     continueShopping: 'Jatka ostoksia',
+    // Growth features (Feature 3 — stamp card / loyalty).
+    loyaltyReward: (count: number) => `🎉 Onnittelut ${count}. tilauksestasi! Tässä palkinto seuraavaa kertaa varten:`,
+    loyaltyProgress: (count: number, remaining: number) => `Tämä on ${count}. tilauksesi — ${remaining} lisää palkintoon!`,
+    copyCode: 'Kopioi koodi',
+    codeCopied: 'Kopioitu!',
+    // Growth features batch 2 (Feature 6 — "Ozy Wow Moment").
+    wowMomentReward: '✨ Wow-hetki! Voitit yllätyspalkinnon seuraavaan tilaukseesi:',
   },
 
   track: {
@@ -290,6 +316,13 @@ const fi = {
     deliveringTo: (addr: string, method: string) => `Toimitetaan osoitteeseen ${addr} · ${method}`,
     codPaymentLabel: 'Käteinen toimituksessa',
     trackDifferentOrder: '← Seuraa toista tilausta',
+    // Growth features (Feature 1 — reorder).
+    reorderButton: 'Tilaa uudelleen',
+    reorderLoading: 'Valmistellaan uudelleentilaustasi…',
+    reorderGenericError: 'Uudelleentilaus ei juuri nyt onnistunut. Yritä uudelleen.',
+    reorderReadyNotice: (n: number) => `${n} tuote${n !== 1 ? 'tta' : ''} lisätty koriisi tämän päivän hintaan.`,
+    reorderSkippedNotice: (n: number) => `${n} tuote${n !== 1 ? 'tta' : ''} ei ole enää saatavilla ja ${n !== 1 ? 'ne jätettiin' : 'se jätettiin'} pois. Loput ovat valmiina korissasi.`,
+    reorderContinue: 'Jatka kassalle',
   },
 
   legal: {
@@ -347,6 +380,46 @@ const fi = {
     body: 'Sivun lataamisessa tapahtui virhe. Yritä uudelleen — jos ongelma jatkuu, palaa etusivulle.',
     tryAgain: 'Yritä uudelleen',
     goHome: 'Etusivulle',
+  },
+
+  faq: {
+    metaTitle: 'UKK — Toimitus, Maksutavat ja Tilaaminen | ozy.fi',
+    title: 'Usein kysytyt kysymykset',
+    intro: 'Nopeita vastauksia toimituksesta, maksutavoista ja tilaamisesta ozy.fi:ssä Helsingissä. Etkö löytänyt etsimääsi? Ota suoraan yhteyttä.',
+    items: [
+      {
+        q: 'Mille alueille toimitatte?',
+        a: 'Toimitamme tiettyihin Helsingin postinumeroihin. Syötä postinumerosi kassalla, niin näet heti kuuluuko osoitteesi toimitusalueeseemme.',
+      },
+      {
+        q: 'Paljonko toimitus maksaa?',
+        a: 'Toimitusmaksu näkyy selkeästi ostoskorissa ennen tilauksen vahvistamista — ei yllätyskuluja jälkikäteen.',
+      },
+      {
+        q: 'Onko tilauksella minimisumma?',
+        a: 'Kyllä, kotiinkuljetuksella on minimitilaussumma. Se näkyy ostoskorissasi, samoin kuin kuinka paljon sinun tarvitsee vielä lisätä sen täyttämiseksi.',
+      },
+      {
+        q: 'Miten voin maksaa?',
+        a: 'Käteisellä kuljettajalle toimituksen yhteydessä. Verkkomaksu kortilla on tulossa pian.',
+      },
+      {
+        q: 'Kuinka kauan toimitus kestää?',
+        a: 'Useimmat tilaukset saapuvat 30-45 minuutissa, riippuen ruuhkasta ja etäisyydestäsi ravintolaan. Näet arvioidun toimitusajan tilausta tehdessäsi.',
+      },
+      {
+        q: 'Voinko seurata tilaustani?',
+        a: 'Kyllä — tilauksen tekemisen jälkeen voit seurata sen tilaa seurantasivullamme tilausnumerolla ja puhelinnumerolla.',
+      },
+      {
+        q: 'Voinko muokata täytteitä tai kysyä allergioista?',
+        a: 'Kyllä, jokaisen pizzan, kebabin ja burgerin voi muokata valitsemallasi pohjalla, kastikkeella, juustolla ja täytteillä tilatessasi. Erityisistä allergiakysymyksistä ota suoraan yhteyttä ennen tilaamista.',
+      },
+      {
+        q: 'Voinko muuttaa tai peruuttaa tilaukseni sen tekemisen jälkeen?',
+        a: 'Soita meille mahdollisimman pian — voimme usein tehdä muutoksia, jos tilauksesi valmistus ei ole vielä alkanut, mutta emme voi taata sitä valmistuksen jo alettua.',
+      },
+    ],
   },
 
   notFound: {

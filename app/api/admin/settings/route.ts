@@ -24,6 +24,24 @@ const HOMEPAGE_KEYS = new Set([
   'popular_product_ids',
 ]);
 
+// Bug fix (found while reviewing the Sept 2026 growth-features delivery):
+// Manager-role staff are supposed to have Menu/Pricing access (see the
+// three-role design: Kitchen=Orders only, Manager=Orders/Menu/Homepage/
+// Customers/Reports, Owner=everything) — but the "Pricing rules" box in
+// Menu & Pricing has, since it was first added, saved its fields
+// alongside whatever else was in `admin_settings`, and every one of
+// those fields was missing from the allow-list above (which only ever
+// covered Homepage Display). That silently 403'd any Manager trying to
+// save Pricing rules — this list is exactly those fields, so Managers
+// can actually use the permission they're supposed to have.
+const PRICING_KEYS = new Set([
+  'size_large_upcharge',
+  'first_order_discount_percent',
+  'stamp_card_reward_percent',
+  'wow_moment_chance_percent',
+  'wow_moment_reward_percent',
+]);
+
 export async function GET(request: Request) {
   const { env } = await getCloudflareContext({ async: true });
   const denied = await requireRole(request, env, ['manager', 'owner']);
@@ -40,7 +58,7 @@ export async function GET(request: Request) {
 
   const out: Record<string, unknown> = {};
   for (const r of rows.results) {
-    if (session.role === 'manager' && !HOMEPAGE_KEYS.has(r.key)) continue;
+    if (session.role === 'manager' && !HOMEPAGE_KEYS.has(r.key) && !PRICING_KEYS.has(r.key)) continue;
     out[r.key] = r.value;
   }
 
@@ -73,12 +91,13 @@ export async function PUT(request: Request) {
   const keys = Object.keys(body);
 
   if (session.role === 'manager') {
-    const disallowed = keys.filter((k) => !HOMEPAGE_KEYS.has(k));
+    const disallowed = keys.filter((k) => !HOMEPAGE_KEYS.has(k) && !PRICING_KEYS.has(k));
     if (disallowed.length) {
       // A real 403, not a silent drop — this is exactly what the "hit a
       // restricted API directly" verification step checks for. A
       // Manager only ever gets this by calling the API by hand (the
-      // Homepage Display UI never sends anything outside HOMEPAGE_KEYS).
+      // Homepage Display and Pricing rules UIs never send anything
+      // outside HOMEPAGE_KEYS/PRICING_KEYS).
       return json(
         { error: `Your role can't change: ${disallowed.join(', ')}` },
         403

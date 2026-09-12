@@ -19,6 +19,11 @@ const en = {
     cartAriaLabel: 'Cart',
     openMenuAriaLabel: 'Open menu',
     storeClosedBanner: "We're temporarily closed and not taking new orders right now.",
+    // Growth features batch 2 (Feature 5) — homepage banner for whichever
+    // scheduled offer is active right now. `label` is plain admin-entered
+    // text (see admin/dashboard's Scheduled offers section) — never a
+    // hardcoded campaign name.
+    scheduledOfferBanner: (label: string, pct: number) => `🔥 ${label}: ${pct}% off right now!`,
   },
 
   footer: {
@@ -28,9 +33,21 @@ const en = {
     findUs: 'Find us',
     contactHeading: 'Contact',
     privacyPolicy: 'Privacy Policy',
+    faq: 'FAQ',
     terms: 'Terms & Conditions',
     rights: (year: number) => `© ${year} ozy.fi. All rights reserved.`,
     demoNotice: 'Demo website.',
+    // Growth features (Feature 4 — referral program).
+    referralColumnHeading: 'Refer a friend',
+    referralHeading: 'Get a coupon for a friend',
+    referralEmailPlaceholder: 'your@email.com',
+    referralSubmit: 'Get code',
+    referralSubmitting: 'Sending…',
+    referralError: 'Could not get a code right now. Please try again.',
+    referralSuccess: 'Here\'s your code — share it with a friend!',
+    referralAlreadyHad: 'You already have a code:',
+    referralCopy: 'Copy code',
+    referralCopied: 'Copied!',
   },
 
   cookieBanner: {
@@ -237,6 +254,13 @@ const en = {
     dipsShortcut: 'Dip the edges',
     snacks: 'Snacks',
     added: 'Added',
+    // Growth features (Feature 2 — first-order welcome discount).
+    welcomeDiscountBanner: (pct: number) => `🎉 First order? Enjoy ${pct}% off — applied automatically at checkout!`,
+    // Growth features batch 2 (Feature 5) — shown instead of the welcome
+    // banner above when a scheduled offer is active and more favorable
+    // (see CheckoutModal.tsx's bestAutoDiscount). `label` is plain
+    // admin-entered text, never a hardcoded campaign name.
+    scheduledOfferBanner: (label: string, pct: number) => `🔥 ${label}: ${pct}% off — applied automatically at checkout!`,
   },
 
   confirm: {
@@ -244,6 +268,12 @@ const en = {
     thanks: (name: string | undefined) => `Thanks${name ? `, ${name}` : ''}! Your order is on its way.`,
     eta: 'Estimated ready time: 25–35 minutes',
     couponApplied: (amount: string) => `Coupon applied: −${amount}`,
+    // Growth features (Feature 2 — first-order welcome discount).
+    welcomeDiscountApplied: (amount: string) => `First-order discount applied: −${amount}`,
+    // Growth features batch 2 (Feature 5) — shown instead of
+    // welcomeDiscountApplied when the applied discount was a scheduled
+    // offer. `label` is the admin-entered offer name.
+    scheduledOfferApplied: (label: string, amount: string) => `${label} discount applied: −${amount}`,
     codNote: (total: ReactNode) => (
       <>Pay <b>{total}</b> by cash on delivery when your order arrives.</>
     ),
@@ -252,6 +282,20 @@ const en = {
     ),
     trackLinkText: 'Track order',
     continueShopping: 'Continue shopping',
+    // Growth features (Feature 3 — stamp card / loyalty).
+    loyaltyReward: (count: number) => `🎉 Congrats on your ${count}th order! Here's a reward for next time:`,
+    loyaltyProgress: (count: number, remaining: number) =>
+      `This is your ${count}${count === 1 ? 'st' : count === 2 ? 'nd' : count === 3 ? 'rd' : 'th'} order — ${remaining} more for a reward!`,
+    copyCode: 'Copy code',
+    codeCopied: 'Copied!',
+    // Growth features batch 2 (Feature 6 — "Ozy Wow Moment"). Deliberately
+    // distinct wording/emoji from loyaltyReward above, and rendered in its
+    // own block (see ConfirmModal.tsx) so the two can never visually
+    // collide when both fire on the same order. No percentage shown here,
+    // same convention as loyaltyReward above (POST /api/orders doesn't
+    // return the reward percent, only the code, matching how the
+    // stamp-card reward is already surfaced).
+    wowMomentReward: '✨ Wow Moment! You’ve won a surprise reward for your next order:',
   },
 
   track: {
@@ -287,6 +331,13 @@ const en = {
     deliveringTo: (addr: string, method: string) => `Delivering to ${addr} · ${method}`,
     codPaymentLabel: 'Cash on delivery',
     trackDifferentOrder: '← Track a different order',
+    // Growth features (Feature 1 — reorder).
+    reorderButton: 'Reorder this',
+    reorderLoading: 'Preparing your reorder…',
+    reorderGenericError: 'Could not reorder right now. Please try again.',
+    reorderReadyNotice: (n: number) => `${n} item${n !== 1 ? 's' : ''} added to your cart at today's prices.`,
+    reorderSkippedNotice: (n: number) => `${n} item${n !== 1 ? 's are' : ' is'} no longer available and ${n !== 1 ? 'were' : 'was'} skipped. The rest is ready in your cart.`,
+    reorderContinue: 'Continue to checkout',
   },
 
   legal: {
@@ -344,6 +395,46 @@ const en = {
     body: 'That page hit a snag. Please try again — if it keeps happening, head back to the homepage.',
     tryAgain: 'Try again',
     goHome: 'Go to homepage',
+  },
+
+  faq: {
+    metaTitle: 'FAQ — Delivery, Payment & Ordering | ozy.fi',
+    title: 'Frequently asked questions',
+    intro: 'Quick answers about delivery, payment, and ordering from ozy.fi in Helsinki. Can\'t find what you\'re looking for? Contact us directly.',
+    items: [
+      {
+        q: 'Which areas do you deliver to?',
+        a: 'We deliver to a set list of Helsinki postal codes. Enter your postal code at checkout and we\'ll let you know right away if your address is within our delivery area.',
+      },
+      {
+        q: 'How much is delivery?',
+        a: 'The delivery fee is shown clearly in your cart before you confirm the order — no surprise charges added afterward.',
+      },
+      {
+        q: 'Is there a minimum order amount?',
+        a: 'Yes, a minimum order amount applies for delivery. It\'s shown in your cart, along with how much more you\'d need to add to reach it, if anything.',
+      },
+      {
+        q: 'How can I pay?',
+        a: 'Cash on delivery — you pay the driver when your order arrives. Online card payment is coming soon.',
+      },
+      {
+        q: 'How long does delivery take?',
+        a: 'Most orders arrive within 30-45 minutes, depending on how busy we are and your distance from the restaurant. You\'ll see an estimated time when you place your order.',
+      },
+      {
+        q: 'Can I track my order?',
+        a: 'Yes — after ordering, use our order tracking page with your order number and phone number to see its current status.',
+      },
+      {
+        q: 'Can I customize toppings, or ask about allergies?',
+        a: 'Yes, every pizza, kebab, and burger can be customized with your choice of base, sauce, cheese, and toppings when you order. For specific allergy questions, please contact us directly before ordering.',
+      },
+      {
+        q: 'Can I change or cancel my order after placing it?',
+        a: 'Please call us as soon as possible — we can often make changes if your order hasn\'t started preparing yet, but we can\'t guarantee it once the kitchen has started.',
+      },
+    ],
   },
 
   notFound: {

@@ -1,5 +1,12 @@
 html, body { width: 100%; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* Disables the default mobile-browser tap-highlight flash site-wide, on
+   every button and link. Added here (near the top, before anything else
+   loads) per the business owner's request — checked first and found
+   NOT already present in this file (or anywhere else in the project;
+   see this delivery's summary for that discrepancy), so this is a real
+   addition, not a restored/verified pre-existing rule. */
+button, a { -webkit-tap-highlight-color: transparent; }
 body { overflow-x: clip; }
 @supports not (overflow-x: clip) {
   body { overflow-x: hidden; }
@@ -257,10 +264,31 @@ footer{ padding: 56px 0 32px; }
   background: #FF6A5C; color: #1A0D06; text-align: center; font-weight: 700;
   font-size: 0.85rem; padding: 10px 16px;
 }
-.footer-grid{ display:grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 40px; padding-bottom: 40px; border-bottom: 1px solid var(--line); }
+/* Growth features batch 2 (Feature 5) — reuses .store-closed-banner's
+   layout (same site-wide banner slot in Header.tsx) but overrides the
+   color: red reads as a "we're closed" warning, wrong tone for a
+   promotional discount banner. */
+.store-closed-banner.scheduled-offer-banner{
+  background: var(--gold, #E3A73B); color: #1A0D06;
+}
+/* Growth features (Feature 4 — referral program) added a 4th column
+   (the Footer.tsx referral form) — widened from the original 3-column
+   1.4fr 1fr 1fr template so it doesn't wrap awkwardly into row 2. */
+.footer-grid{ display:grid; grid-template-columns: 1.3fr 0.9fr 0.9fr 1fr; gap: 32px; padding-bottom: 40px; border-bottom: 1px solid var(--line); }
 .footer-grid h4{ color: var(--cream); font-size: 0.95rem; margin: 0 0 16px; }
 .footer-grid a{ display:block; color: var(--muted); padding: 6px 0; font-size: 0.94rem; }
 .footer-grid a:hover{ color: var(--ember); }
+/* Growth features (Feature 4 — referral program) — the Footer.tsx email
+   input has no styling of its own otherwise (this project has no global
+   input appearance rule — see body{} above — every other form on this
+   site is styled by its own page-specific class like .track-form input,
+   .checkout-page input), so without this it would render as an
+   unstyled, white, theme-clashing browser-default input. */
+.footer-grid input[type="email"]{
+  background: var(--bg); border: 1px solid var(--line); color: var(--cream);
+  padding: 9px 10px; border-radius: 5px; font-size: 0.9rem;
+}
+.footer-grid input[type="email"]:focus{ border-color: var(--ember); outline: none; }
 .footer-bottom{ display:flex; justify-content:space-between; padding-top: 24px; color: var(--muted); font-size: 0.85rem; flex-wrap:wrap; gap: 10px; }
 
 /* ---------- LANGUAGE SWITCHER (bilingual site) ---------- */

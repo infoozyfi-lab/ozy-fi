@@ -1,15 +1,17 @@
 'use client';
 
 import { useEffect, useState, type FormEvent, type ChangeEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { StoreProvider } from '@/context/StoreContext';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { useTranslations, useLocale } from '@/lib/i18n';
+import { useTranslations, useLocale, useLocalePath } from '@/lib/i18n';
 import type {
   OrderStatus,
   OrderTrackingResult,
   OrderPhoneMatch,
   RecentOrder,
+  CartLine,
 } from '@/lib/types';
 
 interface Step {
@@ -225,6 +227,89 @@ function PhoneLookup({ onFound, t, locale }: { onFound: (orderNum: string, phone
   );
 }
 
+// Feature 1 — "Reorder this". Two-step by design: fetching the reorder
+// data first (so any "N items skipped" notice is visible on THIS page,
+// before leaving it) and only navigating to checkout once the customer
+// explicitly continues — matches the brief's "lands the customer on
+// checkout with the cart already filled — not an auto-submitted order
+// (they should still review before confirming)".
+function ReorderButton({ orderNum, phone, t }: { orderNum: string; phone: string; t: any }) {
+  const router = useRouter();
+  const lp = useLocalePath();
+  const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [error, setError] = useState('');
+  const [result, setResult] = useState<{ cart: CartLine[]; skippedCount: number; addedCount: number } | null>(null);
+
+  const fetchReorder = async () => {
+    setStatus('loading');
+    setError('');
+    try {
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderNum)}/reorder?phone=${encodeURIComponent(phone)}`);
+      // res.json() resolves to `unknown` under real fetch typings — cast to
+      // this endpoint's actual response shape.
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        cart?: CartLine[];
+        skippedCount?: number;
+        addedCount?: number;
+      };
+      if (!res.ok || !data.cart) {
+        setError(data.error || t.track.reorderGenericError);
+        setStatus('error');
+        return;
+      }
+      setResult({ cart: data.cart, skippedCount: data.skippedCount || 0, addedCount: data.addedCount || data.cart.length });
+      setStatus('ready');
+    } catch {
+      setError(t.track.reorderGenericError);
+      setStatus('error');
+    }
+  };
+
+  // Writes into the SAME sessionStorage keys StoreContext.tsx's cart-
+  // persistence effect and one-shot checkout-open effect already read on
+  // mount (see that file's header comment on why this is the only way to
+  // hand off state to a different page's StoreProvider instance) — this
+  // page never imports StoreContext itself for cart state.
+  const continueToCheckout = () => {
+    if (!result) return;
+    try {
+      sessionStorage.setItem('ozy_cart', JSON.stringify(result.cart));
+      sessionStorage.setItem('ozy_open_checkout', '1');
+    } catch {
+      // Storage unavailable — still navigate; the customer just lands on
+      // an empty cart instead of a pre-filled one, same degraded
+      // experience session storage being unavailable already causes
+      // elsewhere in this app.
+    }
+    router.push(lp('/menu'));
+  };
+
+  if (status === 'ready' && result) {
+    return (
+      <div className="track-recent" style={{ marginTop: 16 }}>
+        <p className="track-recent-title">
+          {result.skippedCount > 0
+            ? t.track.reorderSkippedNotice(result.skippedCount)
+            : t.track.reorderReadyNotice(result.addedCount)}
+        </p>
+        <button type="button" className="btn-primary" onClick={continueToCheckout}>
+          {t.track.reorderContinue}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <button type="button" className="btn-primary" onClick={fetchReorder} disabled={status === 'loading'}>
+        {status === 'loading' ? t.track.reorderLoading : t.track.reorderButton}
+      </button>
+      {status === 'error' && <p className="field-error" style={{ marginTop: 8 }}>{error}</p>}
+    </div>
+  );
+}
+
 function TrackForm({ t, locale }: { t: any; locale: string }) {
   const [orderNum, setOrderNum] = useState('');
   const [phone, setPhone] = useState('');
@@ -351,6 +436,8 @@ function TrackForm({ t, locale }: { t: any; locale: string }) {
           <p className="track-address">
             {t.track.deliveringTo(order.address, order.payment_method === 'cod' ? t.track.codPaymentLabel : order.payment_method)}
           </p>
+
+          <ReorderButton orderNum={order.order_num} phone={phone} t={t} />
 
           <button type="button" className="track-lost-link" onClick={() => setOrder(null)}>
             {t.track.trackDifferentOrder}

@@ -2,6 +2,7 @@ import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { json, purgeMenuCache, ADMIN_TABLES } from '@/lib/api-helpers';
 import { requireRole, getSession } from '@/lib/adminAuth';
 import { logActivity } from '@/lib/auditLog';
+import { validateScheduledOfferInput } from '@/lib/scheduledOffers';
 import type { StaffRole } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -39,6 +40,16 @@ export async function PUT(request: Request, { params }: { params: { table: strin
     if (finalOfferPrice !== null && finalOfferPrice !== undefined && finalOfferPrice !== '' && Number(finalOfferPrice) > finalPrice) {
       return json({ error: 'Offer price cannot be higher than the regular price.' }, 400);
     }
+  }
+
+  // Growth features batch 2 (Feature 5) — same validation as the POST
+  // route (app/api/admin/[table]/route.ts), applied to whichever fields
+  // this particular update touches (a lone `active` toggle, for
+  // instance, is valid on its own and shouldn't require re-sending
+  // days/time/percent).
+  if (params.table === 'scheduled_offers') {
+    const validationError = validateScheduledOfferInput(body);
+    if (validationError) return json({ error: validationError }, 400);
   }
 
   const setClause = cols.map((c) => `${c} = ?`).join(', ');

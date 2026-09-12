@@ -254,3 +254,120 @@ export function verifyCartLine(
 ): PriceCheckResult {
   return line.bundleId ? verifyBundleLine(line, menu) : verifyProductLine(line, menu);
 }
+
+// ---------------------------------------------------------------------
+// Growth features (reorder) — GET /api/orders/[orderNum]/reorder needs to
+// compute what a historical order_item would cost TODAY, not check a
+// claimed price against a tolerance the way verifyProductLine/
+// verifyBundleLine above do. Kept as separate functions rather than
+// reworking verifyProductLine/verifyBundleLine to serve both callers —
+// those two are the money-critical path POST /api/orders depends on
+// (verified with real worked examples during the price-verification
+// pass) and this project's standing rule is to stay tightly scoped, so
+// this deliberately touches neither of them. Both still reuse the exact
+// same primitives those functions do — calcUnitPriceFromSelection and
+// validateSelectionShape — so "current prices, not historical" is
+// computed by the one real pricing formula this file owns, not a
+// reimplementation of it.
+export interface ReorderLineResult {
+  ok: boolean;
+  error?: string;
+  productId?: string;
+  bundleId?: string;
+  name?: string;
+  image?: string | null;
+  unitPrice?: number;
+  selection?: CartLineSelectionData;
+  bundleItems?: CartLineBundleItem[];
+}
+
+// Resolves a plain product or addon (drink/dip/snack) line at CURRENT
+// prices. A selection that no longer validates (shape changed, or was
+// simply never stored — see worker/schema.sql's selection_json comment
+// for pre-migration rows) is treated as "no customization" rather than
+// an error, same fallback verifyProductLine uses for an omitted
+// `selection` — never a reason to skip an otherwise-reorderable item.
+export function computeCurrentProductPrice(
+  productId: string | null | undefined,
+  selection: unknown,
+  menu: MenuBlob
+): ReorderLineResult {
+  if (!productId) return { ok: false, error: 'Missing product reference.' };
+
+  const product = menu.products.find((p) => p.id === productId);
+  const addon = product
+    ? undefined
+    : [...menu.drinks, ...menu.dipCups, ...menu.snacks].find((a) => a.id === productId);
+
+  if (!product && !addon) {
+    return { ok: false, error: 'This item is no longer on the menu.' };
+  }
+
+  if (addon) {
+    return { ok: true, productId, name: addon.name, image: addon.image, unitPrice: addon.price };
+  }
+
+  const basePrice = product!.price ?? 0;
+  const toppingsEligible = Boolean(product!.toppingsEnabled);
+  let unitPrice = basePrice;
+  let resolvedSelection: CartLineSelectionData | undefined;
+  if (selection !== undefined && validateSelectionShape(selection)) {
+    resolvedSelection = selection;
+    unitPrice = calcUnitPriceFromSelection(basePrice, toppingsEligible, selection, menu);
+  }
+  return { ok: true, productId, name: product!.name, image: product!.image, unitPrice, selection: resolvedSelection };
+}
+
+// Resolves a bundle line at CURRENT prices — same "bundle base price plus
+// each filled slot item's real customization extra" formula as
+// verifyBundleLine, just computing a fresh total instead of checking one.
+// If the bundle itself, or any one of its filled slot items' products, no
+// longer exists, the WHOLE bundle line is treated as unavailable (not
+// just the missing sub-item) — a bundle with a silently-dropped slot item
+// isn't the same bundle the customer originally ordered, so this reorder
+// feature skips it entirely (and counts it in the "N items skipped"
+// notice) rather than guessing at a partial substitute.
+export function computeCurrentBundlePrice(
+  bundleId: string | undefined,
+  bundleItems: unknown,
+  menu: MenuBlob
+): ReorderLineResult {
+  if (!bundleId) return { ok: false, error: 'Missing bundle reference.' };
+
+  const bundle = menu.bundles.find((b) => b.id === bundleId);
+  if (!bundle) return { ok: false, error: 'This bundle is no longer available.' };
+
+  const items = Array.isArray(bundleItems) ? bundleItems : [];
+  let extrasTotal = 0;
+  const resolvedItems: CartLineBundleItem[] = [];
+
+  for (const raw of items) {
+    if (!raw || typeof raw !== 'object' || typeof (raw as CartLineBundleItem).productId !== 'string') {
+      return { ok: false, error: `"${bundle.title}" has invalid item data.` };
+    }
+    const item = raw as CartLineBundleItem;
+    const product = menu.products.find((p) => p.id === item.productId);
+    if (!product) {
+      return { ok: false, error: `"${bundle.title}" contains an item that is no longer available.` };
+    }
+
+    if (item.selection !== undefined && validateSelectionShape(item.selection)) {
+      const basePrice = product.price ?? 0;
+      const toppingsEligible = Boolean(product.toppingsEnabled);
+      const unit = calcUnitPriceFromSelection(basePrice, toppingsEligible, item.selection, menu);
+      extrasTotal += unit - basePrice;
+      resolvedItems.push({ productId: item.productId, selection: item.selection });
+    } else {
+      resolvedItems.push({ productId: item.productId });
+    }
+  }
+
+  return {
+    ok: true,
+    bundleId,
+    name: bundle.title,
+    image: bundle.image,
+    unitPrice: bundle.price + extrasTotal,
+    bundleItems: resolvedItems,
+  };
+}

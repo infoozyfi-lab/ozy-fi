@@ -2,6 +2,7 @@ import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { json, slugify, purgeMenuCache, ADMIN_TABLES } from '@/lib/api-helpers';
 import { requireRole, getSession } from '@/lib/adminAuth';
 import { logActivity } from '@/lib/auditLog';
+import { validateScheduledOfferInput } from '@/lib/scheduledOffers';
 import type { StaffRole } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -49,6 +50,15 @@ export async function POST(request: Request, { params }: { params: { table: stri
     if (Number(body.offer_price) > Number(body.price || 0)) {
       return json({ error: 'Offer price cannot be higher than the regular price.' }, 400);
     }
+  }
+
+  // Growth features batch 2 (Feature 5) — day-array/time-window/percent
+  // validation, same "inline per-table check in the generic route" style
+  // as the products check above (see lib/scheduledOffers.ts for the
+  // shared rules, also used by the PUT route below).
+  if (params.table === 'scheduled_offers') {
+    const validationError = validateScheduledOfferInput(body);
+    if (validationError) return json({ error: validationError }, 400);
   }
 
   const cols = table.cols.filter((c) => c in body);

@@ -9,7 +9,7 @@ import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { goToCheckoutDirect, cart, storeClosed } = useStore();
+  const { goToCheckoutDirect, cart, storeClosed, activeScheduledOffer } = useStore();
   const pathname = usePathname();
   const t = useTranslations();
   const lp = useLocalePath();
@@ -59,6 +59,21 @@ export default function Header() {
       {storeClosed && (
         <div className="store-closed-banner">
           {t.header.storeClosedBanner}
+        </div>
+      )}
+      {/* Growth features batch 2 (Feature 5) — homepage banner for
+          whichever scheduled offer is active right now. Hidden whenever
+          storeClosed is also true — advertising a discount while not
+          taking orders would be misleading. Reuses the exact same
+          site-wide-banner slot/pattern as storeClosed above (this
+          Header renders on every page via StoreProvider); a SEPARATE
+          banner is added inside CheckoutModal.tsx for "shown ... in
+          checkout" (the checkout overlay is a full-screen takeover that
+          covers this Header entirely — see app/globals.css's
+          .checkout-page). */}
+      {!storeClosed && activeScheduledOffer && (
+        <div className="store-closed-banner scheduled-offer-banner">
+          {t.header.scheduledOfferBanner(activeScheduledOffer.label, activeScheduledOffer.discountPercent)}
         </div>
       )}
       <nav className="nav wrap" ref={navRef}>

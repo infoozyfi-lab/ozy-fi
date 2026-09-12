@@ -8,6 +8,9 @@
 // rather than maximally strict, matching this phase's `strict: false` /
 // `checkJs: false` tsconfig.
 
+import type { RawScheduledOffer, ScheduledOffer } from './scheduledOffers';
+export type { RawScheduledOffer, ScheduledOffer };
+
 export type Locale = 'fi' | 'en';
 
 // ---------------------------------------------------------------------
@@ -94,6 +97,12 @@ export interface MenuData {
   addons: RawAddon[];
   bundles: RawBundle[];
   settings: RawSettings;
+  // Growth features batch 2 (Feature 5) — active scheduled weekday
+  // offers (e.g. a Monday/Tuesday slow-day discount, a Friday special).
+  // Raw row shape + normalization live in lib/scheduledOffers.ts rather
+  // than here, since that module is shared with server-side enforcement
+  // (app/api/orders/route.ts) and needs to stay dependency-free.
+  scheduledOffers: RawScheduledOffer[];
 }
 
 // Minimal D1-like binding — only the shape loadMenuData() actually calls.
@@ -273,6 +282,20 @@ export interface MenuBlob {
   openingHours: OpeningHours;
   featured: Featured;
   popularProductIds: string[];
+  // Growth features — admin-configurable percentages (admin_settings keys
+  // first_order_discount_percent / stamp_card_reward_percent), 0 means
+  // "not configured / disabled" for each (mirrors sizeLargeUpcharge's own
+  // "unset admin_settings key → Number('') || 0" fallback). See
+  // CheckoutModal.tsx (welcome-discount banner) and
+  // app/api/orders/route.ts (server-side enforcement of both).
+  firstOrderDiscountPercent: number;
+  stampCardRewardPercent: number;
+  // Growth features batch 2 (Feature 5) — normalized, currently-active
+  // scheduled offers (already filtered to active=1 by lib/menu-data.ts's
+  // query; day/time-window evaluation happens separately, at the moment
+  // it's needed, via lib/scheduledOffers.ts's findBestActiveScheduledOffer
+  // — see context/StoreContext.tsx). Empty array if none are configured.
+  scheduledOffers: ScheduledOffer[];
 }
 
 // ---------------------------------------------------------------------
@@ -380,12 +403,40 @@ export interface Customer {
   notes: string;
 }
 
+// Stamp-card loyalty progress for the order that was just placed — see
+// POST /api/orders's response and ConfirmModal.tsx's progress message /
+// reward-code display. `rewardCode` is only set on the order that just
+// brought this phone number's non-cancelled order count to a multiple of
+// 5 (see app/api/orders/route.ts) — null every other time.
+export interface LoyaltyProgress {
+  orderCount: number;
+  rewardCode: string | null;
+}
+
 export interface ConfirmedOrder {
   orderNum: string;
   customer: Customer;
   total: number;
   discountAmount: number;
   items: CartLine[];
+  loyalty?: LoyaltyProgress;
+  // Growth features (Feature 2) — distinguishes an automatic welcome
+  // discount from a manually-entered coupon code, both of which land in
+  // the same `discountAmount` above (see app/api/orders/route.ts) — so
+  // ConfirmModal.tsx can show the right label for each rather than
+  // always saying "Coupon applied" for a discount the customer never
+  // typed a code for.
+  welcomeDiscountApplied?: boolean;
+  // Growth features batch 2 (Feature 5) — set when the applied discount
+  // was a scheduled weekday offer rather than a coupon or the welcome
+  // discount, so ConfirmModal.tsx can show its admin-entered label
+  // instead of a generic "discount applied" line.
+  scheduledOfferApplied?: { id: string; label: string } | null;
+  // Growth features batch 2 (Feature 6 — "Ozy Wow Moment") — set only
+  // when this order's random check succeeded; the code is for a FUTURE
+  // order (see app/api/orders/route.ts), never applied retroactively to
+  // this one. null/undefined every other time.
+  wowMomentRewardCode?: string | null;
 }
 
 export interface OpenProductOptions {
@@ -545,6 +596,9 @@ export interface CouponRow {
   usage_limit?: number | null;
   times_used: number;
   created_at: string;
+  // Growth features (Phase: referral program) — set only on a coupon
+  // auto-created by POST /api/referral; see worker/schema.sql's comment.
+  referral_email?: string | null;
 }
 
 // lib/coupons.js's validateCoupon() result — a discriminated-ish shape
@@ -595,6 +649,11 @@ export interface OrderItemRow {
   qty: number;
   line_total: number;
   details?: string | null;
+  // Growth features (Phase: reorder) — JSON-encoded
+  // `{ selection?, bundleId?, bundleItems? }`, see worker/schema.sql's
+  // comment on this column. NULL for any row written before this column
+  // existed, or for a plain uncustomized product/addon line.
+  selection_json?: string | null;
 }
 
 // worker/schema.sql's `audit_log` table — see lib/auditLog.js.

@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ChangeEvent, type MouseEvent } from 'react';
 import ResourceManager from '@/components/admin/ResourceManager';
 import BundleManager from '@/components/admin/BundleManager';
+import ScheduledOffersManager from '@/components/admin/ScheduledOffersManager';
 import OrderKanban from '@/components/admin/OrderKanban';
 import MyAccountModal from '@/components/admin/MyAccountModal';
 import StatTile from '@/components/admin/charts/StatTile';
@@ -556,6 +557,85 @@ interface CustomerSummary {
   lastOrder: string;
 }
 
+// Growth features (Feature 3 — stamp card / loyalty) admin view. Grouped
+// by the SAME last-6-digits tolerance phoneMatches() (lib/api-helpers.ts)
+// uses everywhere else phone lookups happen in this codebase — including
+// the stamp-card counting itself (app/api/orders/route.ts) — so what the
+// business owner sees here lines up with what actually triggers a
+// reward, unlike the table above (which groups by email-or-phone-or-name,
+// so the same phone under two different emails would appear as separate
+// rows and under-count for loyalty purposes).
+interface PhoneLoyaltySummary {
+  phone: string;
+  totalOrders: number;
+  nonCancelledOrders: number;
+  lastOrder: string;
+}
+
+const STAMP_INTERVAL = 5;
+
+function groupOrdersByPhone(orders: OrderRow[]): PhoneLoyaltySummary[] {
+  const groups: PhoneLoyaltySummary[] = [];
+  orders.forEach((o) => {
+    const digits = String(o.phone || '').replace(/\D/g, '');
+    const key = digits.slice(-6);
+    if (!key) return;
+    let group = groups.find((g) => g.phone.replace(/\D/g, '').slice(-6) === key);
+    if (!group) {
+      group = { phone: o.phone, totalOrders: 0, nonCancelledOrders: 0, lastOrder: o.created_at };
+      groups.push(group);
+    }
+    group.totalOrders += 1;
+    if (o.status !== 'cancelled') group.nonCancelledOrders += 1;
+    if (o.created_at > group.lastOrder) group.lastOrder = o.created_at;
+  });
+  return groups.sort((a, b) => b.nonCancelledOrders - a.nonCancelledOrders);
+}
+
+function LoyaltyByPhoneBox({ orders }: { orders: OrderRow[] }) {
+  const groups = useMemo(() => groupOrdersByPhone(orders), [orders]);
+
+  return (
+    <div style={{ ...box, marginBottom: 20 }}>
+      <h3 style={{ marginTop: 0, marginBottom: 4 }}>Orders by phone (loyalty progress)</h3>
+      <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0, marginBottom: 12 }}>
+        Non-cancelled orders per phone number — every 5th one earns a stamp-card reward (see Menu &amp; Pricing&apos;s Pricing rules box to set the reward %).
+      </p>
+      {groups.length === 0 ? (
+        <p>No orders yet.</p>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={th}>Phone</th>
+                <th style={th}>Non-cancelled orders</th>
+                <th style={th}>Total orders (incl. cancelled)</th>
+                <th style={th}>Progress to next reward</th>
+                <th style={th}>Last order</th>
+              </tr>
+            </thead>
+            <tbody>
+              {groups.map((g) => {
+                const remaining = (STAMP_INTERVAL - (g.nonCancelledOrders % STAMP_INTERVAL)) % STAMP_INTERVAL;
+                return (
+                  <tr key={g.phone}>
+                    <td style={td}>{g.phone}</td>
+                    <td style={td}>{g.nonCancelledOrders}</td>
+                    <td style={td}>{g.totalOrders}</td>
+                    <td style={td}>{remaining === 0 ? 'Reward earned this order' : `${remaining} more to go`}</td>
+                    <td style={td}>{g.lastOrder}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CustomersTab({ token }: { token: string }) {
   const { orders, loading } = useOrders(token);
 
@@ -582,7 +662,9 @@ function CustomersTab({ token }: { token: string }) {
   }, [orders]);
 
   return (
-    <div style={box}>
+    <div>
+      {!loading && <LoyaltyByPhoneBox orders={orders} />}
+      <div style={box}>
       <h2 style={{ marginTop: 0 }}>Customers</h2>
       <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: -8 }}>Derived from order history — not a separate customer database.</p>
       {loading ? (
@@ -617,6 +699,7 @@ function CustomersTab({ token }: { token: string }) {
           </table>
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -1386,7 +1469,19 @@ function PricingRulesBox({ token }: { token: string }) {
       await fetch('/api/admin/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ size_large_upcharge: values.size_large_upcharge || '' }),
+        body: JSON.stringify({
+          size_large_upcharge: values.size_large_upcharge || '',
+          // Growth features — first-order welcome discount % and stamp-
+          // card reward %, both admin-configurable (see this feature's
+          // summary). Blank/0 disables each independently.
+          first_order_discount_percent: values.first_order_discount_percent || '',
+          stamp_card_reward_percent: values.stamp_card_reward_percent || '',
+          // Growth features batch 2 (Feature 6 — "Ozy Wow Moment"). Both
+          // must be set (>0) for the random reward to ever trigger — see
+          // app/api/orders/route.ts.
+          wow_moment_chance_percent: values.wow_moment_chance_percent || '',
+          wow_moment_reward_percent: values.wow_moment_reward_percent || '',
+        }),
       });
       setSaved(true);
     } finally {
@@ -1431,6 +1526,42 @@ function PricingRulesBox({ token }: { token: string }) {
             type="number" step="0.1"
             value={values.size_large_upcharge || ''}
             onChange={(e: ChangeEvent<HTMLInputElement>) => { setValues((v) => ({ ...v, size_large_upcharge: e.target.value })); setSaved(false); }}
+          />
+        </label>
+        <label style={{ minWidth: 240 }}>
+          First-order welcome discount (%) — auto-applied to a phone number&apos;s very first order. Blank/0 disables it.
+          <input
+            style={inputStyle}
+            type="number" step="1" min="0" max="100"
+            value={values.first_order_discount_percent || ''}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => { setValues((v) => ({ ...v, first_order_discount_percent: e.target.value })); setSaved(false); }}
+          />
+        </label>
+        <label style={{ minWidth: 240 }}>
+          Stamp-card reward (%) — auto-applied to a single-use coupon on every 5th non-cancelled order for a phone number. Blank/0 disables it.
+          <input
+            style={inputStyle}
+            type="number" step="1" min="0" max="100"
+            value={values.stamp_card_reward_percent || ''}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => { setValues((v) => ({ ...v, stamp_card_reward_percent: e.target.value })); setSaved(false); }}
+          />
+        </label>
+        <label style={{ minWidth: 240 }}>
+          &quot;Ozy Wow Moment&quot; odds (%) — chance a random order wins a surprise reward. Blank/0 disables it.
+          <input
+            style={inputStyle}
+            type="number" step="1" min="0" max="100"
+            value={values.wow_moment_chance_percent || ''}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => { setValues((v) => ({ ...v, wow_moment_chance_percent: e.target.value })); setSaved(false); }}
+          />
+        </label>
+        <label style={{ minWidth: 240 }}>
+          Wow Moment reward (%) — the single-use coupon a winning order&apos;s customer gets for next time.
+          <input
+            style={inputStyle}
+            type="number" step="1" min="0" max="100"
+            value={values.wow_moment_reward_percent || ''}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => { setValues((v) => ({ ...v, wow_moment_reward_percent: e.target.value })); setSaved(false); }}
           />
         </label>
         <button type="submit" style={btnPrimary} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
@@ -1629,6 +1760,8 @@ function MenuTabs({ token }: { token: string }) {
     { id: 'options', label: 'Options & Toppings', icon: '🧀', desc: 'Bases, sauces, cheese, toppings, and filling choices' },
     { id: 'addons', label: 'Add-ons', icon: '🥤', desc: 'Drinks, dips, and snacks customers can add to their order' },
     { id: 'bundles', label: 'Bundles', icon: '🎁', desc: 'Combo deals and multi-item meal bundles' },
+    // Growth features batch 2 (Feature 5).
+    { id: 'scheduled_offers', label: 'Scheduled offers', icon: '📅', desc: 'Weekday/time-window discounts, e.g. a Monday boost or a Friday special' },
   ];
 
   if (!tab) {
@@ -1675,6 +1808,9 @@ function MenuTabs({ token }: { token: string }) {
       )}
       {tab === 'bundles' && (
         <BundleManager token={token} categories={categories} products={products} onChanged={bump} />
+      )}
+      {tab === 'scheduled_offers' && (
+        <ScheduledOffersManager onChanged={bump} />
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react';
+import { useState, useRef, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react';
 import { useStore } from '@/context/StoreContext';
 import { useTranslations } from '@/lib/i18n';
 import type { Addon, CartLine, Customer } from '@/lib/types';
@@ -77,6 +77,8 @@ export default function CheckoutModal() {
     cart, cartTotal, isCheckoutOpen, closeCheckout, placeOrder,
     removeFromCart, updateCartQty, addDrinkToCart,
     drinks, dipCups, snacks,
+    firstOrderDiscountPercent,
+    activeScheduledOffer,
   } = useStore();
   const t = useTranslations();
   const STEP_LABELS: string[] = [t.checkout.stepCart, t.checkout.stepDetails, t.checkout.stepPayment];
@@ -109,6 +111,51 @@ export default function CheckoutModal() {
   const [couponDiscount, setCouponDiscount] = useState(0);
   const [couponFinalTotal, setCouponFinalTotal] = useState<number | null>(null);
 
+  // Feature 2 — first-order welcome discount. `null` = not checked yet
+  // (or the phone field isn't a valid number to check), `true`/`false` =
+  // the last checked phone number's eligibility. This is purely advisory
+  // for the banner below — POST /api/orders re-checks from scratch at
+  // order-creation time and is the only check that actually matters (see
+  // that route's comment), so a stale/wrong value here can never cause an
+  // ineligible customer to actually get the discount, only show or hide
+  // a banner incorrectly for a moment.
+  const [firstOrderEligible, setFirstOrderEligible] = useState<boolean | null>(null);
+  const checkedPhoneRef = useRef('');
+
+  const checkFirstOrderEligibility = async (rawPhone: string) => {
+    const cleaned = rawPhone.trim();
+    if (!isValidFinnishPhone(cleaned) || checkedPhoneRef.current === cleaned) return;
+    checkedPhoneRef.current = cleaned;
+    try {
+      const res = await fetch(`/api/checkout/first-order?phone=${encodeURIComponent(cleaned)}`);
+      const data = (await res.json().catch(() => ({ eligible: false }))) as { eligible?: boolean };
+      setFirstOrderEligible(Boolean(data.eligible));
+    } catch {
+      // Advisory only — leave the banner hidden rather than guessing.
+      setFirstOrderEligible(null);
+    }
+  };
+
+  // Growth features batch 2 (Feature 5) — "best banner" choice between
+  // the welcome discount and an active scheduled offer, since the two
+  // are mutually exclusive server-side (app/api/orders/route.ts applies
+  // whichever is more favorable, never both) — this is purely about
+  // which single banner to SHOW here; the server independently decides
+  // and enforces the real discount at order-creation time regardless of
+  // what this computes. Both percentages are already known from the menu
+  // blob before any API call, so this needs no extra request — unlike
+  // firstOrderEligible, which only becomes known once the phone is
+  // entered (see checkFirstOrderEligibility above), so the scheduled-
+  // offer banner can show alone even before that.
+  const scheduledOfferPercent = activeScheduledOffer?.discountPercent ?? 0;
+  const welcomeEligible = firstOrderEligible === true && firstOrderDiscountPercent > 0;
+  const bestAutoDiscount: { kind: 'welcome'; percent: number } | { kind: 'scheduledOffer'; percent: number; label: string } | null =
+    welcomeEligible && firstOrderDiscountPercent >= scheduledOfferPercent
+      ? { kind: 'welcome', percent: firstOrderDiscountPercent }
+      : scheduledOfferPercent > 0 && activeScheduledOffer
+        ? { kind: 'scheduledOffer', percent: scheduledOfferPercent, label: activeScheduledOffer.label }
+        : null;
+
   type HandleAddFn = ((item: Addon) => void) & { _t?: number };
 
   const handleAdd: HandleAddFn = (item) => {
@@ -134,6 +181,8 @@ export default function CheckoutModal() {
     setErrors({});
     setOrderError('');
     resetCoupon();
+    setFirstOrderEligible(null);
+    checkedPhoneRef.current = '';
   };
 
   const applyCoupon = async () => {
@@ -213,6 +262,8 @@ export default function CheckoutModal() {
       setStep(1);
       setCustomer(EMPTY);
       resetCoupon();
+      setFirstOrderEligible(null);
+      checkedPhoneRef.current = '';
     } catch (err: any) {
       setOrderError(err.message || t.checkout.genericOrderError);
     } finally {
@@ -331,9 +382,32 @@ export default function CheckoutModal() {
               </label>
               <label className={errors.phone ? 'has-error' : ''}>
                 {t.checkout.phone}
-                <input type="tel" value={customer.phone} onChange={onField('phone')} placeholder={t.checkout.phonePlaceholder} />
+                <input
+                  type="tel"
+                  value={customer.phone}
+                  onChange={onField('phone')}
+                  onBlur={() => checkFirstOrderEligibility(customer.phone)}
+                  placeholder={t.checkout.phonePlaceholder}
+                />
                 {errors.phone && <span className="field-error">{errors.phone}</span>}
               </label>
+              {/* Feature 2 / Feature 5 — welcome discount or scheduled
+                  offer, whichever is more favorable (see
+                  bestAutoDiscount above). Advisory only — the discount
+                  itself is applied and re-checked server-side regardless
+                  of whether this banner ever renders. */}
+              {bestAutoDiscount && (
+                <p
+                  style={{
+                    margin: '-8px 0 16px', padding: '10px 12px', borderRadius: 8,
+                    background: 'rgba(227,167,59,0.12)', color: 'var(--gold, #E3A73B)', fontSize: 13,
+                  }}
+                >
+                  {bestAutoDiscount.kind === 'welcome'
+                    ? t.checkout.welcomeDiscountBanner(bestAutoDiscount.percent)
+                    : t.checkout.scheduledOfferBanner(bestAutoDiscount.label, bestAutoDiscount.percent)}
+                </p>
+              )}
               <label>
                 {t.checkout.additionalInfo}
                 <input type="text" value={customer.notes} onChange={onField('notes')} placeholder={t.checkout.additionalInfoPlaceholder} />
@@ -344,6 +418,14 @@ export default function CheckoutModal() {
           {step === 3 && (
             <form id="paymentForm" onSubmit={submitOrder}>
               <MiniSummary cart={cart} cartTotal={cartTotal} t={t} />
+
+              {bestAutoDiscount && couponStatus !== 'applied' && (
+                <p style={{ margin: '0 0 12px', padding: '10px 12px', borderRadius: 8, background: 'rgba(227,167,59,0.12)', color: 'var(--gold, #E3A73B)', fontSize: 13 }}>
+                  {bestAutoDiscount.kind === 'welcome'
+                    ? t.checkout.welcomeDiscountBanner(bestAutoDiscount.percent)
+                    : t.checkout.scheduledOfferBanner(bestAutoDiscount.label, bestAutoDiscount.percent)}
+                </p>
+              )}
 
               <div style={{ margin: '16px 0' }}>
                 {couponStatus === 'applied' ? (

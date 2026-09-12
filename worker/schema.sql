@@ -131,7 +131,18 @@ CREATE TABLE order_items (
   name        TEXT NOT NULL,
   qty         INTEGER NOT NULL DEFAULT 1,
   line_total  REAL NOT NULL DEFAULT 0,
-  details     TEXT
+  details     TEXT,
+  -- Growth features (Phase: reorder/loyalty/referral) — a JSON-encoded
+  -- `{ selection?, bundleId?, bundleItems? }` blob, the same structured
+  -- pricing data POST /api/orders already verifies against real D1 prices
+  -- (see lib/pricing.ts) before writing this row, saved here too so the
+  -- "Reorder this" feature can rebuild a real, exact cart line later —
+  -- recomputed at CURRENT prices, never by trusting `line_total` above —
+  -- instead of only having the human-readable `details` strings, which
+  -- were never enough to know exactly which option ids were chosen. NULL
+  -- for any order placed before this column existed, and for a plain
+  -- (non-customizable) product/addon line, which has nothing to store.
+  selection_json TEXT
 );
 
 CREATE TABLE admin_settings (
@@ -158,6 +169,35 @@ CREATE TABLE bundles (
   slots           TEXT NOT NULL DEFAULT '[]',
   active          INTEGER NOT NULL DEFAULT 1,
   sort_order      INTEGER NOT NULL DEFAULT 0
+);
+
+-- Growth features batch 2 (Feature 5 — scheduled weekday offers). One row
+-- per admin-configured offer (e.g. a Monday/Tuesday slow-day discount, or
+-- a Friday special) — managed through the SAME generic admin CRUD system
+-- as categories/products/option_groups/options/addons/bundles (see
+-- lib/api-helpers.ts's ADMIN_TABLES and app/api/admin/[table]/**), not a
+-- bespoke new API, matching this project's existing pattern for "an
+-- admin-manageable list of things."
+--
+-- `days` is a JSON-encoded array of day keys ('mon'..'sun', the SAME
+-- convention admin_settings.opening_hours already uses — see
+-- app/admin/dashboard/page.tsx's OPENING_HOURS_DAYS) — same "store
+-- structured data as JSON in a TEXT column, don't parse it server-side
+-- beyond what's needed" precedent as bundles.slots.
+-- `start_time`/`end_time` are 'HH:MM' 24h strings; both NULL/empty means
+-- "all day" (see lib/scheduledOffers.ts, which is the one place that
+-- decides whether an offer is active right now — shared between the
+-- server, which enforces it, and the client, which only uses it for a
+-- banner).
+CREATE TABLE scheduled_offers (
+  id                TEXT PRIMARY KEY,
+  label             TEXT NOT NULL,
+  days              TEXT NOT NULL DEFAULT '[]',
+  start_time        TEXT,
+  end_time          TEXT,
+  discount_percent  REAL NOT NULL,
+  active            INTEGER NOT NULL DEFAULT 1,
+  sort_order        INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_products_category ON products(category_id);
@@ -236,5 +276,17 @@ CREATE TABLE coupons (
   min_order_amount REAL,
   usage_limit      INTEGER,
   times_used       INTEGER NOT NULL DEFAULT 0,
-  created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+  -- Growth features (Phase: referral program) — set only on a coupon
+  -- auto-created by the Footer referral form (POST /api/referral),
+  -- normalized (trimmed + lowercased) so a second submission from the
+  -- same address is recognized regardless of capitalization. NULL for
+  -- every coupon created any other way (admin-created, or the stamp-card
+  -- loyalty reward — see app/api/orders/route.ts). Not UNIQUE at the
+  -- schema level (SQLite allows multiple NULLs in a UNIQUE column anyway,
+  -- so it would only really constrain non-null values, and the "does this
+  -- email already have a code" check already reads-before-writing in the
+  -- API route) — kept as a plain indexed-by-nothing column for simplicity
+  -- at this feature's scale, same reasoning as other small tables here.
+  referral_email   TEXT
 );

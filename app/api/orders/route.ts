@@ -1,10 +1,11 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
-import { json, makeOrderNum } from '@/lib/api-helpers';
+import { json, makeOrderNum, findOrdersByPhone, makeCouponCode } from '@/lib/api-helpers';
 import { trackPurchaseServerSide } from '@/lib/server-tracking';
 import { validateCoupon, normalizeCouponCode } from '@/lib/coupons';
 import { loadMenuData } from '@/lib/menu-data';
 import { normalizeMenuBlob } from '@/lib/menu-i18n';
 import { verifyCartLine } from '@/lib/pricing';
+import { findBestActiveScheduledOffer } from '@/lib/scheduledOffers';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,6 +100,18 @@ export async function POST(request: Request) {
     return json({ error: "Sorry, we don't currently deliver to that postal code." }, 400);
   }
 
+  // --- Growth features: this phone's order history (Feature 2 + 3) ---
+  // One lookup, reused by both the first-order welcome discount (was
+  // there ANY order before this one, of any status?) and the stamp-card
+  // loyalty count (how many non-cancelled orders, including the one being
+  // placed right now?) below. Computed here, before either the item-price
+  // verification or the order is written, from the phone number ON THIS
+  // REQUEST — never from anything the client claims about its own
+  // eligibility, same "never trust the client" principle as the price
+  // checks that follow.
+  const priorOrders = await findOrdersByPhone(env, customer.phone);
+  const isFirstOrderEver = priorOrders.length === 0;
+
   // --- Server-side price/quantity validation (money-correctness pass) ---
   // The client computes prices (base + toppings + size upcharge, or a
   // bundle's base + each filled slot's customization extra) for a
@@ -148,6 +161,8 @@ export async function POST(request: Request) {
   let finalTotal = recomputedTotal;
   let discountAmount = 0;
   let appliedCouponCode: string | null = null;
+  let welcomeDiscountApplied = false;
+  let scheduledOfferApplied: { id: string; label: string } | null = null;
 
   if (body.couponCode) {
     const result = await validateCoupon(env, body.couponCode, recomputedTotal);
@@ -157,6 +172,57 @@ export async function POST(request: Request) {
     finalTotal = result.finalTotal as number;
     discountAmount = result.discountAmount as number;
     appliedCouponCode = normalizeCouponCode(body.couponCode);
+  } else {
+    // --- Automatic discounts: welcome discount vs. scheduled offer
+    // (Feature 2 vs. Feature 5) ---
+    // Neither requires the customer to type anything, so — unlike a
+    // manually-entered coupon, which always wins outright above — these
+    // two can both be "available" on the same order and must not stack.
+    // Growth features batch 2 explicitly authorized touching this same
+    // if/else (previously just an if/else-if between coupon and welcome
+    // discount) to fold the scheduled offer in "consistently": compute
+    // every automatic candidate's discount amount off the SAME verified
+    // subtotal, then apply whichever is largest — the one most
+    // favorable to the customer, same rule as coupon-vs-welcome before
+    // it. Checked against THIS request's own moment in time (never a
+    // client-supplied "offer was active when I added to cart" flag) via
+    // lib/scheduledOffers.ts's findBestActiveScheduledOffer, using the
+    // real server clock evaluated in Helsinki time.
+    const candidates: Array<{ amount: number; apply: () => void }> = [];
+
+    const welcomePct = Number(rawMenu.settings?.first_order_discount_percent) || 0;
+    if (isFirstOrderEver && welcomePct > 0) {
+      const amount = Math.min(Math.round(recomputedTotal * (welcomePct / 100) * 100) / 100, recomputedTotal);
+      candidates.push({
+        amount,
+        apply: () => {
+          discountAmount = amount;
+          appliedCouponCode = 'WELCOME';
+          welcomeDiscountApplied = true;
+        },
+      });
+    }
+
+    const activeOffer = findBestActiveScheduledOffer(menu.scheduledOffers);
+    if (activeOffer) {
+      const amount = Math.min(
+        Math.round(recomputedTotal * (activeOffer.discountPercent / 100) * 100) / 100,
+        recomputedTotal
+      );
+      candidates.push({
+        amount,
+        apply: () => {
+          discountAmount = amount;
+          scheduledOfferApplied = { id: activeOffer.id, label: activeOffer.label };
+        },
+      });
+    }
+
+    if (candidates.length) {
+      const best = candidates.reduce((a, b) => (b.amount > a.amount ? b : a));
+      best.apply();
+      finalTotal = Math.round((recomputedTotal - discountAmount) * 100) / 100;
+    }
   }
 
   const orderNum = makeOrderNum();
@@ -181,9 +247,22 @@ export async function POST(request: Request) {
 
   const stmts = items.map((line) =>
     env.DB.prepare(
-      `INSERT INTO order_items (order_id, product_id, name, qty, line_total, details)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).bind(orderId, line.productId || null, line.name, line.qty, line.lineTotal, JSON.stringify(line.details || []))
+      `INSERT INTO order_items (order_id, product_id, name, qty, line_total, details, selection_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      orderId, line.productId || null, line.name, line.qty, line.lineTotal, JSON.stringify(line.details || []),
+      // Growth features (Feature 1 — reorder) — the same structured
+      // pricing data just verified above via verifyCartLine, saved
+      // alongside the order so a later reorder can rebuild this exact
+      // line and recompute it at CURRENT prices (lib/pricing.ts's
+      // computeCurrentProductPrice/computeCurrentBundlePrice) instead of
+      // trusting this row's own line_total. `bundleId` is included here
+      // (not just left implicit via `product_id`, which for a bundle
+      // line already holds the bundle's own id) so the reorder route
+      // never has to guess whether a given product_id refers to a real
+      // product or a bundle.
+      JSON.stringify({ selection: line.selection, bundleId: line.bundleId, bundleItems: line.bundleItems })
+    )
   );
 
   if (stmts.length) {
@@ -199,12 +278,72 @@ export async function POST(request: Request) {
   // usage-limited coupon could let both through — acceptable for this
   // business's order volume; a stricter conditional UPDATE could close
   // that gap later if it ever matters.
-  if (appliedCouponCode) {
+  if (appliedCouponCode && !welcomeDiscountApplied) {
+    // Only for a REAL stored coupon — the synthetic 'WELCOME' code above
+    // has no row in the coupons table to increment.
     ctx.waitUntil(
       env.DB.prepare('UPDATE coupons SET times_used = times_used + 1 WHERE code = ?')
         .bind(appliedCouponCode)
         .run()
     );
+  }
+
+  // --- Stamp card / loyalty (Feature 3) ---
+  // Counts this phone's non-cancelled orders, INCLUDING the one just
+  // placed above — a freshly-created order always starts as 'received'
+  // (never 'cancelled'), so this is always exactly
+  // (priorOrders filtered to non-cancelled) + 1; no separate re-query
+  // needed. A cancelled order is excluded from `priorOrders` here the
+  // same way it would be excluded from any FUTURE count once it's
+  // cancelled — it can never itself trigger a reward (its own count
+  // included it as non-cancelled only for the brief instant it existed
+  // before being cancelled, which is the same "can't retroactively
+  // un-trigger a reward" tradeoff already accepted for coupon usage
+  // counting elsewhere in this route — flagged in this delivery's
+  // summary as a case not fully covered).
+  const nonCancelledOrderCount = priorOrders.filter((o) => o.status !== 'cancelled').length + 1;
+  let loyaltyRewardCode: string | null = null;
+  const stampRewardPct = Number(rawMenu.settings?.stamp_card_reward_percent) || 0;
+
+  if (stampRewardPct > 0 && nonCancelledOrderCount > 0 && nonCancelledOrderCount % 5 === 0) {
+    loyaltyRewardCode = makeCouponCode('LOYALTY');
+    // Reuses the exact same coupons row shape/creation logic as the admin
+    // coupon-creation endpoint (app/api/admin/coupons/route.ts) — a
+    // percent-off, single-use, no-minimum, no-expiry code. Awaited
+    // (unlike the coupon-usage counter above, which is fire-and-forget)
+    // because this code is handed to the customer in THIS response —
+    // unlike incrementing a counter on a coupon that already exists, the
+    // row has to actually be in D1 before the response goes out, or a
+    // customer trying it immediately could hit "coupon not found".
+    await env.DB.prepare(
+      `INSERT INTO coupons (code, discount_type, discount_value, active, usage_limit)
+       VALUES (?, 'percent', ?, 1, 1)`
+    ).bind(loyaltyRewardCode, stampRewardPct).run();
+  }
+
+  // --- "Ozy Wow Moment" (Feature 6) — random per-order surprise reward ---
+  // A REAL random roll, server-side, using this request's own moment —
+  // never anything client-influenced (there's no client input involved
+  // in this decision at all). Both settings are 0/unset by default, so
+  // this does nothing until an admin explicitly configures odds AND a
+  // reward percentage. Mirrors the stamp-card reward immediately above:
+  // the exact same coupons row shape, and `await`-ed (not fire-and-
+  // forget) for the same reason — this code is handed to the customer in
+  // THIS response, so the row must exist in D1 before the response goes
+  // out. Never applied to the order that triggered it (that would need
+  // this check to happen before the order's own total was known, which
+  // is backwards) — it's a single-use code for a FUTURE order, same as
+  // the stamp-card/referral rewards.
+  let wowMomentRewardCode: string | null = null;
+  const wowChancePct = Number(rawMenu.settings?.wow_moment_chance_percent) || 0;
+  const wowRewardPct = Number(rawMenu.settings?.wow_moment_reward_percent) || 0;
+
+  if (wowChancePct > 0 && wowRewardPct > 0 && Math.random() * 100 < wowChancePct) {
+    wowMomentRewardCode = makeCouponCode('WOW');
+    await env.DB.prepare(
+      `INSERT INTO coupons (code, discount_type, discount_value, active, usage_limit)
+       VALUES (?, 'percent', ?, 1, 1)`
+    ).bind(wowMomentRewardCode, wowRewardPct).run();
   }
 
   // Fire-and-forget — doesn't delay the customer's response, and one
@@ -227,5 +366,15 @@ export async function POST(request: Request) {
     );
   }
 
-  return json({ orderNum, id: orderId, status: 'received', total: finalTotal, discountAmount }, 201);
+  return json({
+    orderNum,
+    id: orderId,
+    status: 'received',
+    total: finalTotal,
+    discountAmount,
+    welcomeDiscountApplied,
+    scheduledOfferApplied,
+    loyalty: { orderCount: nonCancelledOrderCount, rewardCode: loyaltyRewardCode },
+    wowMomentRewardCode,
+  }, 201);
 }
