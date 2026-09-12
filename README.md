@@ -203,4 +203,4 @@ build logs and the "Total Upload" size (Workers Free plan caps a Worker at
 - **Known audit findings not yet fixed**: see `ozy-fi-ssr-roadmap-bn.md`,
   Phase 10, for the full prioritized list (real server-rendered menu
   content, admin login rate-limiting, httpOnly auth cookies, Schema.org/
-  JSON-LD, multi-user admin roles, image optimization, TypeScript/tests).
+  JSON-LD, multi-user admin roles, image optimization, TypeScript/tests).   
