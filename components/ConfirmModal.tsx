@@ -5,13 +5,6 @@ import { useState } from 'react';
 import { useStore } from '@/context/StoreContext';
 import { useTranslations, useLocalePath } from '@/lib/i18n';
 
-// Feature 3 — stamp card / loyalty. Every 5th (non-cancelled) order earns
-// a reward — see app/api/orders/route.ts. This interval is fixed by the
-// brief ("every 5th order"), not admin-configurable like the reward
-// amount itself (stamp_card_reward_percent), so it's a plain constant
-// here rather than something threaded through from settings.
-const STAMP_INTERVAL = 5;
-
 function CopyCodeButton({ code, copyLabel, copiedLabel }: { code: string; copyLabel: string; copiedLabel: string }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
@@ -37,7 +30,12 @@ export default function ConfirmModal() {
   const lp = useLocalePath();
   const open = !!confirmedOrder;
   const loyalty = confirmedOrder?.loyalty;
-  const remainingForReward = loyalty ? (STAMP_INTERVAL - (loyalty.orderCount % STAMP_INTERVAL)) % STAMP_INTERVAL : 0;
+  // Rewards dashboard consolidation — the "every Nth order" threshold is
+  // now admin-configurable (stamp_card_every_n_orders), so it's read from
+  // this order's own response (loyalty.everyNOrders) rather than a
+  // hardcoded constant here — see app/api/orders/route.ts.
+  const everyN = loyalty?.everyNOrders || 5;
+  const remainingForReward = loyalty ? (everyN - (loyalty.orderCount % everyN)) % everyN : 0;
 
   return (
     <div className={`modal-overlay${open ? ' open' : ''}`}>
@@ -56,20 +54,28 @@ export default function ConfirmModal() {
                   ? t.confirm.welcomeDiscountApplied(`${confirmedOrder.discountAmount.toFixed(2)} €`)
                   : confirmedOrder.scheduledOfferApplied
                     ? t.confirm.scheduledOfferApplied(confirmedOrder.scheduledOfferApplied.label, `${confirmedOrder.discountAmount.toFixed(2)} €`)
-                    : t.confirm.couponApplied(`${confirmedOrder.discountAmount.toFixed(2)} €`)}
+                    : confirmedOrder.discountSource === 'stamp_card'
+                      ? t.confirm.stampCardApplied(`${confirmedOrder.discountAmount.toFixed(2)} €`)
+                      : t.confirm.couponApplied(`${confirmedOrder.discountAmount.toFixed(2)} €`)}
               </p>
             )}
             <div className="cod-note">
               <span style={{ fontSize: '1.3rem' }}>💵</span>
               <span>{t.confirm.codNote(`${confirmedOrder.total.toFixed(2)} €`)}</span>
             </div>
-            {loyalty && loyalty.rewardCode ? (
+            {/* Stamp-card redesign — the reward is applied directly to the
+                order's own total (or banked as a pending reward for a
+                future one) rather than minted as a coupon, so there's no
+                code to show/copy here anymore — see
+                app/api/orders/route.ts and worker/migrations/
+                010_stamp_card_redesign_and_source_tracking.sql. */}
+            {loyalty && confirmedOrder.discountSource === 'stamp_card' ? (
               <div style={{ margin: '14px 0 0', padding: '12px 14px', borderRadius: 10, background: 'rgba(227,167,59,0.14)', color: 'var(--gold, #E3A73B)' }}>
-                <p style={{ margin: '0 0 8px', fontWeight: 700 }}>{t.confirm.loyaltyReward(loyalty.orderCount)}</p>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-                  <code style={{ fontSize: 15, fontWeight: 700 }}>{loyalty.rewardCode}</code>
-                  <CopyCodeButton code={loyalty.rewardCode} copyLabel={t.confirm.copyCode} copiedLabel={t.confirm.codeCopied} />
-                </div>
+                <p style={{ margin: 0, fontWeight: 700 }}>{t.confirm.stampCardRewardApplied}</p>
+              </div>
+            ) : loyalty && loyalty.pendingRewardCreated ? (
+              <div style={{ margin: '14px 0 0', padding: '12px 14px', borderRadius: 10, background: 'rgba(227,167,59,0.14)', color: 'var(--gold, #E3A73B)' }}>
+                <p style={{ margin: 0, fontWeight: 700 }}>{t.confirm.stampCardPendingEarned(loyalty.orderCount)}</p>
               </div>
             ) : loyalty && remainingForReward > 0 ? (
               <p style={{ color: 'var(--muted)', fontSize: '0.85rem', margin: '14px 0 0' }}>

@@ -4,13 +4,14 @@ import type { CouponRow } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-// "e.g. 3€ off" per the brief — a plain, explicit number rather than
-// another admin-configurable setting, since the brief gave one for this
-// feature specifically (unlike the welcome discount and stamp-card
-// reward, which the brief left unspecified — see those features'
-// settings keys). If the business owner wants this admin-configurable
-// too, it's the same small addition as those two.
-const REFERRAL_DISCOUNT_AMOUNT = 3;
+// Rewards dashboard consolidation — was a plain hardcoded constant
+// ("e.g. 3€ off" per the original brief); now admin-configurable
+// (referral_discount_amount, see app/admin/dashboard/page.tsx's
+// RewardsTab). Falls back to 3 (the old hardcoded value) when the
+// setting is blank/unset, so existing behavior is unchanged for anyone
+// who hasn't touched the new setting — same "old value as the fallback
+// default" approach used for stamp_card_every_n_orders.
+const DEFAULT_REFERRAL_DISCOUNT_AMOUNT = 3;
 
 function normalizeEmail(raw: unknown): string {
   return String(raw || '').trim().toLowerCase();
@@ -27,6 +28,16 @@ function normalizeEmail(raw: unknown): string {
 // volume" tradeoff already made elsewhere, e.g. the coupon-usage race in
 // app/api/orders/route.ts), but worth revisiting before this gets
 // meaningfully more traffic.
+//
+// Rewards dashboard consolidation — honest finding: this route only ever
+// mints ONE coupon, for the person who submits their email (the "friend"
+// side). There is no separate reward for the referrer (the customer who
+// shared the form) anywhere in this codebase — Footer.tsx's own header
+// comment already says "Phase 1: on-screen code only." So there's no
+// second constant/amount to make separately configurable here; only
+// referral_discount_amount (below) exists. If a referrer-side reward is
+// wanted, that would be new functionality (a "Phase 2"), not a
+// relocation — out of scope for this consolidation task.
 export async function POST(request: Request) {
   const { env } = await getCloudflareContext({ async: true });
 
@@ -45,11 +56,23 @@ export async function POST(request: Request) {
     return json({ code: existing.code, alreadyHad: true });
   }
 
+  const settingRow = await env.DB.prepare("SELECT value FROM admin_settings WHERE key = 'referral_discount_amount'")
+    .first<{ value: string }>();
+  // Deliberately NOT `Number(x) || DEFAULT` here (unlike stamp_card_every_
+  // n_orders, where 0 is meaningless and should fall back either way) —
+  // 0 is a valid amount an admin could genuinely choose for this field
+  // (a token/free coupon), so only a missing/blank/non-numeric stored
+  // value falls back to the old hardcoded default; an explicit "0" is
+  // honored as 0.
+  const rawAmount = settingRow?.value;
+  const parsedAmount = rawAmount !== undefined && rawAmount !== null && rawAmount !== '' ? Number(rawAmount) : NaN;
+  const discountAmount = Number.isFinite(parsedAmount) ? parsedAmount : DEFAULT_REFERRAL_DISCOUNT_AMOUNT;
+
   const code = makeCouponCode('FRIEND');
   await env.DB.prepare(
     `INSERT INTO coupons (code, discount_type, discount_value, active, usage_limit, referral_email)
      VALUES (?, 'amount', ?, 1, 1, ?)`
-  ).bind(code, REFERRAL_DISCOUNT_AMOUNT, email).run();
+  ).bind(code, discountAmount, email).run();
 
   return json({ code, alreadyHad: false }, 201);
 }

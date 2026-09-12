@@ -13,6 +13,15 @@ export type { RawScheduledOffer, ScheduledOffer };
 
 export type Locale = 'fi' | 'en';
 
+// Stamp-card redesign / discount-source tracking — the fixed vocabulary
+// recorded in orders.discount_source (worker/migrations/
+// 010_stamp_card_redesign_and_source_tracking.sql), reflecting whichever
+// SINGLE mechanism won the "most favorable discount" comparison in
+// app/api/orders/route.ts. Not exhaustive of every code path that can
+// touch `total` (e.g. no discount at all is `null`, not a member of this
+// union) — see that route for the full decision.
+export type DiscountSource = 'manual_coupon' | 'referral' | 'first_order_welcome' | 'stamp_card' | 'scheduled_offer';
+
 // ---------------------------------------------------------------------
 // Raw D1 rows — as returned by loadMenuData() (lib/menu-data.ts) and the
 // GET /api/menu route that wraps it.
@@ -404,13 +413,28 @@ export interface Customer {
 }
 
 // Stamp-card loyalty progress for the order that was just placed — see
-// POST /api/orders's response and ConfirmModal.tsx's progress message /
-// reward-code display. `rewardCode` is only set on the order that just
-// brought this phone number's non-cancelled order count to a multiple of
-// 5 (see app/api/orders/route.ts) — null every other time.
+// POST /api/orders's response and ConfirmModal.tsx's progress message.
+//
+// Stamp-card redesign — `rewardCode` is gone: the reward is no longer a
+// minted coupon, it's applied directly to this order's total (or banked
+// as a pending reward for a future one) — see app/api/orders/route.ts
+// and worker/migrations/010_stamp_card_redesign_and_source_tracking.sql.
+// Whether THIS order's discount was the stamp-card reward is on
+// ConfirmedOrder.discountSource below, not here.
 export interface LoyaltyProgress {
   orderCount: number;
-  rewardCode: string | null;
+  // True only when THIS order just earned a fresh stamp-card reward but
+  // had no eligible item to apply it to (or lost the "most favorable
+  // discount" comparison to something else) — banked in
+  // stamp_card_pending_rewards for the next order that has one, however
+  // many orders later. Purely informational for the confirmation screen;
+  // there is no code to copy.
+  pendingRewardCreated: boolean;
+  // Rewards dashboard consolidation — the admin-configured "every Nth
+  // order" threshold used to compute this order's progress, sent so
+  // ConfirmModal.tsx never has to hardcode it (or separately fetch
+  // settings just for this one number) — see app/api/orders/route.ts.
+  everyNOrders: number;
 }
 
 export interface ConfirmedOrder {
@@ -437,6 +461,13 @@ export interface ConfirmedOrder {
   // order (see app/api/orders/route.ts), never applied retroactively to
   // this one. null/undefined every other time.
   wowMomentRewardCode?: string | null;
+  // Stamp-card redesign / discount-source tracking — which single
+  // mechanism actually won the discount on THIS order (see
+  // app/api/orders/route.ts); null/undefined when no discount applied.
+  // ConfirmModal.tsx uses this to show the right message for a stamp-card
+  // win specifically, distinct from welcomeDiscountApplied/
+  // scheduledOfferApplied above (which already carry their own labels).
+  discountSource?: DiscountSource | null;
 }
 
 export interface OpenProductOptions {
@@ -601,6 +632,23 @@ export interface CouponRow {
   referral_email?: string | null;
 }
 
+// worker/schema.sql's `stamp_card_pending_rewards` table (stamp-card
+// redesign — see worker/migrations/
+// 010_stamp_card_redesign_and_source_tracking.sql). An un-redeemed row
+// (redeemed_at IS NULL) is a reward this phone earned but couldn't apply
+// yet (no eligible item in the cart that triggered it); at most one such
+// row per phone at a time (enforced in app/api/orders/route.ts, not a DB
+// constraint — see that file).
+export interface StampCardPendingRewardRow {
+  id: number;
+  phone: string;
+  reward_percent: number;
+  earned_at: string;
+  earned_order_num: string;
+  redeemed_at?: string | null;
+  redeemed_order_num?: string | null;
+}
+
 // lib/coupons.js's validateCoupon() result — a discriminated-ish shape
 // (only `error` is guaranteed on failure; `coupon`/discountAmount/
 // finalTotal are only guaranteed once `valid` is true), left as optional
@@ -637,6 +685,16 @@ export interface OrderRow {
   coupon_code?: string | null;
   discount_amount: number;
   marketing_consent?: number;
+  // Stamp-card redesign / discount-source tracking (worker/migrations/
+  // 010_stamp_card_redesign_and_source_tracking.sql). Optional here (as
+  // opposed to a required field with a null union) because a handful of
+  // call sites project only a subset of `orders` columns rather than
+  // SELECT * — see each route for which. Rows written before this
+  // migration have discount_source NULL, triggered_wow_moment/is_reorder
+  // 0 (SQLite backfills the column default for existing rows).
+  discount_source?: DiscountSource | null;
+  triggered_wow_moment?: number;
+  is_reorder?: number;
   created_at: string;
 }
 

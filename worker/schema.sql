@@ -121,6 +121,21 @@ CREATE TABLE orders (
   -- at purchase time and again at refund/cancel time, so consent is
   -- respected consistently rather than only at the initial moment.
   marketing_consent  INTEGER NOT NULL DEFAULT 0,
+  -- Stamp-card redesign / discount-source tracking (worker/migrations/
+  -- 010_stamp_card_redesign_and_source_tracking.sql) — see that file for
+  -- the full explanation of all three columns below. discount_source
+  -- records which single mechanism won the "most favorable discount"
+  -- comparison in app/api/orders/route.ts: 'manual_coupon' | 'referral' |
+  -- 'first_order_welcome' | 'stamp_card' | 'scheduled_offer' | NULL.
+  discount_source    TEXT,
+  -- Separate from discount_source: the Ozy Wow Moment reward is minted
+  -- for the customer's NEXT order, not this one, so this order may ALSO
+  -- separately carry a real discount_source at the same time.
+  triggered_wow_moment INTEGER NOT NULL DEFAULT 0,
+  -- Set when this order was placed via the "Reorder this" feature.
+  -- Client-supplied and trusted as-is — informational/reporting only,
+  -- never used in any price or discount calculation.
+  is_reorder         INTEGER NOT NULL DEFAULT 0,
   created_at         TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -289,4 +304,21 @@ CREATE TABLE coupons (
   -- API route) — kept as a plain indexed-by-nothing column for simplicity
   -- at this feature's scale, same reasoning as other small tables here.
   referral_email   TEXT
+);
+
+-- Stamp-card redesign (Part A of the stamp-card/discount-source/
+-- Customer-Source brief) — see worker/migrations/
+-- 010_stamp_card_redesign_and_source_tracking.sql for the full
+-- explanation. Holds an earned stamp-card reward for a phone number
+-- when the order that earned it had no eligible item to apply it to,
+-- until an order that does have one comes in. At most one un-redeemed
+-- row per phone at a time (enforced in app/api/orders/route.ts).
+CREATE TABLE stamp_card_pending_rewards (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  phone              TEXT NOT NULL,
+  reward_percent     REAL NOT NULL,
+  earned_at          TEXT NOT NULL DEFAULT (datetime('now')),
+  earned_order_num   TEXT NOT NULL,
+  redeemed_at        TEXT,
+  redeemed_order_num TEXT
 );

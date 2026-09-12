@@ -276,6 +276,12 @@ function ReorderButton({ orderNum, phone, t }: { orderNum: string; phone: string
     try {
       sessionStorage.setItem('ozy_cart', JSON.stringify(result.cart));
       sessionStorage.setItem('ozy_open_checkout', '1');
+      // Stamp-card redesign / discount-source tracking (Part C —
+      // "Reorders") — a sibling one-shot flag, consumed by
+      // context/StoreContext.tsx's mount effect the same way
+      // ozy_open_checkout is, so the order this cart turns into can be
+      // marked orders.is_reorder = 1.
+      sessionStorage.setItem('ozy_is_reorder', '1');
     } catch {
       // Storage unavailable — still navigate; the customer just lands on
       // an empty cart instead of a pre-filled one, same degraded

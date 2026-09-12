@@ -1,11 +1,12 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
-import { json, makeOrderNum, findOrdersByPhone, makeCouponCode } from '@/lib/api-helpers';
+import { json, makeOrderNum, findOrdersByPhone, findPendingStampCardReward, makeCouponCode } from '@/lib/api-helpers';
 import { trackPurchaseServerSide } from '@/lib/server-tracking';
 import { validateCoupon, normalizeCouponCode } from '@/lib/coupons';
 import { loadMenuData } from '@/lib/menu-data';
 import { normalizeMenuBlob } from '@/lib/menu-i18n';
 import { verifyCartLine } from '@/lib/pricing';
 import { findBestActiveScheduledOffer } from '@/lib/scheduledOffers';
+import type { DiscountSource } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,6 +41,14 @@ interface CreateOrderBody {
   items: OrderItemInput[];
   couponCode?: string | null;
   marketingConsent?: boolean;
+  // Stamp-card redesign / discount-source tracking (Part C — "Reorders")
+  // — set by context/StoreContext.tsx's placeOrder() when this cart
+  // originated from the "Reorder this" button (see
+  // app/api/orders/[orderNum]/reorder/route.ts + TrackPageClient.tsx's
+  // ReorderButton). Client-supplied and trusted as-is: purely
+  // informational/reporting, never used in any price or discount
+  // calculation — same trust level already given to marketingConsent.
+  isReorder?: boolean;
 }
 
 export async function POST(request: Request) {
@@ -112,6 +121,52 @@ export async function POST(request: Request) {
   const priorOrders = await findOrdersByPhone(env, customer.phone);
   const isFirstOrderEver = priorOrders.length === 0;
 
+  // --- Stamp card / loyalty (Feature 3, redesigned) — precursor values ---
+  // Computed here (before item-price verification) since none of this
+  // depends on `items`; the cheapest-eligible-item lookup that DOES need
+  // verified items happens further below, right after that loop.
+  //
+  // Counts this phone's non-cancelled orders, INCLUDING the one being
+  // placed right now — a freshly-created order always starts as
+  // 'received' (never 'cancelled'), so this is always exactly
+  // (priorOrders filtered to non-cancelled) + 1; no separate re-query
+  // needed. Same reasoning/caveat as before this redesign: a cancelled
+  // order can never itself trigger a reward, and can't retroactively
+  // un-trigger one either — an accepted tradeoff, same as coupon usage
+  // counting elsewhere in this route.
+  const nonCancelledOrderCount = priorOrders.filter((o) => o.status !== 'cancelled').length + 1;
+  const stampRewardPct = Number(rawMenu.settings?.stamp_card_reward_percent) || 0;
+  // Rewards dashboard consolidation — the "every Nth order" threshold,
+  // admin-configurable (stamp_card_every_n_orders). Blank/unset falls
+  // back to 5. Floored and clamped to at least 1 so a stray non-numeric
+  // or negative stored value can never turn into a `% 0` (NaN, silently
+  // never rewarding) or `% -3`.
+  const stampEveryNOrders = Math.max(1, Math.floor(Number(rawMenu.settings?.stamp_card_every_n_orders) || 5));
+  const reachedStampMilestone = stampRewardPct > 0 && nonCancelledOrderCount > 0 && nonCancelledOrderCount % stampEveryNOrders === 0;
+
+  // Stamp-card redesign (Part A) — the business owner's chosen list of
+  // eligible product ids, same JSON-array-in-a-flat-settings-key pattern
+  // already established by admin_settings.popular_product_ids (see
+  // app/admin/dashboard/page.tsx's HomepageDisplaySettings) — reused here
+  // rather than inventing a new storage shape.
+  let stampEligibleProductIds: string[] = [];
+  try {
+    const parsed = JSON.parse(rawMenu.settings?.stamp_card_eligible_product_ids || '[]');
+    if (Array.isArray(parsed)) stampEligibleProductIds = parsed.filter((id): id is string => typeof id === 'string');
+  } catch {
+    stampEligibleProductIds = [];
+  }
+
+  // A customer can only have ONE pending stamp-card reward at a time (see
+  // worker/migrations/010_stamp_card_redesign_and_source_tracking.sql) —
+  // looked up once here and reused below both to decide whether THIS
+  // order should redeem it and, after the order is written, whether to
+  // mark it redeemed. Skipped entirely while the feature is off
+  // (stampRewardPct <= 0), so disabling it pauses both new-earning and
+  // redemption of anything already pending — a judgment call, documented
+  // in this task's delivery summary.
+  const existingPendingReward = stampRewardPct > 0 ? await findPendingStampCardReward(env, customer.phone) : null;
+
   // --- Server-side price/quantity validation (money-correctness pass) ---
   // The client computes prices (base + toppings + size upcharge, or a
   // bundle's base + each filled slot's customization extra) for a
@@ -151,6 +206,29 @@ export async function POST(request: Request) {
   }
   recomputedTotal = Math.round(recomputedTotal * 100) / 100;
 
+  // --- Stamp card / loyalty (Feature 3, redesigned) — cheapest eligible
+  // cart line ---
+  // Operates on `items` AFTER the verification loop above has confirmed
+  // every line's lineTotal is real (matches lib/pricing.ts's recomputed
+  // price) — safe to derive a unit price as lineTotal / qty without
+  // re-deriving it from menu data a second time. "Cheapest" compares
+  // PER-UNIT price (a line's lineTotal already reflects its own qty), and
+  // only ONE unit of the cheapest eligible line gets discounted — never
+  // the whole line, never the whole order.
+  let cheapestEligibleUnitPrice: number | null = null;
+  if (stampRewardPct > 0 && stampEligibleProductIds.length > 0) {
+    for (const line of items) {
+      if (!line.productId || !stampEligibleProductIds.includes(line.productId)) continue;
+      const qty = Number(line.qty);
+      const lineTotal = Number(line.lineTotal);
+      if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(lineTotal)) continue;
+      const unitPrice = lineTotal / qty;
+      if (cheapestEligibleUnitPrice === null || unitPrice < cheapestEligibleUnitPrice) {
+        cheapestEligibleUnitPrice = unitPrice;
+      }
+    }
+  }
+
   // --- Coupon re-validation (Phase 7.6) ---
   // The client may have shown its own "10% off" preview (from
   // /api/coupons/validate, called as the customer types the code in) —
@@ -163,6 +241,13 @@ export async function POST(request: Request) {
   let appliedCouponCode: string | null = null;
   let welcomeDiscountApplied = false;
   let scheduledOfferApplied: { id: string; label: string } | null = null;
+  let discountSource: DiscountSource | null = null;
+  // Set inside the stamp-card candidate's apply() closure below — true
+  // when the applied reward came from a pre-existing pending reward
+  // (about to be marked redeemed after the order is written), false when
+  // it's a fresh milestone reward being consumed immediately (nothing to
+  // persist), null if the stamp-card candidate never won at all.
+  let stampCardWonViaExistingPending: boolean | null = null;
 
   if (body.couponCode) {
     const result = await validateCoupon(env, body.couponCode, recomputedTotal);
@@ -172,22 +257,27 @@ export async function POST(request: Request) {
     finalTotal = result.finalTotal as number;
     discountAmount = result.discountAmount as number;
     appliedCouponCode = normalizeCouponCode(body.couponCode);
+    // Discount-source tracking (Part B) — a referral-minted coupon is
+    // distinguished from a manually-created one the exact way the rest of
+    // this codebase already does: coupons.referral_email is set only for
+    // the former (see app/api/referral/route.ts) — traced rather than
+    // guessed.
+    discountSource = result.coupon?.referral_email ? 'referral' : 'manual_coupon';
   } else {
-    // --- Automatic discounts: welcome discount vs. scheduled offer
-    // (Feature 2 vs. Feature 5) ---
-    // Neither requires the customer to type anything, so — unlike a
-    // manually-entered coupon, which always wins outright above — these
-    // two can both be "available" on the same order and must not stack.
+    // --- Automatic discounts: welcome discount vs. scheduled offer vs.
+    // stamp card (Feature 2 vs. Feature 5 vs. Feature 3) ---
+    // None of these require the customer to type anything, so — unlike a
+    // manually-entered coupon, which always wins outright above — all
+    // three can be "available" on the same order and must not stack.
     // Growth features batch 2 explicitly authorized touching this same
     // if/else (previously just an if/else-if between coupon and welcome
-    // discount) to fold the scheduled offer in "consistently": compute
-    // every automatic candidate's discount amount off the SAME verified
-    // subtotal, then apply whichever is largest — the one most
-    // favorable to the customer, same rule as coupon-vs-welcome before
-    // it. Checked against THIS request's own moment in time (never a
-    // client-supplied "offer was active when I added to cart" flag) via
-    // lib/scheduledOffers.ts's findBestActiveScheduledOffer, using the
-    // real server clock evaluated in Helsinki time.
+    // discount) to fold the scheduled offer in "consistently"; the
+    // stamp-card redesign explicitly extends the SAME pattern rather than
+    // adding a separate parallel check: compute every automatic
+    // candidate's discount amount off the SAME verified subtotal (or, for
+    // stamp card, off its own eligible-item's unit price), then apply
+    // whichever amount is largest — the one most favorable to the
+    // customer, same rule as coupon-vs-welcome before it.
     const candidates: Array<{ amount: number; apply: () => void }> = [];
 
     const welcomePct = Number(rawMenu.settings?.first_order_discount_percent) || 0;
@@ -199,6 +289,7 @@ export async function POST(request: Request) {
           discountAmount = amount;
           appliedCouponCode = 'WELCOME';
           welcomeDiscountApplied = true;
+          discountSource = 'first_order_welcome';
         },
       });
     }
@@ -214,6 +305,31 @@ export async function POST(request: Request) {
         apply: () => {
           discountAmount = amount;
           scheduledOfferApplied = { id: activeOffer.id, label: activeOffer.label };
+          discountSource = 'scheduled_offer';
+        },
+      });
+    }
+
+    // Stamp card (Part A redesign) — only a candidate when there's an
+    // eligible item in THIS cart to actually discount, and either an
+    // existing pending reward is waiting to be redeemed or this order
+    // freshly reaches the milestone. The percentage used is the pending
+    // reward's own banked percentage when redeeming one (captured at the
+    // moment it was earned, never re-read from current settings — see the
+    // migration file), otherwise the current setting.
+    if (cheapestEligibleUnitPrice !== null && (existingPendingReward || reachedStampMilestone)) {
+      const usedPercent = existingPendingReward ? existingPendingReward.reward_percent : stampRewardPct;
+      const amount = Math.min(
+        Math.round(cheapestEligibleUnitPrice * (usedPercent / 100) * 100) / 100,
+        cheapestEligibleUnitPrice
+      );
+      const viaExistingPending = Boolean(existingPendingReward);
+      candidates.push({
+        amount,
+        apply: () => {
+          discountAmount = amount;
+          discountSource = 'stamp_card';
+          stampCardWonViaExistingPending = viaExistingPending;
         },
       });
     }
@@ -225,7 +341,71 @@ export async function POST(request: Request) {
     }
   }
 
+  // --- Stamp card / loyalty — pending-reward bookkeeping decision ---
+  // Decided here (after the coupon-vs-automatic-discounts branch above
+  // has fully run, so discountSource/stampCardWonViaExistingPending are
+  // final) but the actual DB write happens further below, after the order
+  // is inserted (it needs orderNum). An earned reward must never simply
+  // vanish for having the bad luck of coinciding with a bigger discount,
+  // or with the customer using a manual coupon instead — see this
+  // delivery's summary for the worked examples covering every branch here.
+  let createNewPendingReward = false;
+  let redeemPendingRewardId: number | null = null;
+  if (stampRewardPct > 0) {
+    if (existingPendingReward) {
+      // Only redeem it if it's the one that actually won the comparison
+      // above (or was the outright winner via a manual coupon path, which
+      // never touches discountSource — so a coupon being used instead
+      // simply leaves this pending reward untouched, still pending, same
+      // as losing to a bigger automatic discount or the cart having no
+      // eligible item this time).
+      if ((discountSource as DiscountSource) === 'stamp_card' && stampCardWonViaExistingPending === true) {
+        redeemPendingRewardId = existingPendingReward.id;
+      }
+    } else if (reachedStampMilestone) {
+      // Fresh milestone this order. If it was consumed immediately (won
+      // the automatic-discount comparison), there's nothing to persist.
+      // Otherwise — no eligible item at all, it lost to a bigger
+      // discount, or a manual coupon was used instead — bank it as a new
+      // pending reward rather than letting it vanish.
+      const consumedImmediately = (discountSource as DiscountSource) === 'stamp_card' && stampCardWonViaExistingPending === false;
+      if (!consumedImmediately) {
+        createNewPendingReward = true;
+      }
+    }
+  }
+
   const orderNum = makeOrderNum();
+
+  // --- "Ozy Wow Moment" (Feature 6) — random per-order surprise reward ---
+  // A REAL random roll, server-side, using this request's own moment —
+  // never anything client-influenced (there's no client input involved
+  // in this decision at all). Both settings are 0/unset by default, so
+  // this does nothing until an admin explicitly configures odds AND a
+  // reward percentage. Moved to run BEFORE the order insert (discount-
+  // source tracking task) so the roll's outcome is known in time to set
+  // orders.triggered_wow_moment on that same insert — its own logic is
+  // otherwise completely unchanged from before this task. Never applied
+  // to the order that triggered it (that would need this check to happen
+  // before the order's own total was known, which is backwards) — it's a
+  // single-use code for a FUTURE order, same as the stamp-card/referral
+  // rewards.
+  let wowMomentRewardCode: string | null = null;
+  const wowChancePct = Number(rawMenu.settings?.wow_moment_chance_percent) || 0;
+  const wowRewardPct = Number(rawMenu.settings?.wow_moment_reward_percent) || 0;
+
+  if (wowChancePct > 0 && wowRewardPct > 0 && Math.random() * 100 < wowChancePct) {
+    wowMomentRewardCode = makeCouponCode('WOW');
+    await env.DB.prepare(
+      `INSERT INTO coupons (code, discount_type, discount_value, active, usage_limit)
+       VALUES (?, 'percent', ?, 1, 1)`
+    ).bind(wowMomentRewardCode, wowRewardPct).run();
+  }
+  // Discount-source tracking (Part B) — kept as its OWN column rather than
+  // folded into discount_source: this order may separately have a real
+  // discount_source from one of the other mechanisms at the same time,
+  // since Wow Moment's reward is for the NEXT order, not this one.
+  const triggeredWowMoment = Boolean(wowMomentRewardCode);
 
   // orders.email is NOT NULL (worker/schema.sql) — storing '' for a
   // skipped email needs no migration, vs. making the column nullable.
@@ -237,10 +417,14 @@ export async function POST(request: Request) {
 
   const insertOrder = await env.DB.prepare(
     `INSERT INTO orders
-      (order_num, customer_name, address, email, phone, notes, total, status, payment_method, coupon_code, discount_amount, marketing_consent)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'received', 'cod', ?, ?, ?)`
+      (order_num, customer_name, address, email, phone, notes, total, status, payment_method, coupon_code, discount_amount, marketing_consent, discount_source, triggered_wow_moment, is_reorder)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'received', 'cod', ?, ?, ?, ?, ?, ?)`
   )
-    .bind(orderNum, customer.name, customer.address, email, customer.phone, customer.notes || '', finalTotal, appliedCouponCode, discountAmount, body.marketingConsent ? 1 : 0)
+    .bind(
+      orderNum, customer.name, customer.address, email, customer.phone, customer.notes || '', finalTotal,
+      appliedCouponCode, discountAmount, body.marketingConsent ? 1 : 0,
+      discountSource, triggeredWowMoment ? 1 : 0, body.isReorder ? 1 : 0
+    )
     .run();
 
   const orderId = insertOrder.meta.last_row_id;
@@ -288,62 +472,25 @@ export async function POST(request: Request) {
     );
   }
 
-  // --- Stamp card / loyalty (Feature 3) ---
-  // Counts this phone's non-cancelled orders, INCLUDING the one just
-  // placed above — a freshly-created order always starts as 'received'
-  // (never 'cancelled'), so this is always exactly
-  // (priorOrders filtered to non-cancelled) + 1; no separate re-query
-  // needed. A cancelled order is excluded from `priorOrders` here the
-  // same way it would be excluded from any FUTURE count once it's
-  // cancelled — it can never itself trigger a reward (its own count
-  // included it as non-cancelled only for the brief instant it existed
-  // before being cancelled, which is the same "can't retroactively
-  // un-trigger a reward" tradeoff already accepted for coupon usage
-  // counting elsewhere in this route — flagged in this delivery's
-  // summary as a case not fully covered).
-  const nonCancelledOrderCount = priorOrders.filter((o) => o.status !== 'cancelled').length + 1;
-  let loyaltyRewardCode: string | null = null;
-  const stampRewardPct = Number(rawMenu.settings?.stamp_card_reward_percent) || 0;
-
-  if (stampRewardPct > 0 && nonCancelledOrderCount > 0 && nonCancelledOrderCount % 5 === 0) {
-    loyaltyRewardCode = makeCouponCode('LOYALTY');
-    // Reuses the exact same coupons row shape/creation logic as the admin
-    // coupon-creation endpoint (app/api/admin/coupons/route.ts) — a
-    // percent-off, single-use, no-minimum, no-expiry code. Awaited
-    // (unlike the coupon-usage counter above, which is fire-and-forget)
-    // because this code is handed to the customer in THIS response —
-    // unlike incrementing a counter on a coupon that already exists, the
-    // row has to actually be in D1 before the response goes out, or a
-    // customer trying it immediately could hit "coupon not found".
-    await env.DB.prepare(
-      `INSERT INTO coupons (code, discount_type, discount_value, active, usage_limit)
-       VALUES (?, 'percent', ?, 1, 1)`
-    ).bind(loyaltyRewardCode, stampRewardPct).run();
-  }
-
-  // --- "Ozy Wow Moment" (Feature 6) — random per-order surprise reward ---
-  // A REAL random roll, server-side, using this request's own moment —
-  // never anything client-influenced (there's no client input involved
-  // in this decision at all). Both settings are 0/unset by default, so
-  // this does nothing until an admin explicitly configures odds AND a
-  // reward percentage. Mirrors the stamp-card reward immediately above:
-  // the exact same coupons row shape, and `await`-ed (not fire-and-
-  // forget) for the same reason — this code is handed to the customer in
-  // THIS response, so the row must exist in D1 before the response goes
-  // out. Never applied to the order that triggered it (that would need
-  // this check to happen before the order's own total was known, which
-  // is backwards) — it's a single-use code for a FUTURE order, same as
-  // the stamp-card/referral rewards.
-  let wowMomentRewardCode: string | null = null;
-  const wowChancePct = Number(rawMenu.settings?.wow_moment_chance_percent) || 0;
-  const wowRewardPct = Number(rawMenu.settings?.wow_moment_reward_percent) || 0;
-
-  if (wowChancePct > 0 && wowRewardPct > 0 && Math.random() * 100 < wowChancePct) {
-    wowMomentRewardCode = makeCouponCode('WOW');
-    await env.DB.prepare(
-      `INSERT INTO coupons (code, discount_type, discount_value, active, usage_limit)
-       VALUES (?, 'percent', ?, 1, 1)`
-    ).bind(wowMomentRewardCode, wowRewardPct).run();
+  // --- Stamp card / loyalty — pending-reward DB write ---
+  // Fire-and-forget, after the order row is safely committed — same
+  // reasoning as the coupon-usage counter above: this is secondary
+  // bookkeeping (nothing here is handed back to the customer as a code
+  // they need immediately), not something that should roll back an
+  // otherwise-successful order if it somehow failed. The two branches are
+  // mutually exclusive by construction (see the decision above).
+  if (redeemPendingRewardId !== null) {
+    ctx.waitUntil(
+      env.DB.prepare(
+        `UPDATE stamp_card_pending_rewards SET redeemed_at = datetime('now'), redeemed_order_num = ? WHERE id = ?`
+      ).bind(orderNum, redeemPendingRewardId).run()
+    );
+  } else if (createNewPendingReward) {
+    ctx.waitUntil(
+      env.DB.prepare(
+        `INSERT INTO stamp_card_pending_rewards (phone, reward_percent, earned_order_num) VALUES (?, ?, ?)`
+      ).bind(customer.phone, stampRewardPct, orderNum).run()
+    );
   }
 
   // Fire-and-forget — doesn't delay the customer's response, and one
@@ -372,9 +519,10 @@ export async function POST(request: Request) {
     status: 'received',
     total: finalTotal,
     discountAmount,
+    discountSource,
     welcomeDiscountApplied,
     scheduledOfferApplied,
-    loyalty: { orderCount: nonCancelledOrderCount, rewardCode: loyaltyRewardCode },
+    loyalty: { orderCount: nonCancelledOrderCount, everyNOrders: stampEveryNOrders, pendingRewardCreated: createNewPendingReward },
     wowMomentRewardCode,
   }, 201);
 }

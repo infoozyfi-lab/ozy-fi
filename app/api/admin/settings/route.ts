@@ -24,23 +24,44 @@ const HOMEPAGE_KEYS = new Set([
   'popular_product_ids',
 ]);
 
-// Bug fix (found while reviewing the Sept 2026 growth-features delivery):
-// Manager-role staff are supposed to have Menu/Pricing access (see the
-// three-role design: Kitchen=Orders only, Manager=Orders/Menu/Homepage/
-// Customers/Reports, Owner=everything) — but the "Pricing rules" box in
-// Menu & Pricing has, since it was first added, saved its fields
-// alongside whatever else was in `admin_settings`, and every one of
-// those fields was missing from the allow-list above (which only ever
-// covered Homepage Display). That silently 403'd any Manager trying to
-// save Pricing rules — this list is exactly those fields, so Managers
-// can actually use the permission they're supposed to have.
-const PRICING_KEYS = new Set([
+// Menu & Pricing's "Pricing rules" box — Manager already fully manages
+// the menu itself (app/api/admin/[table]/** allows manager+owner), so it
+// should be able to set the one remaining rule that lives there too
+// (this was a real, reported gap before this fix: Manager got a 403
+// trying to save this box at all, since only HOMEPAGE_KEYS was ever
+// allow-listed for that role).
+const MENU_PRICING_KEYS = new Set([
   'size_large_upcharge',
+]);
+
+// Growth features batch 3 (Rewards dashboard consolidation) — every
+// setting now managed from the dedicated "Rewards" admin section (see
+// app/admin/dashboard/page.tsx's RewardsTab), covering all 6 growth
+// features' configurable numbers. Deliberately named for the SECTION
+// these keys are edited from now, not "PRICING_KEYS" — these moved out
+// of Menu & Pricing's box specifically so they're no longer mixed in
+// with unrelated pricing rules. Manager already manages every other
+// growth-feature control (scheduled_offers via the generic admin CRUD,
+// which already allows manager+owner; the Customers tab's loyalty-by-
+// phone view) — these settings should be no different.
+const REWARDS_KEYS = new Set([
   'first_order_discount_percent',
   'stamp_card_reward_percent',
+  'stamp_card_every_n_orders',
+  // Stamp-card redesign — the business owner's chosen list of eligible
+  // product ids (a JSON-array-in-TEXT value, same pattern as
+  // popular_product_ids above), replacing the old flat-percent-only
+  // config. See app/api/orders/route.ts and app/admin/dashboard/
+  // page.tsx's StampCardSettingsForm.
+  'stamp_card_eligible_product_ids',
+  'referral_discount_amount',
   'wow_moment_chance_percent',
   'wow_moment_reward_percent',
 ]);
+
+function managerCanAccessKey(key: string): boolean {
+  return HOMEPAGE_KEYS.has(key) || MENU_PRICING_KEYS.has(key) || REWARDS_KEYS.has(key);
+}
 
 export async function GET(request: Request) {
   const { env } = await getCloudflareContext({ async: true });
@@ -58,7 +79,7 @@ export async function GET(request: Request) {
 
   const out: Record<string, unknown> = {};
   for (const r of rows.results) {
-    if (session.role === 'manager' && !HOMEPAGE_KEYS.has(r.key) && !PRICING_KEYS.has(r.key)) continue;
+    if (session.role === 'manager' && !managerCanAccessKey(r.key)) continue;
     out[r.key] = r.value;
   }
 
@@ -91,13 +112,13 @@ export async function PUT(request: Request) {
   const keys = Object.keys(body);
 
   if (session.role === 'manager') {
-    const disallowed = keys.filter((k) => !HOMEPAGE_KEYS.has(k) && !PRICING_KEYS.has(k));
+    const disallowed = keys.filter((k) => !managerCanAccessKey(k));
     if (disallowed.length) {
       // A real 403, not a silent drop — this is exactly what the "hit a
       // restricted API directly" verification step checks for. A
-      // Manager only ever gets this by calling the API by hand (the
-      // Homepage Display and Pricing rules UIs never send anything
-      // outside HOMEPAGE_KEYS/PRICING_KEYS).
+      // Manager only ever gets this by calling the API by hand (every
+      // Manager-visible settings UI — Homepage Display, Pricing rules,
+      // Rewards — only ever sends keys from its own allow-listed set).
       return json(
         { error: `Your role can't change: ${disallowed.join(', ')}` },
         403

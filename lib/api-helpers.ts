@@ -1,4 +1,4 @@
-import type { OrderStatus } from './types';
+import type { OrderStatus, StampCardPendingRewardRow } from './types';
 
 export function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -107,4 +107,21 @@ export async function findOrdersByPhone(env: CloudflareEnv, phone: string): Prom
 export function makeCouponCode(prefix: string): string {
   const n = Math.floor(1000 + Math.random() * 9000);
   return `${prefix}-${Date.now().toString(36).toUpperCase().slice(-4)}${n}`;
+}
+
+// Stamp-card redesign — same full-table-scan + phoneMatches() tolerance
+// as findOrdersByPhone above, over the new stamp_card_pending_rewards
+// table (worker/migrations/010_stamp_card_redesign_and_source_tracking.
+// sql) instead of `orders`. Only un-redeemed rows are ever candidates —
+// a redeemed one is history, not something a future order could still
+// apply. Returns the single row for this phone, or null if none is
+// pending; app/api/orders/route.ts's own logic is what guarantees at
+// most one un-redeemed row per phone ever exists, not a query here.
+export async function findPendingStampCardReward(
+  env: CloudflareEnv,
+  phone: string
+): Promise<StampCardPendingRewardRow | null> {
+  const rows = await env.DB.prepare('SELECT * FROM stamp_card_pending_rewards WHERE redeemed_at IS NULL')
+    .all<StampCardPendingRewardRow>();
+  return rows.results.find((r) => phoneMatches(r.phone, phone)) || null;
 }

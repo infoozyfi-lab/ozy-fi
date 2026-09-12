@@ -266,6 +266,7 @@ const fi = {
     // Growth features (Feature 2 — first-order welcome discount).
     welcomeDiscountApplied: (amount: string) => `Ensitilausalennus käytössä: −${amount}`,
     scheduledOfferApplied: (label: string, amount: string) => `${label}-alennus käytössä: −${amount}`,
+    stampCardApplied: (amount: string) => `Kanta-asiakasetu käytössä: −${amount}`,
     codNote: (total: ReactNode) => (
       <>Maksa <b>{total}</b> käteisellä, kun tilauksesi saapuu.</>
     ),
@@ -274,8 +275,10 @@ const fi = {
     ),
     trackLinkText: 'Seuraa tilausta',
     continueShopping: 'Jatka ostoksia',
-    // Growth features (Feature 3 — stamp card / loyalty).
-    loyaltyReward: (count: number) => `🎉 Onnittelut ${count}. tilauksestasi! Tässä palkinto seuraavaa kertaa varten:`,
+    // Growth features (Feature 3 — stamp card / loyalty), redesigned.
+    stampCardRewardApplied: '🎁 Kanta-asiakasetusi käytettiin tähän tilaukseen!',
+    stampCardPendingEarned: (count: number) =>
+      `🎉 Onnittelut ${count}. tilauksestasi! Käytämme kanta-asiakasetusi automaattisesti seuraavan kerran, kun tilaat jonkin siihen oikeuttavan tuotteen.`,
     loyaltyProgress: (count: number, remaining: number) => `Tämä on ${count}. tilauksesi — ${remaining} lisää palkintoon!`,
     copyCode: 'Kopioi koodi',
     codeCopied: 'Kopioitu!',

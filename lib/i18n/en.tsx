@@ -274,6 +274,10 @@ const en = {
     // welcomeDiscountApplied when the applied discount was a scheduled
     // offer. `label` is the admin-entered offer name.
     scheduledOfferApplied: (label: string, amount: string) => `${label} discount applied: −${amount}`,
+    // Stamp-card redesign — shown in the same top discount-message slot as
+    // welcomeDiscountApplied/scheduledOfferApplied/couponApplied above,
+    // when the stamp-card reward is what won this order's discount.
+    stampCardApplied: (amount: string) => `Stamp-card reward applied: −${amount}`,
     codNote: (total: ReactNode) => (
       <>Pay <b>{total}</b> by cash on delivery when your order arrives.</>
     ),
@@ -282,19 +286,25 @@ const en = {
     ),
     trackLinkText: 'Track order',
     continueShopping: 'Continue shopping',
-    // Growth features (Feature 3 — stamp card / loyalty).
-    loyaltyReward: (count: number) => `🎉 Congrats on your ${count}th order! Here's a reward for next time:`,
+    // Growth features (Feature 3 — stamp card / loyalty), redesigned —
+    // see app/api/orders/route.ts and worker/migrations/
+    // 010_stamp_card_redesign_and_source_tracking.sql. The reward is now
+    // applied directly (no code to show), or banked as a pending reward
+    // for a future order — replaces the old loyaltyReward (which showed a
+    // copyable code every Nth order).
+    stampCardRewardApplied: '🎁 Your stamp-card reward was applied to this order!',
+    stampCardPendingEarned: (count: number) =>
+      `🎉 Congrats on your ${count}${count === 1 ? 'st' : count === 2 ? 'nd' : count === 3 ? 'rd' : 'th'} order! We'll apply your stamp-card reward automatically the next time you order an eligible item.`,
     loyaltyProgress: (count: number, remaining: number) =>
       `This is your ${count}${count === 1 ? 'st' : count === 2 ? 'nd' : count === 3 ? 'rd' : 'th'} order — ${remaining} more for a reward!`,
     copyCode: 'Copy code',
     codeCopied: 'Copied!',
     // Growth features batch 2 (Feature 6 — "Ozy Wow Moment"). Deliberately
-    // distinct wording/emoji from loyaltyReward above, and rendered in its
-    // own block (see ConfirmModal.tsx) so the two can never visually
-    // collide when both fire on the same order. No percentage shown here,
-    // same convention as loyaltyReward above (POST /api/orders doesn't
-    // return the reward percent, only the code, matching how the
-    // stamp-card reward is already surfaced).
+    // distinct wording/emoji from the stamp-card messages above, and
+    // rendered in its own block (see ConfirmModal.tsx) so the two can
+    // never visually collide when both fire on the same order. Still
+    // shows a copyable code (unlike the redesigned stamp-card reward
+    // above) — Wow Moment itself is unchanged by the stamp-card redesign.
     wowMomentReward: '✨ Wow Moment! You’ve won a surprise reward for your next order:',
   },
 

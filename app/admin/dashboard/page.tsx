@@ -572,8 +572,6 @@ interface PhoneLoyaltySummary {
   lastOrder: string;
 }
 
-const STAMP_INTERVAL = 5;
-
 function groupOrdersByPhone(orders: OrderRow[]): PhoneLoyaltySummary[] {
   const groups: PhoneLoyaltySummary[] = [];
   orders.forEach((o) => {
@@ -592,14 +590,30 @@ function groupOrdersByPhone(orders: OrderRow[]): PhoneLoyaltySummary[] {
   return groups.sort((a, b) => b.nonCancelledOrders - a.nonCancelledOrders);
 }
 
-function LoyaltyByPhoneBox({ orders }: { orders: OrderRow[] }) {
+function LoyaltyByPhoneBox({
+  orders,
+  everyN,
+  onNavigateToRewards,
+}: {
+  orders: OrderRow[];
+  everyN: number;
+  onNavigateToRewards?: () => void;
+}) {
   const groups = useMemo(() => groupOrdersByPhone(orders), [orders]);
 
   return (
     <div style={{ ...box, marginBottom: 20 }}>
-      <h3 style={{ marginTop: 0, marginBottom: 4 }}>Orders by phone (loyalty progress)</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+        <h3 style={{ marginTop: 0, marginBottom: 4 }}>Orders by phone (loyalty progress)</h3>
+        {onNavigateToRewards && (
+          <button type="button" style={{ ...btn, marginRight: 0 }} onClick={onNavigateToRewards}>
+            🎁 Manage in Rewards →
+          </button>
+        )}
+      </div>
       <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0, marginBottom: 12 }}>
-        Non-cancelled orders per phone number — every 5th one earns a stamp-card reward (see Menu &amp; Pricing&apos;s Pricing rules box to set the reward %).
+        Non-cancelled orders per phone number — every {everyN}{everyN === 1 ? 'st' : everyN === 2 ? 'nd' : everyN === 3 ? 'rd' : 'th'} one earns a stamp-card reward
+        (see the Rewards tab&apos;s Stamp Card card to set the threshold and reward %).
       </p>
       {groups.length === 0 ? (
         <p>No orders yet.</p>
@@ -617,7 +631,7 @@ function LoyaltyByPhoneBox({ orders }: { orders: OrderRow[] }) {
             </thead>
             <tbody>
               {groups.map((g) => {
-                const remaining = (STAMP_INTERVAL - (g.nonCancelledOrders % STAMP_INTERVAL)) % STAMP_INTERVAL;
+                const remaining = (everyN - (g.nonCancelledOrders % everyN)) % everyN;
                 return (
                   <tr key={g.phone}>
                     <td style={td}>{g.phone}</td>
@@ -636,8 +650,12 @@ function LoyaltyByPhoneBox({ orders }: { orders: OrderRow[] }) {
   );
 }
 
-function CustomersTab({ token }: { token: string }) {
+function CustomersTab({ token, onNavigateToRewards }: { token: string; onNavigateToRewards?: () => void }) {
   const { orders, loading } = useOrders(token);
+  // Read-only here — just needs the current threshold to show accurate
+  // progress; editing it happens in the Rewards tab (see RewardSettingsForm).
+  const { values: settingsValues } = useSettingsValues(token);
+  const stampEveryN = Math.max(1, Math.floor(Number(settingsValues.stamp_card_every_n_orders) || 5));
 
   const customers = useMemo(() => {
     const byEmail: Record<string, CustomerSummary> = {};
@@ -663,7 +681,7 @@ function CustomersTab({ token }: { token: string }) {
 
   return (
     <div>
-      {!loading && <LoyaltyByPhoneBox orders={orders} />}
+      {!loading && <LoyaltyByPhoneBox orders={orders} everyN={stampEveryN} onNavigateToRewards={onNavigateToRewards} />}
       <div style={box}>
       <h2 style={{ marginTop: 0 }}>Customers</h2>
       <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: -8 }}>Derived from order history — not a separate customer database.</p>
@@ -1471,16 +1489,6 @@ function PricingRulesBox({ token }: { token: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           size_large_upcharge: values.size_large_upcharge || '',
-          // Growth features — first-order welcome discount % and stamp-
-          // card reward %, both admin-configurable (see this feature's
-          // summary). Blank/0 disables each independently.
-          first_order_discount_percent: values.first_order_discount_percent || '',
-          stamp_card_reward_percent: values.stamp_card_reward_percent || '',
-          // Growth features batch 2 (Feature 6 — "Ozy Wow Moment"). Both
-          // must be set (>0) for the random reward to ever trigger — see
-          // app/api/orders/route.ts.
-          wow_moment_chance_percent: values.wow_moment_chance_percent || '',
-          wow_moment_reward_percent: values.wow_moment_reward_percent || '',
         }),
       });
       setSaved(true);
@@ -1516,7 +1524,9 @@ function PricingRulesBox({ token }: { token: string }) {
     <div style={{ ...box, marginBottom: 20, padding: 16 }}>
       <h3 style={{ marginTop: 0, marginBottom: 4 }}>Pricing rules</h3>
       <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0, marginBottom: 12 }}>
-        Rules that apply across every product, rather than one product at a time.
+        Rules that apply across every product, rather than one product at a time. Looking for the
+        first-order discount, stamp card, referral, scheduled offers, or Ozy Wow Moment settings?
+        Those moved to the new <strong>Rewards</strong> tab.
       </p>
       <form onSubmit={save} style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
         <label style={{ minWidth: 240 }}>
@@ -1528,45 +1538,668 @@ function PricingRulesBox({ token }: { token: string }) {
             onChange={(e: ChangeEvent<HTMLInputElement>) => { setValues((v) => ({ ...v, size_large_upcharge: e.target.value })); setSaved(false); }}
           />
         </label>
-        <label style={{ minWidth: 240 }}>
-          First-order welcome discount (%) — auto-applied to a phone number&apos;s very first order. Blank/0 disables it.
-          <input
-            style={inputStyle}
-            type="number" step="1" min="0" max="100"
-            value={values.first_order_discount_percent || ''}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => { setValues((v) => ({ ...v, first_order_discount_percent: e.target.value })); setSaved(false); }}
-          />
-        </label>
-        <label style={{ minWidth: 240 }}>
-          Stamp-card reward (%) — auto-applied to a single-use coupon on every 5th non-cancelled order for a phone number. Blank/0 disables it.
-          <input
-            style={inputStyle}
-            type="number" step="1" min="0" max="100"
-            value={values.stamp_card_reward_percent || ''}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => { setValues((v) => ({ ...v, stamp_card_reward_percent: e.target.value })); setSaved(false); }}
-          />
-        </label>
-        <label style={{ minWidth: 240 }}>
-          &quot;Ozy Wow Moment&quot; odds (%) — chance a random order wins a surprise reward. Blank/0 disables it.
-          <input
-            style={inputStyle}
-            type="number" step="1" min="0" max="100"
-            value={values.wow_moment_chance_percent || ''}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => { setValues((v) => ({ ...v, wow_moment_chance_percent: e.target.value })); setSaved(false); }}
-          />
-        </label>
-        <label style={{ minWidth: 240 }}>
-          Wow Moment reward (%) — the single-use coupon a winning order&apos;s customer gets for next time.
-          <input
-            style={inputStyle}
-            type="number" step="1" min="0" max="100"
-            value={values.wow_moment_reward_percent || ''}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => { setValues((v) => ({ ...v, wow_moment_reward_percent: e.target.value })); setSaved(false); }}
-          />
-        </label>
         <button type="submit" style={btnPrimary} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
         {saved && <span style={{ color: 'var(--gold)' }}>Saved ✓</span>}
       </form>
+    </div>
+  );
+}
+
+/* ---------------- Rewards (growth-features consolidation) ---------------- */
+//
+// Every growth/loyalty feature's settings, previously scattered across
+// Menu & Pricing's "Pricing rules" box and a couple of hardcoded route
+// constants, now live in one dedicated section — see this task's brief.
+// Follows the SAME "landing page of cards, click into one to manage just
+// that feature" structure MenuTabs/OptionsManager already established
+// above, rather than inventing a new layout.
+
+interface RewardSettingFieldDef {
+  key: string;
+  label: string;
+  min?: number;
+  max?: number;
+  step?: string;
+}
+
+// One small reusable form for a handful of admin_settings keys — the
+// same shape as PricingRulesBox above (useSettingsValues + a form that
+// PUTs back only the keys it owns), just parameterized so each Rewards
+// card doesn't need its own hand-copied version of that box.
+function RewardSettingsForm({
+  token,
+  title,
+  description,
+  fields,
+}: {
+  token: string;
+  title: string;
+  description?: string;
+  fields: RewardSettingFieldDef[];
+}) {
+  const { values, setValues, loading, error } = useSettingsValues(token);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const save = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const body: Record<string, string> = {};
+      fields.forEach((f) => { body[f.key] = values[f.key] || ''; });
+      await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      setSaved(true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <div style={{ ...box, padding: 16, color: 'var(--muted)' }}>Loading…</div>;
+  }
+  if (error) {
+    return <div style={{ ...box, padding: 16, color: '#FF8A75' }}>{error}</div>;
+  }
+
+  return (
+    <div style={box}>
+      <h3 style={{ marginTop: 0, marginBottom: 4 }}>{title}</h3>
+      {description && (
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0, marginBottom: 16 }}>{description}</p>
+      )}
+      <form onSubmit={save} style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
+        {fields.map((f) => (
+          <label key={f.key} style={{ minWidth: 260 }}>
+            {f.label}
+            <input
+              style={inputStyle}
+              type="number"
+              step={f.step || '1'}
+              min={f.min ?? 0}
+              max={f.max}
+              value={values[f.key] || ''}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => { setValues((v) => ({ ...v, [f.key]: e.target.value })); setSaved(false); }}
+            />
+          </label>
+        ))}
+        <button type="submit" style={btnPrimary} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+        {saved && <span style={{ color: 'var(--gold)' }}>Saved ✓</span>}
+      </form>
+    </div>
+  );
+}
+
+// Stamp-card redesign — same checkbox-list-over-fetched-products pattern
+// already established by HomepageDisplaySettings' popular_product_ids
+// picker above, reused here (per the brief's own pointer) rather than
+// inventing a new multi-select control. A bespoke component (not
+// RewardSettingsForm) because RewardSettingsForm's field-list model has
+// no concept of a product picker — same reasoning ScheduledOffersManager
+// documents for why IT isn't the generic <ResourceManager/> either.
+function StampCardSettingsForm({ token }: { token: string }) {
+  const { values, setValues, loading, error } = useSettingsValues(token);
+  const [products, setProducts] = useState<RawProduct[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/admin/products')
+      .then((r) => r.json())
+      .then((d) => setProducts(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, [token]);
+
+  let eligibleIds: string[] = [];
+  try {
+    const parsed = JSON.parse(values.stamp_card_eligible_product_ids || '[]');
+    if (Array.isArray(parsed)) eligibleIds = parsed;
+  } catch {
+    eligibleIds = [];
+  }
+
+  const toggleEligible = (id: string) => {
+    const next = eligibleIds.includes(id) ? eligibleIds.filter((p) => p !== id) : [...eligibleIds, id];
+    setValues((v) => ({ ...v, stamp_card_eligible_product_ids: JSON.stringify(next) }));
+    setSaved(false);
+  };
+
+  const setField = (key: string, val: string) => {
+    setValues((v) => ({ ...v, [key]: val }));
+    setSaved(false);
+  };
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stamp_card_eligible_product_ids: values.stamp_card_eligible_product_ids || '[]',
+          stamp_card_reward_percent: values.stamp_card_reward_percent || '',
+          stamp_card_every_n_orders: values.stamp_card_every_n_orders || '',
+        }),
+      });
+      setSaved(true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <div style={{ ...box, padding: 16, color: 'var(--muted)' }}>Loading…</div>;
+  }
+  if (error) {
+    return <div style={{ ...box, padding: 16, color: '#FF8A75' }}>{error}</div>;
+  }
+
+  return (
+    <div style={box}>
+      <h3 style={{ marginTop: 0, marginBottom: 4 }}>Stamp Card</h3>
+      <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0, marginBottom: 16 }}>
+        On a customer&apos;s every Nth non-cancelled order, if their cart contains ANY of the eligible
+        products below, one unit of the cheapest eligible item in the cart gets this percentage off —
+        applied immediately, no code needed. If the cart has none of these products, the reward is held
+        (one per phone number at a time) and applied automatically the next time that phone orders an
+        eligible item, however many orders later. Never stacks with a coupon, the welcome discount, or a
+        scheduled offer — whichever discount is most favorable to the customer wins.
+      </p>
+      <form onSubmit={save}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+          <label style={{ minWidth: 260 }}>
+            Reward (%) — blank/0 disables it
+            <input
+              style={inputStyle}
+              type="number"
+              min={0}
+              max={100}
+              step="1"
+              value={values.stamp_card_reward_percent || ''}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setField('stamp_card_reward_percent', e.target.value)}
+            />
+          </label>
+          <label style={{ minWidth: 260 }}>
+            Every Nth order — blank defaults to 5
+            <input
+              style={inputStyle}
+              type="number"
+              min={1}
+              step="1"
+              value={values.stamp_card_every_n_orders || ''}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setField('stamp_card_every_n_orders', e.target.value)}
+            />
+          </label>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <span style={{ display: 'block', marginBottom: 6 }}>Eligible products</span>
+          <div
+            style={{
+              display: 'flex', flexWrap: 'wrap', gap: '8px 16px', padding: 12, border: '1px solid var(--line)',
+              borderRadius: 8, background: 'var(--bg-alt)', maxHeight: 260, overflowY: 'auto',
+            }}
+          >
+            {products.length === 0 && <span style={{ color: 'var(--muted)', fontSize: 13 }}>No products found.</span>}
+            {products.map((p) => (
+              <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                <input type="checkbox" checked={eligibleIds.includes(p.id)} onChange={() => toggleEligible(p.id)} />
+                {p.name}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <button type="submit" style={btnPrimary} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+        {saved && <span style={{ color: 'var(--gold)', marginLeft: 12 }}>Saved ✓</span>}
+      </form>
+    </div>
+  );
+}
+
+const REWARD_CARDS: { id: string; label: string; icon: string; desc: string }[] = [
+  { id: 'first_order', label: 'First-Order Discount', icon: '🎉', desc: "Automatic % off a phone number's very first order" },
+  { id: 'stamp_card', label: 'Stamp Card', icon: '🎟️', desc: 'On every Nth order, % off the cheapest eligible item — or banked until one is ordered' },
+  { id: 'referral', label: 'Referral Program', icon: '🤝', desc: 'A coupon for a friend, from the footer sign-up form' },
+  { id: 'scheduled_offers', label: 'Scheduled Offers', icon: '📅', desc: 'Weekday/time-window discounts, e.g. a Monday boost or a Friday special' },
+  { id: 'wow_moment', label: 'Ozy Wow Moment', icon: '✨', desc: 'A random surprise reward on a configurable share of orders' },
+  // Reorder has no settings to configure — included anyway (rather than
+  // omitted) so all 6 growth features are represented here, per the
+  // brief's "consolidate settings from all 6 features into one place";
+  // its card just explains that and links to where the feature itself
+  // lives, instead of a settings form.
+  { id: 'reorder', label: 'Reorder', icon: '🔁', desc: 'Always on for every customer — nothing to configure' },
+];
+
+function RewardsTab({ token }: { token: string }) {
+  const [tab, setTab] = useState<string | null>(null);
+
+  if (!tab) {
+    return (
+      <div>
+        <h2 style={{ marginTop: 0, marginBottom: 4 }}>Rewards</h2>
+        <p style={{ color: 'var(--muted)', fontSize: 13.5, marginTop: 0, marginBottom: 16 }}>
+          Every growth and loyalty feature's settings, in one place. Pick a card to manage just that feature.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+          {REWARD_CARDS.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setTab(c.id)}
+              style={{
+                textAlign: 'left', background: 'var(--bg-card)', border: '1px solid var(--line)', borderRadius: 12,
+                padding: 20, cursor: 'pointer', color: 'var(--cream)',
+              }}
+            >
+              <div style={{ fontSize: 28, marginBottom: 8 }}>{c.icon}</div>
+              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{c.label}</div>
+              <div style={{ fontSize: 13, color: 'var(--muted)' }}>{c.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button type="button" style={{ ...btn, marginBottom: 16 }} onClick={() => setTab(null)}>← Back to Rewards</button>
+
+      {tab === 'first_order' && (
+        <RewardSettingsForm
+          token={token}
+          title="First-Order Discount"
+          description="Automatically applied to a phone number's genuinely first order (any past order, of any status, disqualifies it). Never stacks with a coupon or a scheduled offer — whichever discount is most favorable to the customer wins."
+          fields={[
+            { key: 'first_order_discount_percent', label: 'Discount (%) — blank/0 disables it', min: 0, max: 100, step: '1' },
+          ]}
+        />
+      )}
+
+      {tab === 'stamp_card' && <StampCardSettingsForm token={token} />}
+
+      {tab === 'referral' && (
+        <RewardSettingsForm
+          token={token}
+          title="Referral Program"
+          description="The footer's “Refer a friend” form mints a single-use coupon for the email address entered — resubmitting the same email returns the existing code rather than a new one. (There is currently no separate reward for the person who shares the form — only the friend's coupon amount below.)"
+          fields={[
+            { key: 'referral_discount_amount', label: 'Friend coupon amount (€) — blank defaults to 3', min: 0, step: '0.5' },
+          ]}
+        />
+      )}
+
+      {tab === 'scheduled_offers' && (
+        <ScheduledOffersManager onChanged={() => {}} />
+      )}
+
+      {tab === 'wow_moment' && (
+        <RewardSettingsForm
+          token={token}
+          title="Ozy Wow Moment"
+          description="A random chance, on every order, of a small surprise reward shown right on the confirmation screen — a single-use coupon for the customer's next order. Both odds and reward must be set above 0 for this to ever trigger."
+          fields={[
+            { key: 'wow_moment_chance_percent', label: 'Odds (%) — blank/0 disables it', min: 0, max: 100, step: '1' },
+            { key: 'wow_moment_reward_percent', label: 'Reward (%) — blank/0 disables it', min: 0, max: 100, step: '1' },
+          ]}
+        />
+      )}
+
+      {tab === 'reorder' && (
+        <div style={box}>
+          <h3 style={{ marginTop: 0 }}>Reorder</h3>
+          <p style={{ color: 'var(--muted)', fontSize: 13.5, marginBottom: 0 }}>
+            The “Reorder this” button on the order-tracking page is available on every past order —
+            there's nothing to turn on or configure. Prices are always recomputed at today's menu
+            prices when a customer reorders, never the historical order's price.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- Customer Source ---------------- */
+//
+// Stamp-card redesign / discount-source tracking task, Part C. Built
+// entirely from data this admin panel already fetches generically
+// (GET /api/admin/orders via useOrders, GET /api/admin/coupons via
+// useCoupons — both defined elsewhere in this file) rather than a new
+// bespoke report endpoint: every column each of the 5 sub-sections below
+// needs turns out to already be on the `orders`/`coupons` rows once
+// discount_source/is_reorder are added (see worker/migrations/
+// 010_stamp_card_redesign_and_source_tracking.sql), so this stays a pure
+// client-side derivation, following the "reuse existing admin CRUD/report
+// patterns" standing rule rather than adding a parallel API.
+//
+// Historical orders placed before that migration have discount_source
+// NULL and is_reorder/triggered_wow_moment 0 — they simply don't show up
+// in the Coupons/Reorders views or count toward the Referral/Stamp-card-
+// earner badges below, same as any newly-added tracking column. Flagged
+// in this task's delivery summary, not something this UI hides.
+
+interface CustomerSourceGroup {
+  phone: string;
+  totalOrders: number;
+  nonCancelledOrders: number;
+  totalSpend: number;
+  hasReferral: boolean;
+  hasStampCard: boolean;
+  lastOrder: string;
+}
+
+// Deliberately a SEPARATE grouping function from groupOrdersByPhone above
+// (used by the Customers tab's loyalty box) rather than extending that
+// one — it already ships and is unrelated to this task; adding fields it
+// doesn't need risks it in the shuffle, against this project's "stay
+// scoped" standing rule. Same last-6-digits phoneMatches tolerance
+// (matching lib/api-helpers.ts's server-side logic) so groupings here
+// line up with what the server actually treats as "the same customer".
+function groupOrdersForCustomerSource(orders: OrderRow[]): CustomerSourceGroup[] {
+  const groups: CustomerSourceGroup[] = [];
+  orders.forEach((o) => {
+    const digits = String(o.phone || '').replace(/\D/g, '');
+    const key = digits.slice(-6);
+    if (!key) return;
+    let group = groups.find((g) => g.phone.replace(/\D/g, '').slice(-6) === key);
+    if (!group) {
+      group = { phone: o.phone, totalOrders: 0, nonCancelledOrders: 0, totalSpend: 0, hasReferral: false, hasStampCard: false, lastOrder: o.created_at };
+      groups.push(group);
+    }
+    group.totalOrders += 1;
+    if (o.status !== 'cancelled') {
+      group.nonCancelledOrders += 1;
+      group.totalSpend += Number(o.total) || 0;
+    }
+    if (o.discount_source === 'referral') group.hasReferral = true;
+    if (o.discount_source === 'stamp_card') group.hasStampCard = true;
+    if (o.created_at > group.lastOrder) group.lastOrder = o.created_at;
+  });
+  return groups;
+}
+
+interface ReferralSourceRow {
+  email: string;
+  code: string;
+  createdAt: string;
+  timesUsed: number;
+  redemption: { phone: string; orderNum: string; date: string } | null;
+}
+
+// A referral coupon's own row has no phone/order/redeemed-at of its own
+// (worker/schema.sql's `coupons` table only ever stores the referring
+// email) — but the order that actually redeemed it (if any) is findable
+// by matching orders.coupon_code back to this coupon's code, which also
+// gives an accurate redemption date (the order's created_at) without
+// needing a new column for it.
+function buildReferralSourceRows(coupons: CouponRowType[], orders: OrderRow[]): ReferralSourceRow[] {
+  return coupons
+    .filter((c) => c.referral_email)
+    .map((c) => {
+      const matched = orders.find((o) => o.coupon_code === c.code);
+      return {
+        email: c.referral_email as string,
+        code: c.code,
+        createdAt: c.created_at,
+        timesUsed: c.times_used,
+        redemption: matched ? { phone: matched.phone, orderNum: matched.order_num, date: matched.created_at } : null,
+      };
+    })
+    .sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
+}
+
+function phoneContains(phone: string, filter: string): boolean {
+  const f = filter.replace(/\D/g, '');
+  if (!f) return true;
+  return String(phone || '').replace(/\D/g, '').includes(f);
+}
+
+const CUSTOMER_SOURCE_CARDS: { id: string; label: string; icon: string; desc: string }[] = [
+  { id: 'coupons', label: 'Coupons', icon: '🏷️', desc: 'Orders where a manually-entered coupon code won the discount' },
+  { id: 'referrals', label: 'Referrals', icon: '🤝', desc: "Every friend code the referral form has issued, and whether it's been used" },
+  { id: 'reorders', label: 'Reorders', icon: '🔁', desc: 'Orders placed via the "Reorder this" button' },
+  { id: 'repeat', label: 'Repeat Customers', icon: '🔂', desc: '2 or more orders from the same phone number' },
+  { id: 'badges', label: 'Customer Badges', icon: '🏅', desc: 'At-a-glance labels computed from order history — nothing to configure' },
+];
+
+function CustomerSourceTab({ token }: { token: string }) {
+  const { orders, loading: ordersLoading } = useOrders(token);
+  const { coupons, loading: couponsLoading } = useCoupons(token);
+  const [tab, setTab] = useState<string | null>(null);
+  const [phoneFilter, setPhoneFilter] = useState('');
+  const loading = ordersLoading || couponsLoading;
+
+  const phoneFilterInput = (
+    <input
+      style={{ ...inputStyle, maxWidth: 240, marginBottom: 16 }}
+      placeholder="Filter by phone…"
+      value={phoneFilter}
+      onChange={(e: ChangeEvent<HTMLInputElement>) => setPhoneFilter(e.target.value)}
+    />
+  );
+
+  if (!tab) {
+    return (
+      <div>
+        <h2 style={{ marginTop: 0, marginBottom: 4 }}>Customer Source</h2>
+        <p style={{ color: 'var(--muted)', fontSize: 13.5, marginTop: 0, marginBottom: 16 }}>
+          Where orders and customers come from, split by source. Pick a card to see just that view.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+          {CUSTOMER_SOURCE_CARDS.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setTab(c.id)}
+              style={{
+                textAlign: 'left', background: 'var(--bg-card)', border: '1px solid var(--line)', borderRadius: 12,
+                padding: 20, cursor: 'pointer', color: 'var(--cream)',
+              }}
+            >
+              <div style={{ fontSize: 28, marginBottom: 8 }}>{c.icon}</div>
+              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{c.label}</div>
+              <div style={{ fontSize: 13, color: 'var(--muted)' }}>{c.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div>
+        <button type="button" style={{ ...btn, marginBottom: 16 }} onClick={() => setTab(null)}>← Back to Customer Source</button>
+        <p>Loading…</p>
+      </div>
+    );
+  }
+
+  const couponOrders = orders.filter((o) => o.discount_source === 'manual_coupon' && phoneContains(o.phone, phoneFilter));
+  const reorderOrders = orders.filter((o) => o.is_reorder && phoneContains(o.phone, phoneFilter));
+  const groups = groupOrdersForCustomerSource(orders).filter((g) => phoneContains(g.phone, phoneFilter));
+  const repeatGroups = groups.filter((g) => g.totalOrders >= 2).sort((a, b) => b.totalOrders - a.totalOrders);
+  const badgeGroups = groups
+    .filter((g) => g.totalOrders >= 2 || g.hasReferral || g.hasStampCard)
+    .sort((a, b) => (b.lastOrder > a.lastOrder ? 1 : -1));
+  const referralRows = buildReferralSourceRows(coupons, orders).filter((r) => phoneContains(r.redemption?.phone || '', phoneFilter));
+
+  return (
+    <div>
+      <button type="button" style={{ ...btn, marginBottom: 16 }} onClick={() => setTab(null)}>← Back to Customer Source</button>
+
+      {tab === 'coupons' && (
+        <div style={box}>
+          <h3 style={{ marginTop: 0 }}>Coupons</h3>
+          <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
+            Every order where a manually-entered coupon code (not the automatic welcome discount,
+            stamp card, or a scheduled offer) won the discount.
+          </p>
+          {phoneFilterInput}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr><th style={th}>Phone</th><th style={th}>Date</th><th style={th}>Order #</th><th style={th}>Coupon code</th><th style={th}>Discount</th></tr>
+              </thead>
+              <tbody>
+                {couponOrders.length === 0 && <tr><td style={td} colSpan={5}>No matching orders.</td></tr>}
+                {couponOrders.map((o) => (
+                  <tr key={o.id}>
+                    <td style={td}>{o.phone}</td>
+                    <td style={td}>{o.created_at}</td>
+                    <td style={td}>{o.order_num}</td>
+                    <td style={td}><code>{o.coupon_code}</code></td>
+                    <td style={td}>{formatCurrency(o.discount_amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {tab === 'referrals' && (
+        <div style={box}>
+          <h3 style={{ marginTop: 0 }}>Referrals</h3>
+          <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
+            Every friend code the footer&apos;s referral form has issued. &ldquo;Used&rdquo; means an
+            order was placed with that code — the date/phone/order shown is that redemption, found by
+            matching the order&apos;s coupon code back to this one (there&apos;s no separate
+            redeemed-at column; an order&apos;s own timestamp is an exact stand-in, since redemption
+            happens the moment the order is placed).
+          </p>
+          <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
+            <strong>Honest gap:</strong> there is currently no separate reward for the person who
+            <em> shares</em> the form (the referrer) anywhere in this codebase — only the friend&apos;s
+            coupon below exists (confirmed again for this task; see the Rewards tab&apos;s Referral
+            Program card). There is nothing to show for &ldquo;the referrer&apos;s own pending/redeemed
+            reward status&rdquo; because that reward doesn&apos;t exist yet — building it would be new
+            functionality, out of scope here.
+          </p>
+          {phoneFilterInput}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr><th style={th}>Referring email</th><th style={th}>Friend&apos;s code</th><th style={th}>Issued</th><th style={th}>Used?</th><th style={th}>Redeemed by (phone / order #)</th></tr>
+              </thead>
+              <tbody>
+                {referralRows.length === 0 && <tr><td style={td} colSpan={5}>No referrals yet.</td></tr>}
+                {referralRows.map((r) => (
+                  <tr key={r.code}>
+                    <td style={td}>{r.email}</td>
+                    <td style={td}><code>{r.code}</code></td>
+                    <td style={td}>{r.createdAt}</td>
+                    <td style={td}>{r.timesUsed > 0 ? 'Yes' : 'Not yet'}</td>
+                    <td style={td}>{r.redemption ? `${r.redemption.phone} / ${r.redemption.orderNum} (${r.redemption.date})` : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {tab === 'reorders' && (
+        <div style={box}>
+          <h3 style={{ marginTop: 0 }}>Reorders</h3>
+          <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
+            Every order placed via the &ldquo;Reorder this&rdquo; button on the order-tracking page.
+            Only orders placed since this tracking was added can be marked this way — orders from
+            before then show as regular orders, not reorders (there was nothing recording it until now).
+          </p>
+          {phoneFilterInput}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr><th style={th}>Phone</th><th style={th}>Date</th><th style={th}>Order #</th><th style={th}>Total</th></tr>
+              </thead>
+              <tbody>
+                {reorderOrders.length === 0 && <tr><td style={td} colSpan={4}>No matching orders.</td></tr>}
+                {reorderOrders.map((o) => (
+                  <tr key={o.id}>
+                    <td style={td}>{o.phone}</td>
+                    <td style={td}>{o.created_at}</td>
+                    <td style={td}>{o.order_num}</td>
+                    <td style={td}>{formatCurrency(o.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {tab === 'repeat' && (
+        <div style={box}>
+          <h3 style={{ marginTop: 0 }}>Repeat Customers</h3>
+          <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
+            Phone numbers with 2 or more total orders (any status). Total spend sums only non-cancelled
+            orders — a cancelled order was never actually paid for.
+          </p>
+          {phoneFilterInput}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr><th style={th}>Phone</th><th style={th}>Total orders</th><th style={th}>Non-cancelled</th><th style={th}>Total spend</th><th style={th}>Last order</th></tr>
+              </thead>
+              <tbody>
+                {repeatGroups.length === 0 && <tr><td style={td} colSpan={5}>No repeat customers yet.</td></tr>}
+                {repeatGroups.map((g) => (
+                  <tr key={g.phone}>
+                    <td style={td}>{g.phone}</td>
+                    <td style={td}>{g.totalOrders}</td>
+                    <td style={td}>{g.nonCancelledOrders}</td>
+                    <td style={td}>{formatCurrency(g.totalSpend)}</td>
+                    <td style={td}>{g.lastOrder}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {tab === 'badges' && (
+        <div style={box}>
+          <h3 style={{ marginTop: 0 }}>Customer Badges</h3>
+          <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
+            Computed on the fly from order history every time this view loads — not a stored or
+            manually-assigned field, so there&apos;s nothing to edit here. <strong>Repeat</strong> = 2+
+            total orders. <strong>Referral</strong> = at least one order where a referral-minted coupon
+            won the discount (there&apos;s no way to detect the OTHER side — someone who only ever
+            shared the form without a linked order — since referral codes aren&apos;t tied to a phone
+            number until redeemed). <strong>Stamp card earner</strong> = at least one order where the
+            stamp-card reward actually won the discount. Only phones with at least one badge are shown.
+          </p>
+          {phoneFilterInput}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr><th style={th}>Phone</th><th style={th}>Badges</th><th style={th}>Last order</th></tr>
+              </thead>
+              <tbody>
+                {badgeGroups.length === 0 && <tr><td style={td} colSpan={3}>No customers with a badge yet.</td></tr>}
+                {badgeGroups.map((g) => (
+                  <tr key={g.phone}>
+                    <td style={td}>{g.phone}</td>
+                    <td style={td}>
+                      {g.totalOrders >= 2 && <span style={{ marginRight: 8 }}>🔂 Repeat</span>}
+                      {g.hasReferral && <span style={{ marginRight: 8 }}>🤝 Referral</span>}
+                      {g.hasStampCard && <span style={{ marginRight: 8 }}>🎟️ Stamp card earner</span>}
+                    </td>
+                    <td style={td}>{g.lastOrder}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1760,8 +2393,6 @@ function MenuTabs({ token }: { token: string }) {
     { id: 'options', label: 'Options & Toppings', icon: '🧀', desc: 'Bases, sauces, cheese, toppings, and filling choices' },
     { id: 'addons', label: 'Add-ons', icon: '🥤', desc: 'Drinks, dips, and snacks customers can add to their order' },
     { id: 'bundles', label: 'Bundles', icon: '🎁', desc: 'Combo deals and multi-item meal bundles' },
-    // Growth features batch 2 (Feature 5).
-    { id: 'scheduled_offers', label: 'Scheduled offers', icon: '📅', desc: 'Weekday/time-window discounts, e.g. a Monday boost or a Friday special' },
   ];
 
   if (!tab) {
@@ -1808,9 +2439,6 @@ function MenuTabs({ token }: { token: string }) {
       )}
       {tab === 'bundles' && (
         <BundleManager token={token} categories={categories} products={products} onChanged={bump} />
-      )}
-      {tab === 'scheduled_offers' && (
-        <ScheduledOffersManager onChanged={bump} />
       )}
     </div>
   );
@@ -2307,8 +2935,8 @@ function CouponsTab({ token }: { token: string }) {
 // enforcement, not a substitute for it.
 const ROLE_TABS: Record<StaffRole, string[]> = {
   kitchen: ['orders'],
-  manager: ['overview', 'orders', 'menu', 'coupons', 'homepage', 'customers', 'reports'],
-  owner: ['overview', 'orders', 'menu', 'coupons', 'homepage', 'customers', 'reports', 'tracking', 'settings', 'staff', 'activity'],
+  manager: ['overview', 'orders', 'menu', 'rewards', 'coupons', 'homepage', 'customers', 'customer_source', 'reports'],
+  owner: ['overview', 'orders', 'menu', 'rewards', 'coupons', 'homepage', 'customers', 'customer_source', 'reports', 'tracking', 'settings', 'staff', 'activity'],
 };
 
 export default function AdminDashboard() {
@@ -2401,9 +3029,11 @@ export default function AdminDashboard() {
     { id: 'overview', label: '🏠 Dashboard' },
     { id: 'orders', label: '📦 Orders', badge: pendingCount },
     { id: 'menu', label: '🍕 Menu & Pricing' },
+    { id: 'rewards', label: '🎁 Rewards' },
     { id: 'coupons', label: '🏷️ Coupons' },
     { id: 'homepage', label: '🖼️ Homepage Display' },
     { id: 'customers', label: '👥 Customers' },
+    { id: 'customer_source', label: '🔎 Customer Source' },
     { id: 'reports', label: '📊 Reports' },
     { id: 'tracking', label: '📈 Tracking & Analytics' },
     { id: 'settings', label: '⚙️ Settings' },
@@ -2465,9 +3095,11 @@ export default function AdminDashboard() {
         )}
         {tab === 'orders' && <OrdersTab token={token} />}
         {tab === 'menu' && <MenuTabs token={token} />}
+        {tab === 'rewards' && <RewardsTab token={token} />}
         {tab === 'coupons' && <CouponsTab token={token} />}
         {tab === 'homepage' && <HomepageDisplaySettings token={token} />}
-        {tab === 'customers' && <CustomersTab token={token} />}
+        {tab === 'customers' && <CustomersTab token={token} onNavigateToRewards={() => setTab('rewards')} />}
+        {tab === 'customer_source' && <CustomerSourceTab token={token} />}
         {tab === 'reports' && <ReportsTab analytics={analytics} loading={analyticsLoading} />}
         {tab === 'tracking' && <TrackingAnalyticsSettings token={token} />}
         {tab === 'settings' && <SettingsTab token={token} />}

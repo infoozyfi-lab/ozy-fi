@@ -31,6 +31,7 @@ import type {
   RecentOrder,
   MenuData,
   ScheduledOffer,
+  DiscountSource,
 } from '@/lib/types';
 
 interface StoreContextValue {
@@ -207,6 +208,16 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
   // it has no StoreContext in common with the page it's navigating to).
   // Removed immediately so a later reload of /menu (or navigating back to
   // it normally) never re-opens checkout unexpectedly.
+  // Stamp-card redesign / discount-source tracking (Part C — "Reorders")
+  // — a sibling one-shot flag to `ozy_open_checkout` above, set by the
+  // SAME ReorderButton.continueToCheckout() call right before it writes
+  // `ozy_cart` and navigates here. Consumed once, the same way, so the
+  // order this cart turns into can be marked orders.is_reorder = 1 (see
+  // placeOrder below) — nothing previously tracked this at all (traced
+  // app/api/orders/[orderNum]/reorder/route.ts: it only rebuilds and
+  // returns a cart, with no awareness of what happens to it afterwards).
+  const [isReorderCart, setIsReorderCart] = useState(false);
+
   useEffect(() => {
     try {
       if (sessionStorage.getItem('ozy_open_checkout') === '1') {
@@ -214,10 +225,15 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         setCheckoutOpen(true);
         setUrl(lp('/checkout'));
       }
+      if (sessionStorage.getItem('ozy_is_reorder') === '1') {
+        sessionStorage.removeItem('ozy_is_reorder');
+        setIsReorderCart(true);
+      }
     } catch {
       // Storage unavailable — reorder still lands the cart (see above),
       // just without auto-opening checkout; the customer can open it
-      // themselves from the cart icon.
+      // themselves from the cart icon. is_reorder tracking degrades the
+      // same way — purely informational, never blocks placing the order.
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -684,6 +700,12 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       // banner hasn't been shown/answered yet for some reason, which is
       // the safe default.
       marketingConsent: typeof window !== 'undefined' && localStorage.getItem('ozy_cookie_consent') === 'all',
+      // Stamp-card redesign / discount-source tracking (Part C —
+      // "Reorders") — purely informational (see the `isReorderCart` state
+      // above); the server trusts this as-is and never uses it in any
+      // price or discount calculation, same trust level as
+      // marketingConsent.
+      isReorder: isReorderCart,
       items: cart.map((line) => ({
         productId: line.productId || null,
         name: line.name,
@@ -718,9 +740,10 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       orderNum: string;
       total?: number;
       discountAmount?: number;
+      discountSource?: DiscountSource | null;
       welcomeDiscountApplied?: boolean;
       scheduledOfferApplied?: { id: string; label: string } | null;
-      loyalty?: { orderCount: number; rewardCode: string | null };
+      loyalty?: { orderCount: number; everyNOrders: number; pendingRewardCreated: boolean };
       wowMomentRewardCode?: string | null;
     };
 
@@ -753,11 +776,13 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       welcomeDiscountApplied: data.welcomeDiscountApplied,
       scheduledOfferApplied: data.scheduledOfferApplied,
       wowMomentRewardCode: data.wowMomentRewardCode,
+      discountSource: data.discountSource,
     });
     setCheckoutOpen(false);
     setCart([]);
+    setIsReorderCart(false);
     setUrl(lp('/order-confirmed'));
-  }, [cart, cartTotal, storeClosed, lp, t]);
+  }, [cart, cartTotal, storeClosed, lp, t, isReorderCart]);
 
   /* ---- Bundle building (e.g. "3 Pizza + 1.5L Lemonade — €45"). ---- */
 
