@@ -123,7 +123,6 @@ export default function Footer() {
             <a href="#story" onClick={scrollTo('story')}>{t.footer.ourStory}</a>
             <a href="#visit" onClick={scrollTo('visit')}>{t.footer.findUs}</a>
             <Link href={lp('/track')}>{t.header.trackOrder}</Link>
-            <Link href={lp('/faq')}>{t.footer.faq}</Link>
             <Link href={lp('/privacy')}>{t.footer.privacyPolicy}</Link>
             <Link href={lp('/terms')}>{t.footer.terms}</Link>
           </div>
