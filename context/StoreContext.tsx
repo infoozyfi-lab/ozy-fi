@@ -64,7 +64,24 @@ interface StoreContextValue {
   goToCheckoutDirect: () => void;
   setCheckoutOpen: Dispatch<SetStateAction<boolean>>;
   closeCheckout: () => void;
-  placeOrder: (customer: Customer, couponCode?: string) => Promise<void>;
+  // Stripe card payments — paymentMethod defaults to 'cod' (unchanged
+  // behaviour: resolves once the order is fully placed). For 'card', the
+  // order row is created immediately (payment_status 'pending') but the
+  // promise resolves BEFORE the order is finalized — the caller
+  // (CheckoutModal, via CardPaymentStep) must collect the card payment
+  // using the returned clientSecret and then call `finalize()` itself;
+  // only that closes the checkout / clears the cart / shows the
+  // confirmation screen. This lets the same customer-details form work
+  // for both payment methods without CheckoutModal needing its own copy
+  // of the order-confirmation logic.
+  placeOrder: (
+    customer: Customer,
+    couponCode?: string,
+    paymentMethod?: 'cod' | 'card'
+  ) => Promise<
+    | { requiresPayment: true; clientSecret: string; finalize: () => void }
+    | { requiresPayment: false }
+  >;
   setConfirmedOrder: Dispatch<SetStateAction<ConfirmedOrder | null>>;
   closeConfirm: () => void;
 
@@ -684,7 +701,44 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     setUrl(lp('/checkout'));
   }, [lp]);
 
-  const placeOrder = useCallback(async (customer: Customer, couponCode?: string) => {
+  // The tail end of what placeOrder used to do unconditionally: show the
+  // confirmation screen, clear the cart, navigate. Split out so the card
+  // path can defer it until AFTER the customer actually pays (see
+  // placeOrder below) instead of the moment the order row is created.
+  const finalizeOrder = useCallback((customer: Customer, data: {
+    orderNum: string;
+    total?: number;
+    discountAmount?: number;
+    discountSource?: DiscountSource | null;
+    welcomeDiscountApplied?: boolean;
+    scheduledOfferApplied?: { id: string; label: string } | null;
+    loyalty?: { orderCount: number; everyNOrders: number; pendingRewardCreated: boolean };
+    wowMomentRewardCode?: string | null;
+  }) => {
+    // Use the server's own total (post-discount, if a coupon applied) for
+    // both the purchase event and the confirmation screen — it's the
+    // authoritative number, not the client's pre-validation preview.
+    const finalTotal = typeof data.total === 'number' ? data.total : cartTotal;
+    trackPurchase(data.orderNum, cart, finalTotal);
+    setConfirmedOrder({
+      orderNum: `#${data.orderNum}`,
+      customer,
+      total: finalTotal,
+      discountAmount: data.discountAmount || 0,
+      items: cart,
+      loyalty: data.loyalty,
+      welcomeDiscountApplied: data.welcomeDiscountApplied,
+      scheduledOfferApplied: data.scheduledOfferApplied,
+      wowMomentRewardCode: data.wowMomentRewardCode,
+      discountSource: data.discountSource,
+    });
+    setCheckoutOpen(false);
+    setCart([]);
+    setIsReorderCart(false);
+    setUrl(lp('/order-confirmed'));
+  }, [cart, cartTotal, lp]);
+
+  const placeOrder = useCallback(async (customer: Customer, couponCode?: string, paymentMethod: 'cod' | 'card' = 'cod') => {
     if (storeClosed) {
       throw new Error(t.checkout.storeClosedError);
     }
@@ -692,6 +746,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       customer,
       total: cartTotal,
       couponCode: couponCode || undefined,
+      paymentMethod,
       // Whether this customer consented to marketing/analytics cookies
       // (see components/CookieBanner.js) — read fresh at order time
       // rather than trusted from anywhere else, so the server knows
@@ -745,11 +800,14 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       scheduledOfferApplied?: { id: string; label: string } | null;
       loyalty?: { orderCount: number; everyNOrders: number; pendingRewardCreated: boolean };
       wowMomentRewardCode?: string | null;
+      clientSecret?: string | null;
     };
 
     // Remember this order on the customer's own device — /track can then
     // offer it as a one-tap shortcut without them needing to note down
-    // the order number themselves.
+    // the order number themselves. Written regardless of payment method:
+    // the order row already exists in D1 (payment_status 'pending' for an
+    // unpaid card order), so /track can already find it either way.
     try {
       const saved: RecentOrder[] = JSON.parse(localStorage.getItem('ozy_recent_orders') || '[]');
       const next = [
@@ -761,28 +819,21 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       // Non-essential — tracking still works via manual entry either way.
     }
 
-    // Use the server's own total (post-discount, if a coupon applied) for
-    // both the purchase event and the confirmation screen — it's the
-    // authoritative number, not the client's pre-validation preview.
-    const finalTotal = typeof data.total === 'number' ? data.total : cartTotal;
-    trackPurchase(data.orderNum, cart, finalTotal);
-    setConfirmedOrder({
-      orderNum: `#${data.orderNum}`,
-      customer,
-      total: finalTotal,
-      discountAmount: data.discountAmount || 0,
-      items: cart,
-      loyalty: data.loyalty,
-      welcomeDiscountApplied: data.welcomeDiscountApplied,
-      scheduledOfferApplied: data.scheduledOfferApplied,
-      wowMomentRewardCode: data.wowMomentRewardCode,
-      discountSource: data.discountSource,
-    });
-    setCheckoutOpen(false);
-    setCart([]);
-    setIsReorderCart(false);
-    setUrl(lp('/order-confirmed'));
-  }, [cart, cartTotal, storeClosed, lp, t, isReorderCart]);
+    if (data.clientSecret) {
+      // Card order: the order row exists but is still unpaid. Don't
+      // finalize yet — hand the caller what it needs to collect payment
+      // (CheckoutModal renders CardPaymentStep with this clientSecret) and
+      // let it call finalize() itself once Stripe confirms the charge.
+      return {
+        requiresPayment: true as const,
+        clientSecret: data.clientSecret,
+        finalize: () => finalizeOrder(customer, data),
+      };
+    }
+
+    finalizeOrder(customer, data);
+    return { requiresPayment: false as const };
+  }, [cart, cartTotal, storeClosed, t, isReorderCart, finalizeOrder]);
 
   /* ---- Bundle building (e.g. "3 Pizza + 1.5L Lemonade — €45"). ---- */
 

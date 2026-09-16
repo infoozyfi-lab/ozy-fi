@@ -27,6 +27,19 @@ interface CloudflareEnv extends Env {
   ADMIN_PASSWORD?: string;
   SESSION_SECRET?: string;
 
+  // Stripe — set via the Cloudflare dashboard (Workers & Pages → ozyfi →
+  // Settings → Variables and Secrets), same pattern as the three above.
+  // STRIPE_SECRET_KEY is a Secret (encrypted); NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+  // is a plain Variable — it's public by design (used client-side to load
+  // Stripe.js) and the NEXT_PUBLIC_ prefix is what lets Next.js inline it
+  // into the client bundle at build time. STRIPE_WEBHOOK_SECRET verifies
+  // that POST /api/webhooks/stripe requests genuinely came from Stripe
+  // (see that route) — get it from the webhook endpoint's settings page
+  // in the Stripe Dashboard once the endpoint is created there.
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?: string;
+
   // wrangler.jsonc correctly declares IMAGES under r2_buckets (bucket_name
   // "ozyfi-images") — but the generated Env interface inferred it as a
   // Cloudflare Images product binding instead of a real R2Bucket, so

@@ -6,6 +6,7 @@ import { loadMenuData } from '@/lib/menu-data';
 import { normalizeMenuBlob } from '@/lib/menu-i18n';
 import { verifyCartLine } from '@/lib/pricing';
 import { findBestActiveScheduledOffer } from '@/lib/scheduledOffers';
+import { getStripe } from '@/lib/stripe';
 import type { DiscountSource } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -49,6 +50,11 @@ interface CreateOrderBody {
   // informational/reporting, never used in any price or discount
   // calculation — same trust level already given to marketingConsent.
   isReorder?: boolean;
+  // Stripe card payments — 'cod' (default, unchanged behaviour) or
+  // 'card'. Anything else client-supplied is rejected below rather than
+  // silently falling back, since this value decides whether a real
+  // charge gets created.
+  paymentMethod?: 'cod' | 'card';
 }
 
 export async function POST(request: Request) {
@@ -85,6 +91,8 @@ export async function POST(request: Request) {
   if (!customer.name || !customer.address || !customer.postalCode || !customer.phone) {
     return json({ error: 'Missing customer details' }, 400);
   }
+
+  const paymentMethod: 'cod' | 'card' = body.paymentMethod === 'card' ? 'card' : 'cod';
 
   // Delivery zone check — only enforced if the admin has actually listed
   // any postal codes/prefixes in Settings. Leaving that field blank (the
@@ -415,13 +423,19 @@ export async function POST(request: Request) {
   // same as no email, no extra empty-string checks needed there.
   const email = (customer.email || '').trim();
 
+  // Card orders start life as payment_status 'pending' — the PaymentIntent
+  // created below (and the row updated with its id) is what /api/webhooks/
+  // stripe later matches against to flip this to 'paid' (or 'failed').
+  // COD orders keep payment_status = payment_method ('cod'), same as
+  // before this feature — nothing to track for cash paid on delivery.
   const insertOrder = await env.DB.prepare(
     `INSERT INTO orders
-      (order_num, customer_name, address, email, phone, notes, total, status, payment_method, coupon_code, discount_amount, marketing_consent, discount_source, triggered_wow_moment, is_reorder)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'received', 'cod', ?, ?, ?, ?, ?, ?)`
+      (order_num, customer_name, address, email, phone, notes, total, status, payment_method, payment_status, coupon_code, discount_amount, marketing_consent, discount_source, triggered_wow_moment, is_reorder)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'received', ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       orderNum, customer.name, customer.address, email, customer.phone, customer.notes || '', finalTotal,
+      paymentMethod, paymentMethod === 'card' ? 'pending' : 'cod',
       appliedCouponCode, discountAmount, body.marketingConsent ? 1 : 0,
       discountSource, triggeredWowMoment ? 1 : 0, body.isReorder ? 1 : 0
     )
@@ -451,6 +465,42 @@ export async function POST(request: Request) {
 
   if (stmts.length) {
     await env.DB.batch(stmts);
+  }
+
+  // --- Stripe: create the PaymentIntent for a card order ---
+  // Done after the order + items are safely committed above, same
+  // "order row exists first" ordering the rest of this route already
+  // uses for its own secondary writes. finalTotal <= 0 (fully covered by
+  // a discount) has nothing to charge — treated as paid immediately
+  // rather than asking Stripe to create a €0 PaymentIntent, which it
+  // rejects.
+  let clientSecret: string | null = null;
+  if (paymentMethod === 'card') {
+    if (finalTotal <= 0) {
+      await env.DB.prepare(`UPDATE orders SET payment_status = 'paid' WHERE id = ?`).bind(orderId).run();
+    } else {
+      try {
+        const stripe = getStripe(env);
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: Math.round(finalTotal * 100), // Stripe wants the smallest currency unit (cents).
+          currency: 'eur',
+          automatic_payment_methods: { enabled: true }, // lets Stripe offer card, Google Pay, Apple Pay itself.
+          metadata: { orderNum, orderId: String(orderId) },
+        });
+        clientSecret = paymentIntent.client_secret;
+        await env.DB.prepare(`UPDATE orders SET stripe_payment_intent_id = ? WHERE id = ?`)
+          .bind(paymentIntent.id, orderId)
+          .run();
+      } catch (err) {
+        // The order row already exists (payment_status stays 'pending') —
+        // intentionally NOT rolled back: the kitchen/admin can still see
+        // and, if needed, manually follow up on an order whose payment
+        // step failed to even start, same as a card that gets declined
+        // further down the flow. The customer sees this as a normal
+        // order-placement error and can retry.
+        return json({ error: 'Could not start card payment. Please try again.' }, 502);
+      }
+    }
   }
 
   // Coupon usage counter — best-effort, after the order row itself is
@@ -524,5 +574,11 @@ export async function POST(request: Request) {
     scheduledOfferApplied,
     loyalty: { orderCount: nonCancelledOrderCount, everyNOrders: stampEveryNOrders, pendingRewardCreated: createNewPendingReward },
     wowMomentRewardCode,
+    paymentMethod,
+    // Non-null only when paymentMethod === 'card' and there was something
+    // to charge — the frontend uses its presence (not paymentMethod
+    // alone) to decide whether it still needs to collect a card payment
+    // before this order can be treated as placed.
+    clientSecret,
   }, 201);
 }
