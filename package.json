@@ -12,7 +12,10 @@
   "dependencies": {
     "next": "14.2.5",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "stripe": "^16.9.0",
+    "@stripe/stripe-js": "^4.7.0",
+    "@stripe/react-stripe-js": "^2.8.1"
   },
   "devDependencies": {
     "@opennextjs/cloudflare": "1.20.2",
