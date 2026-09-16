@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "[ -n \"$OPENNEXT_BUILD\" ] && next build || OPENNEXT_BUILD=1 npx @opennextjs/cloudflare build --dangerouslyUseUnsupportedNextVersion",
     "start": "next start",
     "lint": "next lint",
     "generate-seed": "node scripts/generate-seed.mjs"
@@ -12,6 +12,25 @@
   "dependencies": {
     "next": "14.2.5",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "stripe": "^16.9.0",
+    "@stripe/stripe-js": "^4.7.0",
+    "@stripe/react-stripe-js": "^2.8.1"
+  },
+  "devDependencies": {
+    "@opennextjs/cloudflare": "1.20.2",
+    "wrangler": "^4.0.0",
+    "typescript": "^5.5.4",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0"
+  },
+  "overrides": {
+    "@opennextjs/cloudflare": {
+      "next": "$next"
+    },
+    "@opennextjs/aws": {
+      "next": "$next"
+    }
   }
 }

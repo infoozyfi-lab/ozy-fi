@@ -1,0 +1,34 @@
+-- Migration: schema additions for the 4 growth/loyalty features (reorder,
+-- first-order welcome discount, stamp-card loyalty, referral program).
+--
+-- Run against the LIVE database with:
+--   npx wrangler d1 execute ozyfi-db --remote --file=./worker/migrations/008_growth_features.sql
+--
+-- Two additive, nullable columns — safe against a database with real
+-- order/coupon history, same pattern as every migration before this one:
+--
+-- 1. order_items.selection_json — lets the "Reorder this" feature
+--    (GET /api/orders/[orderNum]/reorder) rebuild an exact cart line
+--    (real option/size/filling ids, not just the human-readable `details`
+--    strings already stored) and recompute its price at CURRENT menu
+--    prices via lib/pricing.ts, rather than trusting the historical
+--    line_total. Existing rows get NULL — an old order simply can't be
+--    reordered with full customization fidelity (it will still reorder,
+--    just from `details` text only... actually see the app route: rows
+--    with NULL selection_json are treated as plain/uncustomized lines,
+--    same as a fresh order with no `selection` sent at all).
+--
+-- 2. coupons.referral_email — lets the Footer referral form (POST
+--    /api/referral) recognize a second submission from the same email
+--    and return the existing code instead of minting a new one. NULL for
+--    every pre-existing coupon and for the stamp-card loyalty reward
+--    (that one has no associated email).
+--
+-- The first-order welcome discount and stamp-card reward PERCENTAGES are
+-- plain admin_settings keys (first_order_discount_percent,
+-- stamp_card_reward_percent) — admin_settings is already a flat key/value
+-- table, so those need no schema change at all; see the delivery's
+-- summary for where they're set (Menu & Pricing's "Pricing rules" box).
+
+ALTER TABLE order_items ADD COLUMN selection_json TEXT;
+ALTER TABLE coupons ADD COLUMN referral_email TEXT;
