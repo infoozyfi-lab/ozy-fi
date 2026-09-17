@@ -114,20 +114,20 @@ export default function MyAccountModal({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        style={{ width: '100%', maxWidth: 460, maxHeight: '90vh', overflowY: 'auto', background: 'var(--bg-card, #fff)', border: '1px solid var(--line, #ddd)', borderRadius: 16, padding: 24, color: 'var(--cream, #111)' }}
+        style={{ width: '100%', maxWidth: 460, maxHeight: '90vh', overflowY: 'auto', background: 'var(--bg-card, #FFFFFF)', border: '1px solid var(--line, #E7E1D6)', borderRadius: 16, padding: 24, color: 'var(--cream, #231D19)' }}
         onClick={(e: MouseEvent) => e.stopPropagation()}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
           <h2 style={{ margin: 0 }}>My Account</h2>
           <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'inherit' }}>✕</button>
         </div>
-        <p style={{ color: 'var(--muted, #888)', fontSize: 13.5, marginTop: 4 }}>
+        <p style={{ color: 'var(--muted, #756B5F)', fontSize: 13.5, marginTop: 4 }}>
           Two-factor authentication (2FA)
         </p>
 
-        {statusError && <p style={{ color: '#FF8A75' }}>{statusError}</p>}
-        {error && <p style={{ color: '#FF8A75' }}>{error}</p>}
-        {message && <p style={{ color: '#4ADE80' }}>{message}</p>}
+        {statusError && <p style={{ color: 'var(--danger)' }}>{statusError}</p>}
+        {error && <p style={{ color: 'var(--danger)' }}>{error}</p>}
+        {message && <p style={{ color: 'var(--success)' }}>{message}</p>}
 
         {!status ? (
           !statusError && <p>Loading…</p>
@@ -141,14 +141,14 @@ export default function MyAccountModal({ onClose }: { onClose: () => void }) {
               Scan or paste this into your authenticator app (Google Authenticator, Authy, etc.), then enter the 6-digit code it shows to turn 2FA on.
             </p>
             <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 12.5, color: 'var(--muted, #888)' }}>Manual entry key</label>
-              <div style={{ padding: 10, marginTop: 4, borderRadius: 8, background: 'var(--bg-alt, #f5f5f5)', fontFamily: 'monospace', fontSize: 15, letterSpacing: 1, wordBreak: 'break-all' }}>
+              <label style={{ fontSize: 12.5, color: 'var(--muted, #756B5F)' }}>Manual entry key</label>
+              <div style={{ padding: 10, marginTop: 4, borderRadius: 8, background: 'var(--bg-alt, #EFEAE1)', fontFamily: 'monospace', fontSize: 15, letterSpacing: 1, wordBreak: 'break-all' }}>
                 {setupData.secret}
               </div>
             </div>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 12.5, color: 'var(--muted, #888)' }}>otpauth:// link (some apps accept pasting this)</label>
-              <div style={{ padding: 10, marginTop: 4, borderRadius: 8, background: 'var(--bg-alt, #f5f5f5)', fontFamily: 'monospace', fontSize: 11.5, wordBreak: 'break-all' }}>
+              <label style={{ fontSize: 12.5, color: 'var(--muted, #756B5F)' }}>otpauth:// link (some apps accept pasting this)</label>
+              <div style={{ padding: 10, marginTop: 4, borderRadius: 8, background: 'var(--bg-alt, #EFEAE1)', fontFamily: 'monospace', fontSize: 11.5, wordBreak: 'break-all' }}>
                 {setupData.otpauthUri}
               </div>
             </div>
@@ -158,20 +158,20 @@ export default function MyAccountModal({ onClose }: { onClose: () => void }) {
                 type="text" inputMode="numeric" autoComplete="one-time-code" autoFocus
                 value={confirmCode} onChange={(e: ChangeEvent<HTMLInputElement>) => setConfirmCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="123456" required
-                style={{ width: '100%', padding: 12, marginTop: 6, boxSizing: 'border-box', border: '1px solid var(--line, #ccc)', borderRadius: 8, fontSize: 18, letterSpacing: 3, textAlign: 'center' }}
+                style={{ width: '100%', padding: 12, marginTop: 6, boxSizing: 'border-box', border: '1px solid var(--line, #E7E1D6)', borderRadius: 8, fontSize: 18, letterSpacing: 3, textAlign: 'center' }}
               />
             </div>
-            <button type="submit" disabled={busy || confirmCode.length !== 6} style={{ width: '100%', padding: 12, cursor: 'pointer', border: 'none', borderRadius: 8, background: '#111', color: '#fff', fontSize: 15 }}>
+            <button type="submit" disabled={busy || confirmCode.length !== 6} style={{ width: '100%', padding: 12, cursor: 'pointer', border: 'none', borderRadius: 8, background: 'var(--ember)', color: 'var(--text-on-accent)', fontSize: 15 }}>
               {busy ? 'Confirming…' : 'Turn on 2FA'}
             </button>
-            <button type="button" onClick={() => { setSetupData(null); setConfirmCode(''); setError(''); }} style={{ width: '100%', marginTop: 8, padding: 10, cursor: 'pointer', border: 'none', background: 'none', color: 'var(--muted, #888)', fontSize: 13 }}>
+            <button type="button" onClick={() => { setSetupData(null); setConfirmCode(''); setError(''); }} style={{ width: '100%', marginTop: 8, padding: 10, cursor: 'pointer', border: 'none', background: 'none', color: 'var(--muted, #756B5F)', fontSize: 13 }}>
               Cancel
             </button>
           </form>
         ) : status.enabled ? (
           <div>
             <p style={{ fontSize: 13.5 }}>🔒 Two-factor authentication is <strong>on</strong> for your account.</p>
-            <button type="button" disabled={busy} onClick={disable2fa} style={{ padding: '10px 16px', cursor: 'pointer', border: '1px solid #FF8A75', borderRadius: 8, background: 'none', color: '#FF8A75', fontSize: 14 }}>
+            <button type="button" disabled={busy} onClick={disable2fa} style={{ padding: '10px 16px', cursor: 'pointer', border: '1px solid var(--danger)', borderRadius: 8, background: 'none', color: 'var(--danger)', fontSize: 14 }}>
               {busy ? 'Working…' : 'Turn off 2FA'}
             </button>
           </div>
@@ -180,7 +180,7 @@ export default function MyAccountModal({ onClose }: { onClose: () => void }) {
             <p style={{ fontSize: 13.5 }}>
               Add an extra step to your login using an authenticator app (Google Authenticator, Authy, or similar) — optional, off by default.
             </p>
-            <button type="button" disabled={busy} onClick={startSetup} style={{ padding: '10px 16px', cursor: 'pointer', border: 'none', borderRadius: 8, background: '#111', color: '#fff', fontSize: 14 }}>
+            <button type="button" disabled={busy} onClick={startSetup} style={{ padding: '10px 16px', cursor: 'pointer', border: 'none', borderRadius: 8, background: 'var(--ember)', color: 'var(--text-on-accent)', fontSize: 14 }}>
               {busy ? 'Starting…' : 'Set up 2FA'}
             </button>
           </div>

@@ -42,25 +42,25 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
         <div
           style={{
             minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', padding: 24, textAlign: 'center', background: '#17110D', color: '#F4E9DA',
+            justifyContent: 'center', padding: 24, textAlign: 'center', background: '#F7F4EF', color: '#231D19',
             fontFamily: 'sans-serif',
           }}
         >
           <p style={{ fontSize: '1.4rem', fontWeight: 700, margin: '0 0 10px' }}>{t.heading}</p>
-          <p style={{ color: '#B8A99C', margin: '0 0 24px', maxWidth: 340 }}>
+          <p style={{ color: '#756B5F', margin: '0 0 24px', maxWidth: 340 }}>
             {t.body}
           </p>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
             <button
               type="button"
               onClick={() => reset()}
-              style={{ background: '#FF6A3D', color: '#1A0D06', border: 'none', borderRadius: 8, padding: '12px 22px', fontWeight: 700, fontSize: 15, cursor: 'pointer' }}
+              style={{ background: '#E8622A', color: '#1C1210', border: 'none', borderRadius: 8, padding: '12px 22px', fontWeight: 700, fontSize: 15, cursor: 'pointer' }}
             >
               {t.tryAgain}
             </button>
             <a
               href={homeHref}
-              style={{ background: 'none', color: '#F4E9DA', border: '1px solid #3A2B21', borderRadius: 8, padding: '12px 22px', fontWeight: 700, fontSize: 15, textDecoration: 'none' }}
+              style={{ background: 'none', color: '#231D19', border: '1px solid #E7E1D6', borderRadius: 8, padding: '12px 22px', fontWeight: 700, fontSize: 15, textDecoration: 'none' }}
             >
               {t.goHome}
             </a>

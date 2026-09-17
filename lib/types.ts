@@ -13,6 +13,24 @@ export type { RawScheduledOffer, ScheduledOffer };
 
 export type Locale = 'fi' | 'en';
 
+// Shared discount-value shape (color-palette-and-discount-pattern brief,
+// part 2 — "shared discount-value pattern"). Every growth feature (first-
+// order welcome discount, stamp card, referral, scheduled weekday offer,
+// Ozy Wow Moment) used to hardcode its own discount shape — most percent-
+// only, referral flat-euro-only. This is the ONE shape all five now use
+// for "what does this discount setting mean" — not new vocabulary,
+// either: it mirrors worker/schema.sql's pre-existing
+// `coupons.discount_type` / `coupons.discount_value` columns exactly, so
+// a manual/referral coupon and every automatic discount are all
+// described the same way. The actual euro-amount calculation from this
+// shape lives in lib/pricing.ts's computeDiscountAmount() (reused by
+// lib/coupons.ts too, so coupons/referral share the same math as the
+// other four features rather than a sixth near-duplicate).
+export interface DiscountValue {
+  type: 'percent' | 'amount';
+  value: number;
+}
+
 // Stamp-card redesign / discount-source tracking — the fixed vocabulary
 // recorded in orders.discount_source (worker/migrations/
 // 010_stamp_card_redesign_and_source_tracking.sql), reflecting whichever
@@ -291,14 +309,19 @@ export interface MenuBlob {
   openingHours: OpeningHours;
   featured: Featured;
   popularProductIds: string[];
-  // Growth features — admin-configurable percentages (admin_settings keys
-  // first_order_discount_percent / stamp_card_reward_percent), 0 means
-  // "not configured / disabled" for each (mirrors sizeLargeUpcharge's own
-  // "unset admin_settings key → Number('') || 0" fallback). See
-  // CheckoutModal.tsx (welcome-discount banner) and
+  // Growth features — shared discount-value shape (color-palette-and-
+  // discount-pattern brief, part 2). Was a bare admin-configurable
+  // percentage (admin_settings' first_order_discount_percent /
+  // stamp_card_reward_percent); now a DiscountValue so either feature can
+  // be configured as a flat euro amount instead — value 0 still means
+  // "not configured / disabled" for each, same as before (mirrors
+  // sizeLargeUpcharge's own "unset admin_settings key → Number('') || 0"
+  // fallback, just one level down inside the shape). See
+  // CheckoutModal.tsx (welcome-discount banner), lib/pricing.ts
+  // (computeDiscountAmount/readDiscountSetting), and
   // app/api/orders/route.ts (server-side enforcement of both).
-  firstOrderDiscountPercent: number;
-  stampCardRewardPercent: number;
+  firstOrderDiscount: DiscountValue;
+  stampCardReward: DiscountValue;
   // Growth features batch 2 (Feature 5) — normalized, currently-active
   // scheduled offers (already filtered to active=1 by lib/menu-data.ts's
   // query; day/time-window evaluation happens separately, at the moment
@@ -550,6 +573,12 @@ export interface OrderTrackingResult {
   total: number | string;
   status: OrderStatus;
   payment_method: string;
+  // Stripe card payments (worker/migrations/012_stripe_payments.sql) — see
+  // OrderRow below for the full value-lifecycle comment. Optional here for
+  // the same reason as OrderRow's discount_source etc.: a handful of call
+  // sites project only a subset of columns.
+  payment_status?: string;
+  stripe_payment_intent_id?: string | null;
   estimated_ready_at?: string | null;
   driver_name?: string | null;
   coupon_code?: string | null;
@@ -642,7 +671,15 @@ export interface CouponRow {
 export interface StampCardPendingRewardRow {
   id: number;
   phone: string;
+  // Legacy column, kept per this project's additive-only migration
+  // convention (worker/migrations/011_shared_discount_value.sql) — still
+  // written on every insert (0 when reward_type is 'amount') so the
+  // NOT NULL constraint never needs relaxing, but no longer read by
+  // app/api/orders/route.ts. reward_type/reward_value are authoritative;
+  // see that migration's header comment.
   reward_percent: number;
+  reward_type: 'percent' | 'amount';
+  reward_value: number;
   earned_at: string;
   earned_order_num: string;
   redeemed_at?: string | null;
@@ -680,6 +717,15 @@ export interface OrderRow {
   total: number;
   status: OrderStatus;
   payment_method: string;
+  // Stripe card payments (worker/migrations/012_stripe_payments.sql).
+  // payment_status: 'cod' (default, nothing to track) | 'pending' (a card
+  // order was created and a Stripe PaymentIntent exists for it, unconfirmed)
+  // | 'paid' (the webhook confirmed the charge — sole source of truth, see
+  // app/api/webhooks/stripe) | 'failed' (card declined). Optional here for
+  // the same reason as discount_source below — some call sites project
+  // only a subset of columns.
+  payment_status?: string;
+  stripe_payment_intent_id?: string | null;
   estimated_ready_at?: string | null;
   driver_name?: string | null;
   coupon_code?: string | null;

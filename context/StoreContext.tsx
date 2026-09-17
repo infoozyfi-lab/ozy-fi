@@ -32,6 +32,7 @@ import type {
   MenuData,
   ScheduledOffer,
   DiscountSource,
+  DiscountValue,
 } from '@/lib/types';
 
 interface StoreContextValue {
@@ -64,7 +65,24 @@ interface StoreContextValue {
   goToCheckoutDirect: () => void;
   setCheckoutOpen: Dispatch<SetStateAction<boolean>>;
   closeCheckout: () => void;
-  placeOrder: (customer: Customer, couponCode?: string) => Promise<void>;
+  // Stripe card payments — paymentMethod defaults to 'cod' (unchanged
+  // behaviour: resolves once the order is fully placed). For 'card', the
+  // order row is created immediately (payment_status 'pending') but the
+  // promise resolves BEFORE the order is finalized — the caller
+  // (CheckoutModal, via CardPaymentStep) must collect the card payment
+  // using the returned clientSecret and then call `finalize()` itself;
+  // only that closes the checkout / clears the cart / shows the
+  // confirmation screen. This lets the same customer-details form work
+  // for both payment methods without CheckoutModal needing its own copy
+  // of the order-confirmation logic.
+  placeOrder: (
+    customer: Customer,
+    couponCode?: string,
+    paymentMethod?: 'cod' | 'card'
+  ) => Promise<
+    | { requiresPayment: true; clientSecret: string; finalize: () => void }
+    | { requiresPayment: false }
+  >;
   setConfirmedOrder: Dispatch<SetStateAction<ConfirmedOrder | null>>;
   closeConfirm: () => void;
 
@@ -89,10 +107,11 @@ interface StoreContextValue {
   drinks: Addon[];
   dipCups: Addon[];
   snacks: Addon[];
-  // Growth features — admin-configurable, 0 means "not configured" (see
-  // lib/menu-i18n.ts's normalizeMenuBlob). firstOrderDiscountPercent
-  // drives CheckoutModal.tsx's welcome-discount banner.
-  firstOrderDiscountPercent: number;
+  // Growth features — shared discount-value shape (lib/types.ts's
+  // DiscountValue). value 0 means "not configured" (see lib/menu-i18n.ts's
+  // normalizeMenuBlob). firstOrderDiscount drives CheckoutModal.tsx's
+  // welcome-discount banner.
+  firstOrderDiscount: DiscountValue;
   // Growth features batch 2 (Feature 5) — the scheduled offer that's
   // active RIGHT NOW (Helsinki day/time), recomputed every minute (see
   // the ticking effect below) so the Header/CheckoutModal banners appear
@@ -281,7 +300,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
   const [drinks, setDrinks] = useState<Addon[]>([]);
   const [dipCups, setDipCups] = useState<Addon[]>([]);
   const [snacks, setSnacks] = useState<Addon[]>([]);
-  const [firstOrderDiscountPercent, setFirstOrderDiscountPercent] = useState(0);
+  const [firstOrderDiscount, setFirstOrderDiscount] = useState<DiscountValue>({ type: 'percent', value: 0 });
   const [scheduledOffers, setScheduledOffers] = useState<ScheduledOffer[]>([]);
   // Ticks once a minute so activeScheduledOffer (below) is recomputed
   // without requiring a menu refetch or page reload — same pattern as
@@ -307,12 +326,6 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     const id = setInterval(() => setOfferClockTick((n) => n + 1), 60000);
     return () => clearInterval(id);
   }, []);
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- offerClockTick is a deliberate re-evaluation trigger, not a real dependency of the computation.
-  const activeScheduledOffer = useMemo(
-    () => findBestActiveScheduledOffer(scheduledOffers),
-    [scheduledOffers, offerClockTick]
-  );
 
   useEffect(() => {
     async function loadMenu() {
@@ -356,7 +369,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         setOpeningHours(blob.openingHours);
         setFeatured(blob.featured);
         setPopularProductIds(blob.popularProductIds);
-        setFirstOrderDiscountPercent(blob.firstOrderDiscountPercent);
+        setFirstOrderDiscount(blob.firstOrderDiscount);
         setScheduledOffers(blob.scheduledOffers);
       } catch (err) {
         console.error('Menu loading error:', err);
@@ -654,6 +667,21 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
 
   const cartTotal = useMemo(() => cart.reduce((sum, l) => sum + l.lineTotal, 0), [cart]);
 
+  // Growth features batch 2 (Feature 5) — moved below cartTotal (was
+  // declared right after the scheduledOffers state above) so it can pass
+  // the current cart total as findBestActiveScheduledOffer's `baseAmount`
+  // — shared discount-value pattern (part 2 of this task): "most
+  // favorable" among multiple simultaneously-active offers now needs a
+  // real euro amount to compare against, since an offer's discount can
+  // be either a percent or a flat amount (see that function's own
+  // comment). Falls back to comparing raw values when cartTotal is 0
+  // (empty cart) — same as passing no baseAmount at all.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- offerClockTick is a deliberate re-evaluation trigger, not a real dependency of the computation.
+  const activeScheduledOffer = useMemo(
+    () => findBestActiveScheduledOffer(scheduledOffers, cartTotal || undefined),
+    [scheduledOffers, cartTotal, offerClockTick]
+  );
+
   const goToCheckout = useCallback(() => {
     if (cart.length === 0) return;
     trackBeginCheckout(cart, cartTotal);
@@ -684,7 +712,44 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     setUrl(lp('/checkout'));
   }, [lp]);
 
-  const placeOrder = useCallback(async (customer: Customer, couponCode?: string) => {
+  // The tail end of what placeOrder used to do unconditionally: show the
+  // confirmation screen, clear the cart, navigate. Split out so the card
+  // path can defer it until AFTER the customer actually pays (see
+  // placeOrder below) instead of the moment the order row is created.
+  const finalizeOrder = useCallback((customer: Customer, data: {
+    orderNum: string;
+    total?: number;
+    discountAmount?: number;
+    discountSource?: DiscountSource | null;
+    welcomeDiscountApplied?: boolean;
+    scheduledOfferApplied?: { id: string; label: string } | null;
+    loyalty?: { orderCount: number; everyNOrders: number; pendingRewardCreated: boolean };
+    wowMomentRewardCode?: string | null;
+  }) => {
+    // Use the server's own total (post-discount, if a coupon applied) for
+    // both the purchase event and the confirmation screen — it's the
+    // authoritative number, not the client's pre-validation preview.
+    const finalTotal = typeof data.total === 'number' ? data.total : cartTotal;
+    trackPurchase(data.orderNum, cart, finalTotal);
+    setConfirmedOrder({
+      orderNum: `#${data.orderNum}`,
+      customer,
+      total: finalTotal,
+      discountAmount: data.discountAmount || 0,
+      items: cart,
+      loyalty: data.loyalty,
+      welcomeDiscountApplied: data.welcomeDiscountApplied,
+      scheduledOfferApplied: data.scheduledOfferApplied,
+      wowMomentRewardCode: data.wowMomentRewardCode,
+      discountSource: data.discountSource,
+    });
+    setCheckoutOpen(false);
+    setCart([]);
+    setIsReorderCart(false);
+    setUrl(lp('/order-confirmed'));
+  }, [cart, cartTotal, lp]);
+
+  const placeOrder = useCallback(async (customer: Customer, couponCode?: string, paymentMethod: 'cod' | 'card' = 'cod') => {
     if (storeClosed) {
       throw new Error(t.checkout.storeClosedError);
     }
@@ -692,6 +757,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       customer,
       total: cartTotal,
       couponCode: couponCode || undefined,
+      paymentMethod,
       // Whether this customer consented to marketing/analytics cookies
       // (see components/CookieBanner.js) — read fresh at order time
       // rather than trusted from anywhere else, so the server knows
@@ -745,11 +811,14 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       scheduledOfferApplied?: { id: string; label: string } | null;
       loyalty?: { orderCount: number; everyNOrders: number; pendingRewardCreated: boolean };
       wowMomentRewardCode?: string | null;
+      clientSecret?: string | null;
     };
 
     // Remember this order on the customer's own device — /track can then
     // offer it as a one-tap shortcut without them needing to note down
-    // the order number themselves.
+    // the order number themselves. Written regardless of payment method:
+    // the order row already exists in D1 (payment_status 'pending' for an
+    // unpaid card order), so /track can already find it either way.
     try {
       const saved: RecentOrder[] = JSON.parse(localStorage.getItem('ozy_recent_orders') || '[]');
       const next = [
@@ -761,28 +830,21 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       // Non-essential — tracking still works via manual entry either way.
     }
 
-    // Use the server's own total (post-discount, if a coupon applied) for
-    // both the purchase event and the confirmation screen — it's the
-    // authoritative number, not the client's pre-validation preview.
-    const finalTotal = typeof data.total === 'number' ? data.total : cartTotal;
-    trackPurchase(data.orderNum, cart, finalTotal);
-    setConfirmedOrder({
-      orderNum: `#${data.orderNum}`,
-      customer,
-      total: finalTotal,
-      discountAmount: data.discountAmount || 0,
-      items: cart,
-      loyalty: data.loyalty,
-      welcomeDiscountApplied: data.welcomeDiscountApplied,
-      scheduledOfferApplied: data.scheduledOfferApplied,
-      wowMomentRewardCode: data.wowMomentRewardCode,
-      discountSource: data.discountSource,
-    });
-    setCheckoutOpen(false);
-    setCart([]);
-    setIsReorderCart(false);
-    setUrl(lp('/order-confirmed'));
-  }, [cart, cartTotal, storeClosed, lp, t, isReorderCart]);
+    if (data.clientSecret) {
+      // Card order: the order row exists but is still unpaid. Don't
+      // finalize yet — hand the caller what it needs to collect payment
+      // (CheckoutModal renders CardPaymentStep with this clientSecret) and
+      // let it call finalize() itself once Stripe confirms the charge.
+      return {
+        requiresPayment: true as const,
+        clientSecret: data.clientSecret,
+        finalize: () => finalizeOrder(customer, data),
+      };
+    }
+
+    finalizeOrder(customer, data);
+    return { requiresPayment: false as const };
+  }, [cart, cartTotal, storeClosed, t, isReorderCart, finalizeOrder]);
 
   /* ---- Bundle building (e.g. "3 Pizza + 1.5L Lemonade — €45"). ---- */
 
@@ -965,7 +1027,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     drinks,
     dipCups,
     snacks,
-    firstOrderDiscountPercent,
+    firstOrderDiscount,
     activeScheduledOffer,
 
     // Bundles/combos + featured-card settings.

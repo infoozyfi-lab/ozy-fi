@@ -125,7 +125,7 @@ export default function KitchenPage() {
           </p>
 
           {error && (
-            <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: '#3A1712', color: '#FF8A75' }}>
+            <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: 'var(--danger-bg)', color: 'var(--danger)' }}>
               {error}
             </div>
           )}
@@ -143,7 +143,7 @@ export default function KitchenPage() {
               </div>
               <button
                 type="submit" disabled={loading || code.length !== 6}
-                style={{ width: '100%', padding: 16, cursor: loading ? 'not-allowed' : 'pointer', border: 'none', borderRadius: 8, background: 'var(--ember)', color: '#1A0D06', fontSize: 17, fontWeight: 700 }}
+                style={{ width: '100%', padding: 16, cursor: loading ? 'not-allowed' : 'pointer', border: 'none', borderRadius: 8, background: 'var(--ember)', color: 'var(--text-on-accent)', fontSize: 17, fontWeight: 700 }}
               >
                 {loading ? 'Verifying…' : 'Verify'}
               </button>
@@ -172,7 +172,7 @@ export default function KitchenPage() {
             </div>
             <button
               type="submit" disabled={loading}
-              style={{ width: '100%', padding: 16, cursor: loading ? 'not-allowed' : 'pointer', border: 'none', borderRadius: 8, background: 'var(--ember)', color: '#1A0D06', fontSize: 17, fontWeight: 700 }}
+              style={{ width: '100%', padding: 16, cursor: loading ? 'not-allowed' : 'pointer', border: 'none', borderRadius: 8, background: 'var(--ember)', color: 'var(--text-on-accent)', fontSize: 17, fontWeight: 700 }}
             >
               {loading ? 'Signing in…' : 'Open Kitchen Display'}
             </button>

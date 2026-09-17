@@ -3,7 +3,9 @@
 import { useState, useRef, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react';
 import { useStore } from '@/context/StoreContext';
 import { useTranslations } from '@/lib/i18n';
+import { computeDiscountAmount, describeDiscountValue } from '@/lib/pricing';
 import type { Addon, CartLine, Customer } from '@/lib/types';
+import CardPaymentStep from './CardPaymentStep';
 
 const EMPTY: Customer = { name: '', address: '', postalCode: '', email: '', phone: '', notes: '' };
 
@@ -77,7 +79,7 @@ export default function CheckoutModal() {
     cart, cartTotal, isCheckoutOpen, closeCheckout, placeOrder,
     removeFromCart, updateCartQty, addDrinkToCart,
     drinks, dipCups, snacks,
-    firstOrderDiscountPercent,
+    firstOrderDiscount,
     activeScheduledOffer,
   } = useStore();
   const t = useTranslations();
@@ -111,6 +113,15 @@ export default function CheckoutModal() {
   const [couponDiscount, setCouponDiscount] = useState(0);
   const [couponFinalTotal, setCouponFinalTotal] = useState<number | null>(null);
 
+  // Stripe card payments. `cardPayment` is set once POST /api/orders has
+  // created the (still-unpaid) order and returned a clientSecret — while
+  // it's set, step 3 shows CardPaymentStep instead of the payment-method
+  // picker, and `finalize()` (closing the checkout / clearing the cart /
+  // showing the confirmation screen) only runs once Stripe actually
+  // confirms the charge, not when the order row was created.
+  const [paymentMethod, setPaymentMethod] = useState<'cod' | 'card'>('cod');
+  const [cardPayment, setCardPayment] = useState<{ clientSecret: string; finalize: () => void } | null>(null);
+
   // Feature 2 — first-order welcome discount. `null` = not checked yet
   // (or the phone field isn't a valid number to check), `true`/`false` =
   // the last checked phone number's eligibility. This is purely advisory
@@ -142,18 +153,28 @@ export default function CheckoutModal() {
   // whichever is more favorable, never both) — this is purely about
   // which single banner to SHOW here; the server independently decides
   // and enforces the real discount at order-creation time regardless of
-  // what this computes. Both percentages are already known from the menu
-  // blob before any API call, so this needs no extra request — unlike
+  // what this computes. Both discount settings are already known from
+  // the menu blob before any API call, so this needs no extra request — unlike
   // firstOrderEligible, which only becomes known once the phone is
   // entered (see checkFirstOrderEligibility above), so the scheduled-
   // offer banner can show alone even before that.
-  const scheduledOfferPercent = activeScheduledOffer?.discountPercent ?? 0;
-  const welcomeEligible = firstOrderEligible === true && firstOrderDiscountPercent > 0;
-  const bestAutoDiscount: { kind: 'welcome'; percent: number } | { kind: 'scheduledOffer'; percent: number; label: string } | null =
-    welcomeEligible && firstOrderDiscountPercent >= scheduledOfferPercent
-      ? { kind: 'welcome', percent: firstOrderDiscountPercent }
-      : scheduledOfferPercent > 0 && activeScheduledOffer
-        ? { kind: 'scheduledOffer', percent: scheduledOfferPercent, label: activeScheduledOffer.label }
+  // Shared discount-value pattern — both settings can now independently
+  // be a percent or a flat euro amount, so "most favorable" can no
+  // longer compare raw percentages directly (10% vs. a flat 2€ isn't a
+  // number-vs-number comparison) — same reasoning as
+  // findBestActiveScheduledOffer's own baseAmount parameter. Compares
+  // the ACTUAL euro amount each would come out to on this cart, mirroring
+  // exactly what app/api/orders/route.ts's candidates[] comparison does
+  // server-side, so this preview banner never disagrees with what the
+  // server actually applies.
+  const welcomeEligible = firstOrderEligible === true && firstOrderDiscount.value > 0;
+  const welcomeAmount = welcomeEligible ? computeDiscountAmount(firstOrderDiscount, cartTotal) : 0;
+  const scheduledOfferAmount = activeScheduledOffer ? computeDiscountAmount(activeScheduledOffer.discount, cartTotal) : 0;
+  const bestAutoDiscount: { kind: 'welcome'; amountText: string } | { kind: 'scheduledOffer'; amountText: string; label: string } | null =
+    welcomeEligible && welcomeAmount >= scheduledOfferAmount
+      ? { kind: 'welcome', amountText: describeDiscountValue(firstOrderDiscount) }
+      : scheduledOfferAmount > 0 && activeScheduledOffer
+        ? { kind: 'scheduledOffer', amountText: describeDiscountValue(activeScheduledOffer.discount), label: activeScheduledOffer.label }
         : null;
 
   type HandleAddFn = ((item: Addon) => void) & { _t?: number };
@@ -183,6 +204,8 @@ export default function CheckoutModal() {
     resetCoupon();
     setFirstOrderEligible(null);
     checkedPhoneRef.current = '';
+    setCardPayment(null);
+    setPaymentMethod('cod');
   };
 
   const applyCoupon = async () => {
@@ -258,18 +281,41 @@ export default function CheckoutModal() {
     setSubmitting(true);
     setOrderError('');
     try {
-      await placeOrder(customer, couponStatus === 'applied' ? couponCode : undefined);
+      const result = await placeOrder(customer, couponStatus === 'applied' ? couponCode : undefined, paymentMethod);
+      if (result.requiresPayment) {
+        // Order row created, still unpaid — switch this step to show
+        // CardPaymentStep instead of resetting; finalize() runs from
+        // handleCardSuccess below, once Stripe actually confirms payment.
+        setCardPayment({ clientSecret: result.clientSecret, finalize: result.finalize });
+        return;
+      }
       setStep(1);
       setCustomer(EMPTY);
       resetCoupon();
       setFirstOrderEligible(null);
       checkedPhoneRef.current = '';
+      setPaymentMethod('cod');
     } catch (err: any) {
       setOrderError(err.message || t.checkout.genericOrderError);
     } finally {
       setSubmitting(false);
     }
   };
+
+  const handleCardSuccess = () => {
+    cardPayment?.finalize();
+    setCardPayment(null);
+    setStep(1);
+    setCustomer(EMPTY);
+    resetCoupon();
+    setFirstOrderEligible(null);
+    checkedPhoneRef.current = '';
+    setPaymentMethod('cod');
+  };
+
+  // Same total the footer "Place order" button already shows — reused as
+  // CardPaymentStep's displayed amount so the two never disagree.
+  const payAmountLabel = `${(couponStatus === 'applied' ? couponFinalTotal! : cartTotal).toFixed(2)} €`;
 
   return (
     <div className={`checkout-page${isCheckoutOpen ? ' open' : ''}`}>
@@ -400,12 +446,12 @@ export default function CheckoutModal() {
                 <p
                   style={{
                     margin: '-8px 0 16px', padding: '10px 12px', borderRadius: 8,
-                    background: 'rgba(227,167,59,0.12)', color: 'var(--gold, #E3A73B)', fontSize: 13,
+                    background: 'rgba(125,90,22,0.12)', color: 'var(--gold, #7D5A16)', fontSize: 13,
                   }}
                 >
                   {bestAutoDiscount.kind === 'welcome'
-                    ? t.checkout.welcomeDiscountBanner(bestAutoDiscount.percent)
-                    : t.checkout.scheduledOfferBanner(bestAutoDiscount.label, bestAutoDiscount.percent)}
+                    ? t.checkout.welcomeDiscountBanner(bestAutoDiscount.amountText)
+                    : t.checkout.scheduledOfferBanner(bestAutoDiscount.label, bestAutoDiscount.amountText)}
                 </p>
               )}
               <label>
@@ -419,60 +465,86 @@ export default function CheckoutModal() {
             <form id="paymentForm" onSubmit={submitOrder}>
               <MiniSummary cart={cart} cartTotal={cartTotal} t={t} />
 
-              {bestAutoDiscount && couponStatus !== 'applied' && (
-                <p style={{ margin: '0 0 12px', padding: '10px 12px', borderRadius: 8, background: 'rgba(227,167,59,0.12)', color: 'var(--gold, #E3A73B)', fontSize: 13 }}>
-                  {bestAutoDiscount.kind === 'welcome'
-                    ? t.checkout.welcomeDiscountBanner(bestAutoDiscount.percent)
-                    : t.checkout.scheduledOfferBanner(bestAutoDiscount.label, bestAutoDiscount.percent)}
-                </p>
+              {cardPayment ? (
+                // Order row already created (payment_status 'pending') —
+                // this is purely about collecting the charge now. The
+                // payment-method/coupon UI below is intentionally hidden
+                // here: switching either would no longer match the order
+                // that's already been created server-side.
+                <div style={{ marginTop: 16 }}>
+                  <CardPaymentStep
+                    clientSecret={cardPayment.clientSecret}
+                    amountLabel={payAmountLabel}
+                    onSuccess={handleCardSuccess}
+                    t={t}
+                  />
+                </div>
+              ) : (
+                <>
+                  {bestAutoDiscount && couponStatus !== 'applied' && (
+                    <p style={{ margin: '0 0 12px', padding: '10px 12px', borderRadius: 8, background: 'rgba(125,90,22,0.12)', color: 'var(--gold, #7D5A16)', fontSize: 13 }}>
+                      {bestAutoDiscount.kind === 'welcome'
+                        ? t.checkout.welcomeDiscountBanner(bestAutoDiscount.amountText)
+                        : t.checkout.scheduledOfferBanner(bestAutoDiscount.label, bestAutoDiscount.amountText)}
+                    </p>
+                  )}
+
+                  <div style={{ margin: '16px 0' }}>
+                    {couponStatus === 'applied' ? (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'rgba(46,125,50,0.12)', borderRadius: 8 }}>
+                        <span>🏷️ {t.checkout.couponApplied(couponCode, `${couponDiscount.toFixed(2)} €`)}</span>
+                        <button type="button" onClick={resetCoupon} style={{ background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', fontSize: 13 }}>
+                          {t.checkout.couponRemove}
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <input
+                            type="text"
+                            placeholder={t.checkout.couponPlaceholder}
+                            value={couponInput}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => { setCouponInput(e.target.value); if (couponStatus === 'error') setCouponStatus('idle'); }}
+                            style={{ flex: 1 }}
+                          />
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            disabled={!couponInput.trim() || couponStatus === 'checking'}
+                            onClick={applyCoupon}
+                            style={{ whiteSpace: 'nowrap' }}
+                          >
+                            {couponStatus === 'checking' ? t.checkout.couponChecking : t.checkout.couponApply}
+                          </button>
+                        </div>
+                        {couponStatus === 'error' && <span className="field-error">{couponError}</span>}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="payment-method">
+                    <p>{t.checkout.paymentMethodHeading}</p>
+                    <label className={`pay-option${paymentMethod === 'cod' ? ' selected' : ''}`}>
+                      <span className="pay-icon">💵</span>
+                      <span className="pay-option-text">
+                        <b>{t.checkout.cod}</b>
+                        <span>{t.checkout.codDesc}</span>
+                      </span>
+                      <input type="radio" name="payment" value="cod" checked={paymentMethod === 'cod'} onChange={() => setPaymentMethod('cod')} />
+                    </label>
+                    <label className={`pay-option${paymentMethod === 'card' ? ' selected' : ''}`}>
+                      <span className="pay-icon">💳</span>
+                      <span className="pay-option-text">
+                        <b>{t.checkout.card}</b>
+                        <span>{t.checkout.cardDesc}</span>
+                      </span>
+                      <input type="radio" name="payment" value="card" checked={paymentMethod === 'card'} onChange={() => setPaymentMethod('card')} />
+                    </label>
+                  </div>
+
+                  {orderError && <p className="field-error" style={{ marginTop: 12 }}>{orderError}</p>}
+                </>
               )}
-
-              <div style={{ margin: '16px 0' }}>
-                {couponStatus === 'applied' ? (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'rgba(60,160,80,0.12)', borderRadius: 8 }}>
-                    <span>🏷️ {t.checkout.couponApplied(couponCode, `${couponDiscount.toFixed(2)} €`)}</span>
-                    <button type="button" onClick={resetCoupon} style={{ background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', fontSize: 13 }}>
-                      {t.checkout.couponRemove}
-                    </button>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input
-                        type="text"
-                        placeholder={t.checkout.couponPlaceholder}
-                        value={couponInput}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => { setCouponInput(e.target.value); if (couponStatus === 'error') setCouponStatus('idle'); }}
-                        style={{ flex: 1 }}
-                      />
-                      <button
-                        type="button"
-                        className="btn-primary"
-                        disabled={!couponInput.trim() || couponStatus === 'checking'}
-                        onClick={applyCoupon}
-                        style={{ whiteSpace: 'nowrap' }}
-                      >
-                        {couponStatus === 'checking' ? t.checkout.couponChecking : t.checkout.couponApply}
-                      </button>
-                    </div>
-                    {couponStatus === 'error' && <span className="field-error">{couponError}</span>}
-                  </div>
-                )}
-              </div>
-
-              <div className="payment-method">
-                <p>{t.checkout.paymentMethodHeading}</p>
-                <label className="pay-option">
-                  <span className="pay-icon">💵</span>
-                  <span className="pay-option-text">
-                    <b>{t.checkout.cod}</b>
-                    <span>{t.checkout.codDesc}</span>
-                  </span>
-                  <input type="radio" name="payment" value="cod" checked readOnly />
-                </label>
-              </div>
-
-              {orderError && <p className="field-error" style={{ marginTop: 12 }}>{orderError}</p>}
             </form>
           )}
         </div>
@@ -492,7 +564,7 @@ export default function CheckoutModal() {
         </div>
       )}
 
-      {step === 3 && (
+      {step === 3 && !cardPayment && (
         <div className="checkout-footer">
           <button
             type="submit"
@@ -501,12 +573,7 @@ export default function CheckoutModal() {
             style={{ flex: 1 }}
             disabled={submitting}
           >
-            {/* couponFinalTotal is typed number | null, but applyCoupon() always sets it via
-                setCouponFinalTotal(data.finalTotal) in the same batch just before
-                setCouponStatus('applied') (see applyCoupon above) — so whenever couponStatus
-                is 'applied', couponFinalTotal is guaranteed non-null. Non-null assertion is a
-                no-op fix under strict mode, same convention as elsewhere in this migration. */}
-            {t.checkout.placeOrder(`${(couponStatus === 'applied' ? couponFinalTotal! : cartTotal).toFixed(2)} €`)}
+            {t.checkout.placeOrder(payAmountLabel)}
           </button>
         </div>
       )}

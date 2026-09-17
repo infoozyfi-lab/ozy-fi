@@ -390,7 +390,7 @@ export async function POST(request: Request) {
       // simply leaves this pending reward untouched, still pending, same
       // as losing to a bigger automatic discount or the cart having no
       // eligible item this time).
-      if ((discountSource as DiscountSource) === 'stamp_card' && stampCardWonViaExistingPending === true) {
+      if ((discountSource as DiscountSource | null) === 'stamp_card' && stampCardWonViaExistingPending === true) {
         redeemPendingRewardId = existingPendingReward.id;
       }
     } else if (reachedStampMilestone) {
@@ -399,7 +399,7 @@ export async function POST(request: Request) {
       // Otherwise — no eligible item at all, it lost to a bigger
       // discount, or a manual coupon was used instead — bank it as a new
       // pending reward rather than letting it vanish.
-      const consumedImmediately = (discountSource as DiscountSource) === 'stamp_card' && stampCardWonViaExistingPending === false;
+      const consumedImmediately = (discountSource as DiscountSource | null) === 'stamp_card' && stampCardWonViaExistingPending === false;
       if (!consumedImmediately) {
         createNewPendingReward = true;
       }

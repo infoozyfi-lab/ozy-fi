@@ -90,8 +90,8 @@ const btn: CSSProperties = {
   fontSize: 13,
   marginRight: 8,
 };
-const btnPrimary: CSSProperties = { ...btn, background: 'var(--ember)', color: '#1A0D06', border: 'none', fontWeight: 700 };
-const btnDanger: CSSProperties = { ...btn, background: '#FF6A5C', color: '#1A0D06', border: 'none', fontWeight: 700 };
+const btnPrimary: CSSProperties = { ...btn, background: 'var(--ember)', color: 'var(--text-on-accent)', border: 'none', fontWeight: 700 };
+const btnDanger: CSSProperties = { ...btn, background: 'var(--danger)', color: 'var(--text-on-accent)', border: 'none', fontWeight: 700 };
 
 const th: CSSProperties = { textAlign: 'left', padding: '10px', color: 'var(--muted)', fontSize: 12.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' };
 const td: CSSProperties = { padding: '12px 10px', borderTop: '1px solid var(--line)', fontSize: 13.5 };
@@ -1045,8 +1045,8 @@ function RestaurantInfoSettings({ token }: { token: string }) {
           the same component's behavior in Menu & Pricing's landing page,
           which is reportedly showing nothing at all. Remove once the
           Menu & Pricing issue is resolved. */}
-      <div style={{ border: '2px dashed #FF6A3D', padding: 8, marginBottom: 16 }}>
-        <p style={{ margin: '0 0 8px', fontSize: 12, color: '#FF6A3D' }}>
+      <div style={{ border: '2px dashed var(--ember)', padding: 8, marginBottom: 16 }}>
+        <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--ember)' }}>
           ⬇ DIAGNOSTIC COPY (Settings tab) — compare against Menu &amp; Pricing
         </p>
         <PricingRulesBox token={token} />
@@ -1057,12 +1057,12 @@ function RestaurantInfoSettings({ token }: { token: string }) {
         style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12,
           padding: 16, marginBottom: 24, borderRadius: 10,
-          background: isClosed ? 'rgba(255,106,92,0.12)' : 'var(--bg-alt)',
-          border: `1px solid ${isClosed ? '#5A2A1F' : 'var(--line)'}`,
+          background: isClosed ? 'var(--danger-bg)' : 'var(--bg-alt)',
+          border: `1px solid ${isClosed ? 'var(--danger-border)' : 'var(--line)'}`,
         }}
       >
         <div>
-          <strong style={{ color: isClosed ? '#FF6A5C' : 'var(--cream)' }}>
+          <strong style={{ color: isClosed ? 'var(--danger)' : 'var(--cream)' }}>
             {isClosed ? '🔴 Store is closed — not taking orders' : '🟢 Store is open — taking orders normally'}
           </strong>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--muted)' }}>
@@ -1104,7 +1104,7 @@ function RestaurantInfoSettings({ token }: { token: string }) {
 
         <h3 style={{ margin: '24px 0 4px', fontSize: 15 }}>Opening hours</h3>
         {hoursWasFreeText && (
-          <p style={{ margin: '0 0 12px', fontSize: 12.5, color: '#E3A73B' }}>
+          <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--gold)' }}>
             Your previous opening-hours text couldn't be converted automatically — filled in with placeholder times below, please set each day correctly and save.
           </p>
         )}
@@ -1294,7 +1294,7 @@ function HomepageDisplaySettings({ token }: { token: string }) {
                   }}
                 />
                 {uploading && <p style={{ fontSize: 12, color: 'var(--muted)', margin: '4px 0 0' }}>Uploading…</p>}
-                {uploadError && <p style={{ fontSize: 12, color: '#FF8A75', margin: '4px 0 0' }}>{uploadError}</p>}
+                {uploadError && <p style={{ fontSize: 12, color: 'var(--danger)', margin: '4px 0 0' }}>{uploadError}</p>}
                 {values.featured_banner_image && (
                   <img
                     src={values.featured_banner_image}
@@ -1514,7 +1514,7 @@ function PricingRulesBox({ token }: { token: string }) {
   }
   if (error) {
     return (
-      <div style={{ ...box, marginBottom: 20, padding: 16, color: '#FF8A75' }}>
+      <div style={{ ...box, marginBottom: 20, padding: 16, color: 'var(--danger)' }}>
         Pricing rules: {error}
       </div>
     );
@@ -1560,12 +1560,68 @@ interface RewardSettingFieldDef {
   min?: number;
   max?: number;
   step?: string;
+  // Shared discount-value pattern (color-palette-and-discount-pattern
+  // brief, part 2 — see lib/types.ts's DiscountValue). When true, `key`
+  // is a BASE key and this field actually reads/writes `${key}_type`
+  // ('percent'|'amount') + `${key}_value` (number) as a pair, rendered
+  // as a type-toggle + number input via DiscountValueInput below,
+  // instead of one plain number field.
+  discount?: boolean;
+}
+
+// Shared discount-value pattern — one small type-toggle ('%' vs '€') +
+// number control, reused by every growth feature's discount SETTING
+// through RewardSettingsForm/StampCardSettingsForm below.
+// components/admin/ScheduledOffersManager.tsx has its own copy of this
+// same two-control shape (it isn't built from RewardSettingsForm, since
+// scheduled offers have their own bespoke form — see that file), but
+// both store to the exact same `${key}_type`/`${key}_value` convention.
+function DiscountValueInput({
+  label,
+  typeValue,
+  numberValue,
+  onTypeChange,
+  onNumberChange,
+}: {
+  label: string;
+  typeValue: string;
+  numberValue: string;
+  onTypeChange: (v: 'percent' | 'amount') => void;
+  onNumberChange: (v: string) => void;
+}) {
+  const type: 'percent' | 'amount' = typeValue === 'amount' ? 'amount' : 'percent';
+  return (
+    <label style={{ minWidth: 260 }}>
+      {label}
+      <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+        <select
+          style={{ ...inputStyle, marginTop: 0, width: 84, flexShrink: 0 }}
+          value={type}
+          onChange={(e: ChangeEvent<HTMLSelectElement>) => onTypeChange(e.target.value as 'percent' | 'amount')}
+        >
+          <option value="percent">%</option>
+          <option value="amount">€</option>
+        </select>
+        <input
+          style={{ ...inputStyle, marginTop: 0 }}
+          type="number"
+          min={0}
+          max={type === 'percent' ? 100 : undefined}
+          step={type === 'percent' ? '1' : '0.5'}
+          value={numberValue}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => onNumberChange(e.target.value)}
+        />
+      </div>
+    </label>
+  );
 }
 
 // One small reusable form for a handful of admin_settings keys — the
 // same shape as PricingRulesBox above (useSettingsValues + a form that
 // PUTs back only the keys it owns), just parameterized so each Rewards
-// card doesn't need its own hand-copied version of that box.
+// card doesn't need its own hand-copied version of that box. A
+// `discount: true` field reads/writes its `_type`/`_value` pair via
+// DiscountValueInput instead of a single plain number.
 function RewardSettingsForm({
   token,
   title,
@@ -1586,7 +1642,14 @@ function RewardSettingsForm({
     setSaving(true);
     try {
       const body: Record<string, string> = {};
-      fields.forEach((f) => { body[f.key] = values[f.key] || ''; });
+      fields.forEach((f) => {
+        if (f.discount) {
+          body[`${f.key}_type`] = values[`${f.key}_type`] || 'percent';
+          body[`${f.key}_value`] = values[`${f.key}_value`] || '';
+        } else {
+          body[f.key] = values[f.key] || '';
+        }
+      });
       await fetch('/api/admin/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -1602,7 +1665,7 @@ function RewardSettingsForm({
     return <div style={{ ...box, padding: 16, color: 'var(--muted)' }}>Loading…</div>;
   }
   if (error) {
-    return <div style={{ ...box, padding: 16, color: '#FF8A75' }}>{error}</div>;
+    return <div style={{ ...box, padding: 16, color: 'var(--danger)' }}>{error}</div>;
   }
 
   return (
@@ -1613,18 +1676,29 @@ function RewardSettingsForm({
       )}
       <form onSubmit={save} style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
         {fields.map((f) => (
-          <label key={f.key} style={{ minWidth: 260 }}>
-            {f.label}
-            <input
-              style={inputStyle}
-              type="number"
-              step={f.step || '1'}
-              min={f.min ?? 0}
-              max={f.max}
-              value={values[f.key] || ''}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => { setValues((v) => ({ ...v, [f.key]: e.target.value })); setSaved(false); }}
+          f.discount ? (
+            <DiscountValueInput
+              key={f.key}
+              label={f.label}
+              typeValue={values[`${f.key}_type`] || 'percent'}
+              numberValue={values[`${f.key}_value`] || ''}
+              onTypeChange={(v) => { setValues((vals) => ({ ...vals, [`${f.key}_type`]: v })); setSaved(false); }}
+              onNumberChange={(v) => { setValues((vals) => ({ ...vals, [`${f.key}_value`]: v })); setSaved(false); }}
             />
-          </label>
+          ) : (
+            <label key={f.key} style={{ minWidth: 260 }}>
+              {f.label}
+              <input
+                style={inputStyle}
+                type="number"
+                step={f.step || '1'}
+                min={f.min ?? 0}
+                max={f.max}
+                value={values[f.key] || ''}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => { setValues((v) => ({ ...v, [f.key]: e.target.value })); setSaved(false); }}
+              />
+            </label>
+          )
         ))}
         <button type="submit" style={btnPrimary} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
         {saved && <span style={{ color: 'var(--gold)' }}>Saved ✓</span>}
@@ -1681,7 +1755,8 @@ function StampCardSettingsForm({ token }: { token: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           stamp_card_eligible_product_ids: values.stamp_card_eligible_product_ids || '[]',
-          stamp_card_reward_percent: values.stamp_card_reward_percent || '',
+          stamp_card_reward_type: values.stamp_card_reward_type || 'percent',
+          stamp_card_reward_value: values.stamp_card_reward_value || '',
           stamp_card_every_n_orders: values.stamp_card_every_n_orders || '',
         }),
       });
@@ -1695,7 +1770,7 @@ function StampCardSettingsForm({ token }: { token: string }) {
     return <div style={{ ...box, padding: 16, color: 'var(--muted)' }}>Loading…</div>;
   }
   if (error) {
-    return <div style={{ ...box, padding: 16, color: '#FF8A75' }}>{error}</div>;
+    return <div style={{ ...box, padding: 16, color: 'var(--danger)' }}>{error}</div>;
   }
 
   return (
@@ -1711,18 +1786,13 @@ function StampCardSettingsForm({ token }: { token: string }) {
       </p>
       <form onSubmit={save}>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-          <label style={{ minWidth: 260 }}>
-            Reward (%) — blank/0 disables it
-            <input
-              style={inputStyle}
-              type="number"
-              min={0}
-              max={100}
-              step="1"
-              value={values.stamp_card_reward_percent || ''}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setField('stamp_card_reward_percent', e.target.value)}
-            />
-          </label>
+          <DiscountValueInput
+            label="Reward — blank/0 disables it"
+            typeValue={values.stamp_card_reward_type || 'percent'}
+            numberValue={values.stamp_card_reward_value || ''}
+            onTypeChange={(v) => setField('stamp_card_reward_type', v)}
+            onNumberChange={(v) => setField('stamp_card_reward_value', v)}
+          />
           <label style={{ minWidth: 260 }}>
             Every Nth order — blank defaults to 5
             <input
@@ -1816,7 +1886,7 @@ function RewardsTab({ token }: { token: string }) {
           title="First-Order Discount"
           description="Automatically applied to a phone number's genuinely first order (any past order, of any status, disqualifies it). Never stacks with a coupon or a scheduled offer — whichever discount is most favorable to the customer wins."
           fields={[
-            { key: 'first_order_discount_percent', label: 'Discount (%) — blank/0 disables it', min: 0, max: 100, step: '1' },
+            { key: 'first_order_discount', label: 'Discount — blank/0 disables it', discount: true },
           ]}
         />
       )}
@@ -1829,7 +1899,7 @@ function RewardsTab({ token }: { token: string }) {
           title="Referral Program"
           description="The footer's “Refer a friend” form mints a single-use coupon for the email address entered — resubmitting the same email returns the existing code rather than a new one. (There is currently no separate reward for the person who shares the form — only the friend's coupon amount below.)"
           fields={[
-            { key: 'referral_discount_amount', label: 'Friend coupon amount (€) — blank defaults to 3', min: 0, step: '0.5' },
+            { key: 'referral_discount', label: 'Friend coupon amount — blank defaults to 3€', discount: true },
           ]}
         />
       )}
@@ -1845,7 +1915,7 @@ function RewardsTab({ token }: { token: string }) {
           description="A random chance, on every order, of a small surprise reward shown right on the confirmation screen — a single-use coupon for the customer's next order. Both odds and reward must be set above 0 for this to ever trigger."
           fields={[
             { key: 'wow_moment_chance_percent', label: 'Odds (%) — blank/0 disables it', min: 0, max: 100, step: '1' },
-            { key: 'wow_moment_reward_percent', label: 'Reward (%) — blank/0 disables it', min: 0, max: 100, step: '1' },
+            { key: 'wow_moment_reward', label: 'Reward — blank/0 disables it', discount: true },
           ]}
         />
       )}
@@ -2264,7 +2334,7 @@ function OptionsManager({
       </p>
 
       {loading && <p>Loading…</p>}
-      {error && <p style={{ color: '#FF8A75' }}>{error}</p>}
+      {error && <p style={{ color: 'var(--danger)' }}>{error}</p>}
 
       {!loading && !error && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 28 }}>
@@ -2518,7 +2588,7 @@ function AddStaffForm({ onAdded }: { onAdded: () => void }) {
   return (
     <form onSubmit={submit} style={{ ...card, marginBottom: 20 }}>
       <h3 style={cardTitle}>New staff account</h3>
-      {error && <p style={{ color: '#FF8A75', marginTop: 0 }}>{error}</p>}
+      {error && <p style={{ color: 'var(--danger)', marginTop: 0 }}>{error}</p>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
         <label>Name<input style={inputStyle} value={name} onChange={(e: ChangeEvent<HTMLInputElement>) => setName(e.target.value)} required /></label>
         <label>Email<input style={inputStyle} type="email" value={email} onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)} required /></label>
@@ -2617,7 +2687,7 @@ function StaffRow({ member, onChanged }: { member: StaffRowType; onChanged: () =
         >
           {member.active ? 'Deactivate' : 'Reactivate'}
         </button>
-        {error && <div style={{ color: '#FF8A75', fontSize: 12, marginTop: 4 }}>{error}</div>}
+        {error && <div style={{ color: 'var(--danger)', fontSize: 12, marginTop: 4 }}>{error}</div>}
       </td>
     </tr>
   );
@@ -2636,7 +2706,7 @@ function StaffManagementTab({ token }: { token: string }) {
       <div style={{ marginBottom: 20 }}>
         <AddStaffForm onAdded={reload} />
       </div>
-      {loading ? <p>Loading…</p> : error ? <p style={{ color: '#FF8A75' }}>{error}</p> : (
+      {loading ? <p>Loading…</p> : error ? <p style={{ color: 'var(--danger)' }}>{error}</p> : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -2689,7 +2759,7 @@ function ActivityLogTab({ token }: { token: string }) {
       <p style={{ color: 'var(--muted)', fontSize: 13.5 }}>
         Recent order status changes, menu/price edits, settings changes and staff account changes, most recent first.
       </p>
-      {loading ? <p>Loading…</p> : error ? <p style={{ color: '#FF8A75' }}>{error}</p> : (
+      {loading ? <p>Loading…</p> : error ? <p style={{ color: 'var(--danger)' }}>{error}</p> : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -2798,7 +2868,7 @@ function AddCouponForm({ onAdded }: { onAdded: () => void }) {
   return (
     <form onSubmit={submit} style={{ ...card, marginBottom: 20 }}>
       <h3 style={cardTitle}>New coupon</h3>
-      {error && <p style={{ color: '#FF8A75', marginTop: 0 }}>{error}</p>}
+      {error && <p style={{ color: 'var(--danger)', marginTop: 0 }}>{error}</p>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
         <label>
           Code
@@ -2880,7 +2950,7 @@ function CouponRow({ coupon, onChanged }: { coupon: CouponRowType; onChanged: ()
         >
           {coupon.active ? 'Deactivate' : 'Reactivate'}
         </button>
-        {error && <div style={{ color: '#FF8A75', fontSize: 12, marginTop: 4 }}>{error}</div>}
+        {error && <div style={{ color: 'var(--danger)', fontSize: 12, marginTop: 4 }}>{error}</div>}
       </td>
     </tr>
   );
@@ -2899,7 +2969,7 @@ function CouponsTab({ token }: { token: string }) {
       <div style={{ marginBottom: 20 }}>
         <AddCouponForm onAdded={reload} />
       </div>
-      {loading ? <p>Loading…</p> : error ? <p style={{ color: '#FF8A75' }}>{error}</p> : (
+      {loading ? <p>Loading…</p> : error ? <p style={{ color: 'var(--danger)' }}>{error}</p> : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -3076,7 +3146,7 @@ export default function AdminDashboard() {
                   style={{
                     marginLeft: 8,
                     background: 'var(--ember)',
-                    color: '#1A0D06',
+                    color: 'var(--text-on-accent)',
                     borderRadius: 999,
                     padding: '1px 7px',
                     fontSize: 11.5,

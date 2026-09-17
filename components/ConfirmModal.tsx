@@ -49,7 +49,7 @@ export default function ConfirmModal() {
             <p>{t.confirm.thanks(confirmedOrder.customer?.name)}</p>
             <p className="confirm-eta">{t.confirm.eta}</p>
             {confirmedOrder.discountAmount > 0 && (
-              <p style={{ color: 'var(--ember, #d97706)', fontSize: '0.9rem', margin: '4px 0 0' }}>
+              <p style={{ color: 'var(--ember-dark, #C14815)', fontSize: '0.9rem', margin: '4px 0 0' }}>
                 {confirmedOrder.welcomeDiscountApplied
                   ? t.confirm.welcomeDiscountApplied(`${confirmedOrder.discountAmount.toFixed(2)} €`)
                   : confirmedOrder.scheduledOfferApplied
@@ -70,11 +70,11 @@ export default function ConfirmModal() {
                 app/api/orders/route.ts and worker/migrations/
                 010_stamp_card_redesign_and_source_tracking.sql. */}
             {loyalty && confirmedOrder.discountSource === 'stamp_card' ? (
-              <div style={{ margin: '14px 0 0', padding: '12px 14px', borderRadius: 10, background: 'rgba(227,167,59,0.14)', color: 'var(--gold, #E3A73B)' }}>
+              <div style={{ margin: '14px 0 0', padding: '12px 14px', borderRadius: 10, background: 'rgba(125,90,22,0.14)', color: 'var(--gold, #7D5A16)' }}>
                 <p style={{ margin: 0, fontWeight: 700 }}>{t.confirm.stampCardRewardApplied}</p>
               </div>
             ) : loyalty && loyalty.pendingRewardCreated ? (
-              <div style={{ margin: '14px 0 0', padding: '12px 14px', borderRadius: 10, background: 'rgba(227,167,59,0.14)', color: 'var(--gold, #E3A73B)' }}>
+              <div style={{ margin: '14px 0 0', padding: '12px 14px', borderRadius: 10, background: 'rgba(125,90,22,0.14)', color: 'var(--gold, #7D5A16)' }}>
                 <p style={{ margin: 0, fontWeight: 700 }}>{t.confirm.stampCardPendingEarned(loyalty.orderCount)}</p>
               </div>
             ) : loyalty && remainingForReward > 0 ? (
@@ -93,7 +93,7 @@ export default function ConfirmModal() {
               <div
                 style={{
                   margin: '14px 0 0', padding: '12px 14px', borderRadius: 10,
-                  background: 'rgba(168,85,247,0.14)', border: '1px solid rgba(168,85,247,0.4)', color: '#c084fc',
+                  background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.35)', color: 'var(--wow-accent, #7C3AED)',
                 }}
               >
                 <p style={{ margin: '0 0 8px', fontWeight: 700 }}>{t.confirm.wowMomentReward}</p>

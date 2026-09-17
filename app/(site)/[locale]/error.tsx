@@ -49,18 +49,18 @@ export default function LocaleError({ error, reset }: { error: Error & { digest?
       }}
     >
       <p style={{ fontSize: '1.4rem', fontWeight: 700, margin: '0 0 10px' }}>{t.error.heading}</p>
-      <p style={{ color: '#6b6b6b', margin: '0 0 24px', maxWidth: 340 }}>{t.error.body}</p>
+      <p style={{ color: 'var(--muted, #756B5F)', margin: '0 0 24px', maxWidth: 340 }}>{t.error.body}</p>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
         <button
           type="button"
           onClick={() => reset()}
-          style={{ background: '#FF6A3D', color: '#1A0D06', border: 'none', borderRadius: 8, padding: '12px 22px', fontWeight: 700, fontSize: 15, cursor: 'pointer' }}
+          style={{ background: 'var(--ember, #E8622A)', color: 'var(--text-on-accent, #1C1210)', border: 'none', borderRadius: 8, padding: '12px 22px', fontWeight: 700, fontSize: 15, cursor: 'pointer' }}
         >
           {t.error.tryAgain}
         </button>
         <a
           href={lp('/')}
-          style={{ background: 'none', border: '1px solid #3A2B21', borderRadius: 8, padding: '12px 22px', fontWeight: 700, fontSize: 15, textDecoration: 'none' }}
+          style={{ background: 'none', border: '1px solid var(--line, #E7E1D6)', borderRadius: 8, padding: '12px 22px', fontWeight: 700, fontSize: 15, textDecoration: 'none' }}
         >
           {t.error.goHome}
         </a>

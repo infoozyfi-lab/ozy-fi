@@ -2,10 +2,17 @@ import type { OrderStatus } from '@/lib/types';
 
 // Chart color tokens for the OZY admin dashboard.
 //
-// Categorical set is the standard 8-hue dark-mode order, validated with
-// scripts/validate_palette.js against this app's card surface (#241A13):
-// all six checks pass (worst adjacent CVD ΔE 8.4, worst normal-vision ΔE
-// 19.3, all >=3:1 contrast). Order is the CVD-safety mechanism — never
+// Categorical set is the standard 8-hue order, originally validated with
+// scripts/validate_palette.js against this app's OLD dark card surface
+// (#241A13): all six checks passed (worst adjacent CVD ΔE 8.4, worst
+// normal-vision ΔE 19.3, all >=3:1 contrast). Left untouched by the
+// Cream & Terracotta palette swap — per the "adapted sensibly" /
+// lighter-touch instruction for admin charts, and because reshuffling it
+// is explicitly the one thing not to do (see below) — but that means
+// it has NOT been re-validated against the new light card surface
+// (#FFFFFF); re-running validate_palette.js against the new surface
+// would be a good follow-up before leaning on this for anything
+// contrast-critical. Order is the CVD-safety mechanism — never
 // reshuffle it; a 9th category folds into "Other" instead of a new hue.
 export const CATEGORICAL: string[] = [
   '#3987e5', // 1 blue
@@ -21,17 +28,25 @@ export const CATEGORICAL: string[] = [
 // Brand accent — used for single-series charts (revenue trend, best sellers)
 // where color's job is emphasis, not identity, so it stays on-brand instead
 // of pulling from the categorical set.
-export const BRAND = '#FF6A3D'; // var(--ember)
-export const BRAND_DIM = '#C9542D'; // var(--ember-dim)
-export const GOLD = '#E3A73B'; // var(--gold)
+export const BRAND = '#C14815'; // var(--ember-dark) -- chart marks sit directly on the light card, and the new brighter --ember only hits ~3.1:1 there, so this uses the text/chart-safe deep shade instead (matches the reasoning for every other place --ember was used AS a color against a light surface, not as a button fill)
+// No longer literally var(--ember-dark) (that token moved to #C14815 with
+// this swap — see BRAND above) — left at its old value on purpose, it's
+// still a coherent dimmer/secondary tone in the same ember family and
+// nothing here depends on it matching --ember-dark exactly.
+export const BRAND_DIM = '#B24A26';
+export const GOLD = '#7D5A16'; // var(--gold)
 
 // Status palette — fixed, reserved meaning, always paired with a label.
+// warning/serious darkened from the old dark-theme values (#fab219 /
+// #ec835a) — both read fine as text/fills on a near-black card but drop
+// well below AA contrast on the new light card background; good/critical
+// already had adequate contrast on white and were left as-is.
 export const STATUS: Record<'good' | 'warning' | 'serious' | 'critical' | 'neutral', string> = {
   good: '#0ca30c',
-  warning: '#fab219',
-  serious: '#ec835a',
+  warning: '#A66A00',
+  serious: '#A8532E',
   critical: '#d03b3b',
-  neutral: '#B8A99C', // muted — "not started yet" (received)
+  neutral: '#756B5F', // muted — "not started yet" (received)
 };
 
 export const ORDER_STATUS_COLOR: Record<OrderStatus, string> = {

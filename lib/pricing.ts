@@ -25,7 +25,7 @@
 // price — see normalizeProducts()) already lives, which the *previous*
 // floor check did not use (it read the raw `products.price` column
 // directly) — see this feature's summary for that pre-existing gap.
-import type { CartLineSelectionData, CartLineBundleItem, MenuBlob } from './types';
+import type { CartLineSelectionData, CartLineBundleItem, MenuBlob, DiscountValue } from './types';
 
 export interface PriceCheckResult {
   ok: boolean;
@@ -370,4 +370,67 @@ export function computeCurrentBundlePrice(
     unitPrice: bundle.price + extrasTotal,
     bundleItems: resolvedItems,
   };
+}
+
+// ---------------------------------------------------------------------
+// Growth features — shared discount-value calculation (color-palette-
+// and-discount-pattern brief, part 2 — "shared discount-value pattern").
+// See lib/types.ts's DiscountValue for the shape itself and why it
+// exists. This is the ONE place that turns a DiscountValue + a base
+// amount into an actual euro discount, used by app/api/orders/route.ts
+// for all four automatic discounts (welcome, scheduled offer, stamp
+// card, Ozy Wow Moment's minted coupon) and by lib/coupons.ts's
+// validateCoupon() (manual coupons + referral) — so a customer's final
+// discount is computed identically no matter which of the five features
+// produced it.
+//
+// The rounding/clamping convention below is NOT new — it's the exact
+// `Math.min(Math.round(raw * 100) / 100, cap)` pattern that was already
+// duplicated across app/api/orders/route.ts (three times) and
+// lib/coupons.ts (once) before this task; this just gives that one
+// pattern one implementation.
+
+// baseAmount: the euro amount this discount applies against — an order
+// subtotal for the welcome discount/scheduled offer/manual coupon, or a
+// single cheapest-eligible-item's unit price for the stamp card. Always
+// clamped to [0, baseAmount] — a discount can never take something below
+// free (e.g. a flat "5€ off" amount-type discount on a 3€ base) or above
+// 100% of what it's discounting.
+export function computeDiscountAmount(discount: DiscountValue | null | undefined, baseAmount: number): number {
+  if (!discount || !Number.isFinite(discount.value) || discount.value <= 0) return 0;
+  if (!Number.isFinite(baseAmount) || baseAmount <= 0) return 0;
+
+  const raw = discount.type === 'amount' ? discount.value : baseAmount * (discount.value / 100);
+  return Math.max(0, Math.min(Math.round(raw * 100) / 100, baseAmount));
+}
+
+// Reads a `{type, value}` pair out of a flat admin_settings-style blob
+// keyed as `${key}_type` / `${key}_value` — e.g. readDiscountSetting(
+// settings, 'first_order_discount') reads first_order_discount_type /
+// first_order_discount_value. This is the same "two sibling keys for one
+// concept" convention admin_settings already used elsewhere (e.g.
+// stamp_card_eligible_product_ids alongside stamp_card_reward_percent),
+// just applied consistently now. A missing/unrecognized `_type` (a
+// setting never migrated, or simply never configured) falls back to
+// `fallbackType` and reads `_value` as 0 — "0, disabled" for whichever
+// type, same behavior every one of these settings already had as a bare
+// percent field before this task.
+export function readDiscountSetting(
+  settings: Record<string, unknown> | null | undefined,
+  key: string,
+  fallbackType: DiscountValue['type'] = 'percent'
+): DiscountValue {
+  const rawType = settings?.[`${key}_type`];
+  const type: DiscountValue['type'] = rawType === 'percent' || rawType === 'amount' ? rawType : fallbackType;
+  const value = Number(settings?.[`${key}_value`]) || 0;
+  return { type, value };
+}
+
+// Plain-language description of a DiscountValue for customer-facing
+// banners/labels (e.g. "10%" vs. "2.00 €") — one shared formatter so
+// every growth feature's UI describes its own setting the same way,
+// rather than each one re-deciding how to show a euro amount vs. a
+// percentage.
+export function describeDiscountValue(discount: DiscountValue): string {
+  return discount.type === 'percent' ? `${discount.value}%` : `${discount.value.toFixed(2)} €`;
 }

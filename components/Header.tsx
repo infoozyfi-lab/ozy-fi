@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useStore } from '@/context/StoreContext';
 import { useTranslations, useLocalePath } from '@/lib/i18n';
+import { describeDiscountValue } from '@/lib/pricing';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 export default function Header() {
@@ -73,7 +74,7 @@ export default function Header() {
           .checkout-page). */}
       {!storeClosed && activeScheduledOffer && (
         <div className="store-closed-banner scheduled-offer-banner">
-          {t.header.scheduledOfferBanner(activeScheduledOffer.label, activeScheduledOffer.discountPercent)}
+          {t.header.scheduledOfferBanner(activeScheduledOffer.label, describeDiscountValue(activeScheduledOffer.discount))}
         </div>
       )}
       <nav className="nav wrap" ref={navRef}>
