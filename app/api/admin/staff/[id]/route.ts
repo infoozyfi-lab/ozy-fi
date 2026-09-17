@@ -19,12 +19,13 @@ async function isLastActiveOwner(env: any, staffId: number): Promise<boolean> {
   return Number(row?.count || 0) === 0;
 }
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { env, ctx } = await getCloudflareContext({ async: true });
   const denied = await requireRole(request, env, ['owner']);
   if (denied) return denied;
 
-  const staffId = Number(params.id);
+  const { id } = await params;
+  const staffId = Number(id);
   if (!Number.isFinite(staffId)) return json({ error: 'Invalid staff id' }, 400);
 
   const target = await env.DB.prepare('SELECT * FROM staff WHERE id = ?').bind(staffId).first();

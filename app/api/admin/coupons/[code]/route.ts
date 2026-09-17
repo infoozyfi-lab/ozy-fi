@@ -13,12 +13,13 @@ const DISCOUNT_TYPES = ['percent', 'amount'];
 // separate DELETE route: "deactivate" (active = 0) is the intended way to
 // retire a coupon per the brief, and it keeps times_used/history intact
 // for whoever's looking at it later, instead of losing the record.
-export async function PATCH(request: Request, { params }: { params: { code: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ code: string }> }) {
   const { env, ctx } = await getCloudflareContext({ async: true });
   const denied = await requireRole(request, env, COUPON_ROLES);
   if (denied) return denied;
 
-  const code = String(params.code || '').trim().toUpperCase();
+  const { code: rawCode } = await params;
+  const code = String(rawCode || '').trim().toUpperCase();
   const existing = await env.DB.prepare('SELECT * FROM coupons WHERE code = ?').bind(code).first();
   if (!existing) return json({ error: 'Not found' }, 404);
 

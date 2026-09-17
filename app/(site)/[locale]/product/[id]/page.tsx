@@ -17,8 +17,8 @@ async function getProduct(id: string): Promise<RawProduct | null> {
   return row || null;
 }
 
-export async function generateMetadata({ params }: { params: { locale: string; id: string } }) {
-  const { locale, id } = params;
+export async function generateMetadata({ params }: { params: Promise<{ locale: string; id: string }> }) {
+  const { locale, id } = await params;
   const product = await getProduct(id);
 
   if (!product) {
@@ -50,8 +50,8 @@ export async function generateMetadata({ params }: { params: { locale: string; i
   };
 }
 
-export default async function ProductDetailPage({ params }: { params: { locale: string; id: string } }) {
-  const { locale, id } = params;
+export default async function ProductDetailPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
+  const { locale, id } = await params;
   // Not wrapped in try/catch — see the identical note in
   // app/(site)/[locale]/menu/[category]/page.js: a real D1 failure here
   // must not be mistaken for "this product doesn't exist" and silently

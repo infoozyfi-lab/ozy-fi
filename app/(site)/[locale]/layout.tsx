@@ -22,8 +22,8 @@ import { isLocale, DEFAULT_LOCALE } from '@/lib/i18n/locales';
 // Flagged in this feature's delivery summary as a deliberate, minor
 // behavior change.
 
-export async function generateMetadata({ params }: { params: { locale: string } }) {
-  const { locale } = params;
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
   return {
     metadataBase: new URL('https://ozy.fi'),
     title: {
@@ -78,9 +78,9 @@ export default async function LocaleLayout({
   params,
 }: {
   children: ReactNode;
-  params: { locale: string };
+  params: Promise<{ locale: string }>;
 }) {
-  const { locale } = params;
+  const { locale } = await params;
 
   // A crawler or a stray link hitting an unsupported locale segment
   // (`/de/menu`, `/fr`, …) should 404, not silently render English

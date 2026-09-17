@@ -41,8 +41,8 @@ async function getCategory(slug: string): Promise<RawCategory | null> {
   return row || null;
 }
 
-export async function generateMetadata({ params }: { params: { locale: string; category: string } }) {
-  const { locale, category: categorySlug } = params;
+export async function generateMetadata({ params }: { params: Promise<{ locale: string; category: string }> }) {
+  const { locale, category: categorySlug } = await params;
   const category = await getCategory(categorySlug);
 
   if (!category) {
@@ -67,7 +67,9 @@ export async function generateMetadata({ params }: { params: { locale: string; c
   };
 }
 
-export default async function CategoryMenuPage({ params }: { params: { locale: string; category: string } }) {
+export default async function CategoryMenuPage({ params }: { params: Promise<{ locale: string; category: string }> }) {
+  const { locale, category: categorySlug } = await params;
+
   // Not wrapped in try/catch: if getCategory() itself throws (a real D1
   // failure), we deliberately let that propagate to
   // app/(site)/[locale]/error.js rather than swallow it and call
@@ -76,7 +78,7 @@ export default async function CategoryMenuPage({ params }: { params: { locale: s
   // problem behind a misleading "not found" page (bug-fix, bilingual-site
   // crash, Sept 2026 — see error.js's comment for why that boundary now
   // exists to catch this safely instead of it reaching global-error.js).
-  const category = await getCategory(params.category);
+  const category = await getCategory(categorySlug);
 
   if (!category) {
     notFound();
@@ -90,13 +92,13 @@ export default async function CategoryMenuPage({ params }: { params: { locale: s
     const { env } = await getCloudflareContext({ async: true });
     initialData = await loadMenuData(env);
   } catch (err) {
-    console.error(`[/${params?.locale}/menu/${params?.category}] failed to load SSR menu data:`, err);
+    console.error(`[/${locale}/menu/${categorySlug}] failed to load SSR menu data:`, err);
   }
 
-  const seoCopy = CATEGORY_SEO_COPY[params.category];
-  const introText = seoCopy ? (params.locale === 'fi' ? seoCopy.fi : seoCopy.en) : null;
+  const seoCopy = CATEGORY_SEO_COPY[categorySlug];
+  const introText = seoCopy ? (locale === 'fi' ? seoCopy.fi : seoCopy.en) : null;
 
-  const title = resolveText(category.title, category.title_fi, params.locale);
+  const title = resolveText(category.title, category.title_fi, locale);
   // Schema.org Menu — a category-specific complement to the site-wide
   // Restaurant schema in app/(site)/[locale]/layout.tsx (which lists
   // servesCuisine generally); this ties the specific cuisine type to
@@ -106,8 +108,8 @@ export default async function CategoryMenuPage({ params }: { params: { locale: s
     '@context': 'https://schema.org',
     '@type': 'Menu',
     name: title,
-    inLanguage: params.locale,
-    url: `https://ozy.fi/${params.locale}/menu/${params.category}`,
+    inLanguage: locale,
+    url: `https://ozy.fi/${locale}/menu/${categorySlug}`,
   } : null;
 
   return (
@@ -116,7 +118,7 @@ export default async function CategoryMenuPage({ params }: { params: { locale: s
         // eslint-disable-next-line react/no-danger
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(menuSchema) }} />
       )}
-      <MenuPageClient onlyCategory={params.category} initialData={initialData} introText={introText} />
+      <MenuPageClient onlyCategory={categorySlug} initialData={initialData} introText={introText} />
     </>
   );
 }

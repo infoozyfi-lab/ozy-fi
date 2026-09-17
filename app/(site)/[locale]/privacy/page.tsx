@@ -1,8 +1,8 @@
 import PrivacyPageClient from '@/components/PrivacyPageClient';
 import { getDictionary, hreflangAlternates } from '@/lib/i18n/locales';
 
-export function generateMetadata({ params }: { params: { locale: string } }) {
-  const { locale } = params;
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
   const t = getDictionary(locale);
 
   return {

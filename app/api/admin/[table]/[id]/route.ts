@@ -10,12 +10,13 @@ export const dynamic = 'force-dynamic';
 // Same access as app/api/admin/[table]/route.js — see its comment.
 const TABLE_ROLES: StaffRole[] = ['manager', 'owner'];
 
-export async function PUT(request: Request, { params }: { params: { table: string; id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ table: string; id: string }> }) {
   const { env, ctx } = await getCloudflareContext({ async: true });
   const denied = await requireRole(request, env, TABLE_ROLES);
   if (denied) return denied;
 
-  const table = ADMIN_TABLES[params.table];
+  const { table: tableName, id } = await params;
+  const table = ADMIN_TABLES[tableName];
   if (!table) return json({ error: 'Unknown table' }, 404);
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
@@ -33,8 +34,8 @@ export async function PUT(request: Request, { params }: { params: { table: strin
   // components/admin/ResourceManager.js's bulk actions) can lower
   // `price` below an existing `offer_price` without ever touching
   // `offer_price` in the same request.
-  if (params.table === 'products' && ('price' in body || 'offer_price' in body)) {
-    const current = await env.DB.prepare('SELECT price, offer_price FROM products WHERE id = ?').bind(params.id).first<{ price: number; offer_price: unknown }>();
+  if (tableName === 'products' && ('price' in body || 'offer_price' in body)) {
+    const current = await env.DB.prepare('SELECT price, offer_price FROM products WHERE id = ?').bind(id).first<{ price: number; offer_price: unknown }>();
     const finalPrice = 'price' in body ? Number(body.price) : Number(current?.price);
     const finalOfferPrice = 'offer_price' in body ? body.offer_price : current?.offer_price;
     if (finalOfferPrice !== null && finalOfferPrice !== undefined && finalOfferPrice !== '' && Number(finalOfferPrice) > finalPrice) {
@@ -47,7 +48,7 @@ export async function PUT(request: Request, { params }: { params: { table: strin
   // this particular update touches (a lone `active` toggle, for
   // instance, is valid on its own and shouldn't require re-sending
   // days/time/percent).
-  if (params.table === 'scheduled_offers') {
+  if (tableName === 'scheduled_offers') {
     const validationError = validateScheduledOfferInput(body);
     if (validationError) return json({ error: validationError }, 400);
   }
@@ -56,33 +57,34 @@ export async function PUT(request: Request, { params }: { params: { table: strin
   const values = cols.map((c) => body[c]);
 
   await env.DB.prepare(
-    `UPDATE ${params.table} SET ${setClause} WHERE id = ?`
-  ).bind(...values, params.id).run();
+    `UPDATE ${tableName} SET ${setClause} WHERE id = ?`
+  ).bind(...values, id).run();
 
   await purgeMenuCache(request, ctx);
 
   const session = await getSession(request, env);
   ctx.waitUntil(
-    logActivity(env, session, `${params.table}.updated`, `Updated ${params.table} "${params.id}" (${cols.join(', ')})`)
+    logActivity(env, session, `${tableName}.updated`, `Updated ${tableName} "${id}" (${cols.join(', ')})`)
   );
 
   return json({ ok: true });
 }
 
-export async function DELETE(request: Request, { params }: { params: { table: string; id: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ table: string; id: string }> }) {
   const { env, ctx } = await getCloudflareContext({ async: true });
   const denied = await requireRole(request, env, TABLE_ROLES);
   if (denied) return denied;
 
-  const table = ADMIN_TABLES[params.table];
+  const { table: tableName, id } = await params;
+  const table = ADMIN_TABLES[tableName];
   if (!table) return json({ error: 'Unknown table' }, 404);
 
-  await env.DB.prepare(`DELETE FROM ${params.table} WHERE id = ?`).bind(params.id).run();
+  await env.DB.prepare(`DELETE FROM ${tableName} WHERE id = ?`).bind(id).run();
 
   await purgeMenuCache(request, ctx);
 
   const session = await getSession(request, env);
-  ctx.waitUntil(logActivity(env, session, `${params.table}.deleted`, `Deleted ${params.table} "${params.id}"`));
+  ctx.waitUntil(logActivity(env, session, `${tableName}.deleted`, `Deleted ${tableName} "${id}"`));
 
   return json({ ok: true });
 }

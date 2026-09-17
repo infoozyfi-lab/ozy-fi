@@ -15,23 +15,26 @@ interface PatchOrderBody {
   driver_name?: unknown;
 }
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { env } = await getCloudflareContext({ async: true });
   const denied = await requireRole(request, env, ORDER_ROLES);
   if (denied) return denied;
 
-  const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(params.id).first();
+  const { id } = await params;
+  const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first();
   if (!order) return json({ error: 'Not found' }, 404);
 
-  const items = await env.DB.prepare('SELECT * FROM order_items WHERE order_id = ?').bind(params.id).all();
+  const items = await env.DB.prepare('SELECT * FROM order_items WHERE order_id = ?').bind(id).all();
 
   return json({ ...order, items: items.results });
 }
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { env, ctx } = await getCloudflareContext({ async: true });
   const denied = await requireRole(request, env, ORDER_ROLES);
   if (denied) return denied;
+
+  const { id } = await params;
 
   const body = (await request.json().catch(() => ({}))) as PatchOrderBody;
   const allowed: OrderStatus[] = ['received', 'preparing', 'on_the_way', 'delivered', 'cancelled'];
@@ -70,18 +73,18 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     noteSuffix += ` (driver: ${driverName})`;
   }
 
-  values.push(params.id);
+  values.push(id);
   await env.DB.prepare(`UPDATE orders SET ${sets.join(', ')} WHERE id = ?`).bind(...values).run();
   const etaNote = noteSuffix;
 
   // Fetched once, reused for both the audit log entry (needs order_num)
   // and the cancellation-tracking branch below (needs total/email/phone)
   // — avoids a second identical SELECT.
-  const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(params.id).first<OrderRow>();
+  const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(id).first<OrderRow>();
 
   const session = await getSession(request, env);
   ctx.waitUntil(
-    logActivity(env, session, 'order.status_changed', `Order ${order?.order_num || params.id} → ${body.status}${etaNote}`)
+    logActivity(env, session, 'order.status_changed', `Order ${order?.order_num || id} → ${body.status}${etaNote}`)
   );
 
   // Tell the ad platforms this order didn't actually happen, so revenue
