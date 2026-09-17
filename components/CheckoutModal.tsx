@@ -3,6 +3,7 @@
 import { useState, useRef, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react';
 import { useStore } from '@/context/StoreContext';
 import { useTranslations } from '@/lib/i18n';
+import { computeDiscountAmount, describeDiscountValue } from '@/lib/pricing';
 import type { Addon, CartLine, Customer } from '@/lib/types';
 import CardPaymentStep from './CardPaymentStep';
 
@@ -78,7 +79,7 @@ export default function CheckoutModal() {
     cart, cartTotal, isCheckoutOpen, closeCheckout, placeOrder,
     removeFromCart, updateCartQty, addDrinkToCart,
     drinks, dipCups, snacks,
-    firstOrderDiscountPercent,
+    firstOrderDiscount,
     activeScheduledOffer,
   } = useStore();
   const t = useTranslations();
@@ -152,18 +153,28 @@ export default function CheckoutModal() {
   // whichever is more favorable, never both) — this is purely about
   // which single banner to SHOW here; the server independently decides
   // and enforces the real discount at order-creation time regardless of
-  // what this computes. Both percentages are already known from the menu
-  // blob before any API call, so this needs no extra request — unlike
+  // what this computes. Both discount settings are already known from
+  // the menu blob before any API call, so this needs no extra request — unlike
   // firstOrderEligible, which only becomes known once the phone is
   // entered (see checkFirstOrderEligibility above), so the scheduled-
   // offer banner can show alone even before that.
-  const scheduledOfferPercent = activeScheduledOffer?.discountPercent ?? 0;
-  const welcomeEligible = firstOrderEligible === true && firstOrderDiscountPercent > 0;
-  const bestAutoDiscount: { kind: 'welcome'; percent: number } | { kind: 'scheduledOffer'; percent: number; label: string } | null =
-    welcomeEligible && firstOrderDiscountPercent >= scheduledOfferPercent
-      ? { kind: 'welcome', percent: firstOrderDiscountPercent }
-      : scheduledOfferPercent > 0 && activeScheduledOffer
-        ? { kind: 'scheduledOffer', percent: scheduledOfferPercent, label: activeScheduledOffer.label }
+  // Shared discount-value pattern — both settings can now independently
+  // be a percent or a flat euro amount, so "most favorable" can no
+  // longer compare raw percentages directly (10% vs. a flat 2€ isn't a
+  // number-vs-number comparison) — same reasoning as
+  // findBestActiveScheduledOffer's own baseAmount parameter. Compares
+  // the ACTUAL euro amount each would come out to on this cart, mirroring
+  // exactly what app/api/orders/route.ts's candidates[] comparison does
+  // server-side, so this preview banner never disagrees with what the
+  // server actually applies.
+  const welcomeEligible = firstOrderEligible === true && firstOrderDiscount.value > 0;
+  const welcomeAmount = welcomeEligible ? computeDiscountAmount(firstOrderDiscount, cartTotal) : 0;
+  const scheduledOfferAmount = activeScheduledOffer ? computeDiscountAmount(activeScheduledOffer.discount, cartTotal) : 0;
+  const bestAutoDiscount: { kind: 'welcome'; amountText: string } | { kind: 'scheduledOffer'; amountText: string; label: string } | null =
+    welcomeEligible && welcomeAmount >= scheduledOfferAmount
+      ? { kind: 'welcome', amountText: describeDiscountValue(firstOrderDiscount) }
+      : scheduledOfferAmount > 0 && activeScheduledOffer
+        ? { kind: 'scheduledOffer', amountText: describeDiscountValue(activeScheduledOffer.discount), label: activeScheduledOffer.label }
         : null;
 
   type HandleAddFn = ((item: Addon) => void) & { _t?: number };
@@ -435,12 +446,12 @@ export default function CheckoutModal() {
                 <p
                   style={{
                     margin: '-8px 0 16px', padding: '10px 12px', borderRadius: 8,
-                    background: 'rgba(227,167,59,0.12)', color: 'var(--gold, #E3A73B)', fontSize: 13,
+                    background: 'rgba(125,90,22,0.12)', color: 'var(--gold, #7D5A16)', fontSize: 13,
                   }}
                 >
                   {bestAutoDiscount.kind === 'welcome'
-                    ? t.checkout.welcomeDiscountBanner(bestAutoDiscount.percent)
-                    : t.checkout.scheduledOfferBanner(bestAutoDiscount.label, bestAutoDiscount.percent)}
+                    ? t.checkout.welcomeDiscountBanner(bestAutoDiscount.amountText)
+                    : t.checkout.scheduledOfferBanner(bestAutoDiscount.label, bestAutoDiscount.amountText)}
                 </p>
               )}
               <label>
@@ -471,16 +482,16 @@ export default function CheckoutModal() {
               ) : (
                 <>
                   {bestAutoDiscount && couponStatus !== 'applied' && (
-                    <p style={{ margin: '0 0 12px', padding: '10px 12px', borderRadius: 8, background: 'rgba(227,167,59,0.12)', color: 'var(--gold, #E3A73B)', fontSize: 13 }}>
+                    <p style={{ margin: '0 0 12px', padding: '10px 12px', borderRadius: 8, background: 'rgba(125,90,22,0.12)', color: 'var(--gold, #7D5A16)', fontSize: 13 }}>
                       {bestAutoDiscount.kind === 'welcome'
-                        ? t.checkout.welcomeDiscountBanner(bestAutoDiscount.percent)
-                        : t.checkout.scheduledOfferBanner(bestAutoDiscount.label, bestAutoDiscount.percent)}
+                        ? t.checkout.welcomeDiscountBanner(bestAutoDiscount.amountText)
+                        : t.checkout.scheduledOfferBanner(bestAutoDiscount.label, bestAutoDiscount.amountText)}
                     </p>
                   )}
 
                   <div style={{ margin: '16px 0' }}>
                     {couponStatus === 'applied' ? (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'rgba(60,160,80,0.12)', borderRadius: 8 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'rgba(46,125,50,0.12)', borderRadius: 8 }}>
                         <span>🏷️ {t.checkout.couponApplied(couponCode, `${couponDiscount.toFixed(2)} €`)}</span>
                         <button type="button" onClick={resetCoupon} style={{ background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', fontSize: 13 }}>
                           {t.checkout.couponRemove}
@@ -513,7 +524,7 @@ export default function CheckoutModal() {
 
                   <div className="payment-method">
                     <p>{t.checkout.paymentMethodHeading}</p>
-                    <label className="pay-option">
+                    <label className={`pay-option${paymentMethod === 'cod' ? ' selected' : ''}`}>
                       <span className="pay-icon">💵</span>
                       <span className="pay-option-text">
                         <b>{t.checkout.cod}</b>
@@ -521,7 +532,7 @@ export default function CheckoutModal() {
                       </span>
                       <input type="radio" name="payment" value="cod" checked={paymentMethod === 'cod'} onChange={() => setPaymentMethod('cod')} />
                     </label>
-                    <label className="pay-option">
+                    <label className={`pay-option${paymentMethod === 'card' ? ' selected' : ''}`}>
                       <span className="pay-icon">💳</span>
                       <span className="pay-option-text">
                         <b>{t.checkout.card}</b>

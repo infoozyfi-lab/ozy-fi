@@ -12,16 +12,103 @@ body { overflow-x: clip; }
   body { overflow-x: hidden; }
 }
 :root{
-  --bg: #17110D;
-  --bg-alt: #1F1712;
-  --bg-card: #241A13;
-  --ember: #FF6A3D;
-  --ember-dim: #C9542D;
-  --gold: #E3A73B;
-  --cream: #F4E9DA;
-  --muted: #B8A99C;
-  --maroon: #7A2A1D;
-  --line: #3A2B21;
+  /* ---- "Daylight Ember" palette (approved — 2nd swap, replacing Cream
+     & Terracotta) ----
+     Brainstormed as a demo (5, then 7, directions compared against the
+     real menu at /palette-lab), user picked this one: Charcoal Ember's
+     near-black header + hot-ember accent, kept on a light/daylight body
+     so it stays readable on a phone in direct sun — the one real risk
+     flagged for the all-dark "Charcoal Ember" direction.
+     Genuinely new here vs. the Cream & Terracotta swap: --header-bg is
+     no longer the same color as --ember. Terracotta's header/hero was
+     literally solid --ember, so one shared --text-on-accent covered
+     both "text on the header surface" and "text on an ember-colored
+     button". Ember is now a much brighter, bolder orange and the header
+     is near-black — those two surfaces need DIFFERENT on-top text, so
+     this swap adds --header-bg/--header-text (see .hero/.cta-strip
+     below) and narrows --text-on-accent to mean specifically "text on a
+     surface that IS var(--ember)" (buttons, active pills, badges) —
+     see delivery report for the full contrast trace. */
+  /* Background */
+  --bg: #F7F4EF;
+  --bg-card: #FFFFFF;
+  /* Secondary/inset surface — not named in the approved palette; mapped
+     to the same value as --tab-inactive-bg (a neutral warm tan) rather
+     than inventing a fourth near-duplicate light tone. Used for sticky
+     footers, alt-row backgrounds, and inset panels. */
+  --bg-alt: #EFEAE1;
+
+  /* Primary accent (hot ember-orange) */
+  --ember: #E8622A;
+  /* Redefined role vs. the Terracotta swap: no longer just "a darker
+     shade for :hover". This new --ember is too bright/saturated to
+     read as body text at 4.5:1 (measured 3.08:1 on --bg) — everywhere
+     the OLD palette used --ember directly AS TEXT (prices, links, the
+     logo's ".fi", tab labels) now uses this deeper, text-safe shade
+     instead; it doubles as the hover-darken for ember-background
+     buttons (measured 4.65:1 against --text-on-accent). --icon-color
+     below is a separate, pre-existing value — left as-is, still checks
+     out at 4.30:1 on --icon-bg. */
+  --ember-dark: #C14815;
+
+  /* Icon circle */
+  --icon-bg: #F0E4D6;
+  --icon-color: #B24A26;
+
+  /* NEW — header/hero/CTA-strip surface. Split out from --ember (see
+     comment above): near-black, not the accent color, so the hero/CTA
+     strip reads as "premium and bold" per the approved direction while
+     --ember stays reserved for buttons and price/accent text. */
+  --header-bg: #211B17;
+  /* NEW — text for the --header-bg surface (measured 14.31:1). Replaces
+     --text-on-accent in every rule that sits on .hero/.cta-strip, plus
+     the --danger/--gold badges below (store-closed banner, the
+     scheduled-offer variant, and the "done" checkout step) — those were
+     always dark/saturated backgrounds needing light text; they just
+     borrowed --text-on-accent before because it happened to be light
+     too. Now that --text-on-accent is dark (see below), they needed
+     their own explicit light-text token. */
+  --header-text: #F3EAE0;
+
+  /* Borders — kept the existing --line name (used ~60 places) rather
+     than renaming site-wide to --border-color; same role, same value
+     the brief specifies for --border-color. */
+  --line: #E7E1D6;
+
+  /* Tabs/chips */
+  --tab-inactive-bg: #EFEAE1;
+  --tab-inactive-text: #5B5147;
+
+  /* Text */
+  --cream: #231D19;        /* primary text */
+  --muted: #756B5F;        /* secondary/muted text */
+
+  /* Text on a surface that IS var(--ember) — buttons, active tabs/pills,
+     badges (cart badge, add-btn, featured badge, etc). Flipped from
+     light to dark this swap: the new --ember is bright enough that dark
+     text reads best on it (measured 5.43:1). NOT used for the
+     header/hero/CTA-strip surface anymore — see --header-text above. */
+  --text-on-accent: #1C1210;
+  /* Muted text — used only on the --header-bg surface (hero subtitle/
+     meta/eyebrow, CTA-strip paragraph). Kept the old name since every
+     existing usage was already header-surface-only; just recolored
+     light-muted for the new dark header (measured 10.71:1). */
+  --text-on-accent-muted: #D9CBBC;
+
+  /* ---- Supplementary semantic tokens (not in the approved swatch) ----
+     The old dark theme hardcoded several status colors (error red,
+     order-urgency, a purple "Wow Moment" highlight) tuned for a
+     near-black background. Flipping only the tokens above would leave
+     those illegible (dark-on-light or too-bright-on-light), so these
+     were added to keep them readable — see delivery report for the
+     reasoning per color. */
+  --gold: #7D5A16;         /* darkened from #E3A73B for AA text contrast on light bg */
+  --danger: #B3261E;
+  --danger-bg: #FBEAE7;
+  --danger-border: #E8B4AC;
+  --success: #2E7D32;
+  --wow-accent: #7C3AED;
+
   --radius: 4px;
   --max: 1180px;
 }
@@ -51,16 +138,24 @@ input{ font-family: inherit; }
   *{ animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
 
-/* ---------- NAV ---------- */
+/* ---------- NAV ----------
+   Judgment call: the approved mockup's "header/hero" is one combined
+   unit (logo/title + subtitle + CTA, solid ember). This site actually
+   has two separate elements — this persistent sticky nav bar (every
+   page) and a homepage-only .hero banner below it. Forcing solid ember
+   onto a bar that follows the user on every scroll/page read as too
+   loud (the same reasoning the brief itself applies to the admin
+   panel), so this nav stays a neutral structural surface and the
+   .hero section (below) gets the full solid-ember treatment instead. */
 header{
   position: sticky; top:0; z-index: 50;
-  background: rgba(23,17,13,0.92);
+  background: rgba(247,244,239,0.92);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--line);
 }
 .nav{ display:flex; align-items:center; justify-content:space-between; padding: 16px 24px; gap: 24px; }
 .logo{ font-family:'Anton', sans-serif; font-size: 1.5rem; color: var(--cream); letter-spacing: 0.01em; flex-shrink: 0; background:none; border:none; cursor:pointer; }
-.logo span{ color: var(--ember); }
+.logo span{ color: var(--ember-dark); }
 .nav-links{ display:flex; gap: 28px; align-items:center; }
 .nav-links a, .nav-links button{ color: var(--muted); font-weight: 500; font-size: 0.94rem; transition: color 0.2s ease; background:none; border:none; cursor:pointer; padding:0; }
 .nav-links a:hover, .nav-links button:hover{ color: var(--cream); }
@@ -77,58 +172,74 @@ header{
   position: relative;
 }
 .cart-icon-badge{
-  position: absolute; top: -2px; right: -2px; background: var(--ember); color: #1A0D06;
+  position: absolute; top: -2px; right: -2px; background: var(--ember); color: var(--text-on-accent);
   font-family:'Anton', sans-serif; font-size: 0.68rem; min-width: 17px; height: 17px;
   border-radius: 50%; display:flex; align-items:center; justify-content:center; padding: 0 2px;
 }
 .burger{ display:none; background:none; border:none; cursor:pointer; padding: 4px; }
 .burger span{ display:block; width: 24px; height: 2px; background: var(--cream); margin: 5px 0; }
 .mobile-nav{
-  display:none; position:absolute; top: 60px; right: 24px; background: #1F1712; border: 1px solid #3A2B21;
+  display:none; position:absolute; top: 60px; right: 24px; background: var(--bg-card); border: 1px solid var(--line);
   border-radius: 4px; padding: 16px 24px; flex-direction: column; gap: 14px;
 }
 .mobile-nav.open{ display:flex; }
 
-/* ---------- HERO ---------- */
+/* ---------- HERO ----------
+   This is the half of the approved header/hero mockup that gets the
+   solid-ember treatment (see NAV comment above). */
 .hero{
   position: relative; overflow: hidden; padding: 72px 0 64px;
-  background:
-    radial-gradient(ellipse 700px 500px at 82% 15%, rgba(255,106,61,0.18), transparent 60%),
-    radial-gradient(ellipse 500px 400px at 100% 100%, rgba(227,167,59,0.10), transparent 60%),
-    var(--bg);
+  background: var(--header-bg);
 }
 .eyebrow{ color: var(--gold); font-weight: 600; font-size: 0.95rem; margin: 0 0 18px; }
-h1.hero-title{ font-size: clamp(2.6rem, 5.5vw, 4.4rem); color: var(--cream); margin: 0 0 20px; max-width: 18ch; }
-h1.hero-title em{ font-style: normal; color: var(--ember); }
-.hero-sub{ color: var(--muted); font-size: 1.08rem; max-width: 50ch; margin: 0 0 40px; }
-.hero-meta{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; color: var(--muted); font-size:0.95rem; margin: 0 0 20px; }
-.hero-meta .stars{ color: var(--gold); font-weight:700; }
-.hero-meta .open{ color:#7CB86A; font-weight:600; }
-.hero-meta .sep{ color: var(--line); }
+.hero .eyebrow{ color: var(--text-on-accent-muted); }
+h1.hero-title{ font-size: clamp(2.6rem, 5.5vw, 4.4rem); color: var(--header-text); margin: 0 0 20px; max-width: 18ch; }
+/* Judgment call: the <em> emphasis used to be colored with --ember for
+   pop against the old dark background. On the new solid-ember hero,
+   ember-on-ember would be illegible, and none of the approved tokens
+   give a second color that both reads as "accent" and stays readable
+   here, so the emphasized word now shares --text-on-accent with the
+   rest of the title (emphasis without a color break). */
+h1.hero-title em{ font-style: normal; color: var(--header-text); }
+.hero-sub{ color: var(--text-on-accent-muted); font-size: 1.08rem; max-width: 50ch; margin: 0 0 40px; }
+.hero-meta{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; color: var(--text-on-accent-muted); font-size:0.95rem; margin: 0 0 20px; }
+.hero-meta .stars{ color: var(--header-text); font-weight:700; }
+.hero-meta .open{ color: var(--header-text); font-weight:600; }
+.hero-meta .sep{ color: var(--text-on-accent-muted); }
 .hero-cats{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 480px; margin-top: 8px; }
-.hero-cat{ background: var(--bg-card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 8px; text-align:center; color: var(--cream); cursor:pointer; }
-.hero-cat:hover, .hero-cat:focus-visible{ border-color: var(--ember-dim); }
-.hero-cat-icon{ font-size: 1.7rem; margin-bottom: 6px; }
+/* Category icon tiles — the closest match in this codebase to the
+   approved mockup's "icon circle" (--icon-bg background, --icon-color
+   icon). */
+.hero-cat{ background: var(--icon-bg); border: 1px solid var(--line); border-radius: 10px; padding: 16px 8px; text-align:center; color: var(--cream); cursor:pointer; }
+.hero-cat:hover, .hero-cat:focus-visible{ border-color: var(--ember-dark); }
+.hero-cat-icon{ font-size: 1.7rem; margin-bottom: 6px; color: var(--icon-color); }
 .hero-cat-label{ font-size: 0.92rem; font-weight: 700; }
 .popular-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 22px; }
-.popular-card{ background: var(--bg-card); border: 1px solid var(--line); border-radius: 10px; overflow:hidden; text-align:left; cursor:pointer; padding:0; }
+.popular-card{ background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px; overflow:hidden; text-align:left; cursor:pointer; padding:0; }
 .popular-card img{ width:100%; height: 90px; object-fit:cover; display:block; }
 .popular-card-info{ padding: 10px; }
 .popular-card-name{ font-size:0.85rem; font-weight:700; color:var(--cream); margin:0 0 4px; line-height:1.2; }
-.popular-card-price{ font-size:0.85rem; font-weight:700; color: var(--ember); }
+/* Product-card price per the approved spec: --cream, not the accent
+   color (this codebase previously used --ember here). */
+.popular-card-price{ font-size:0.85rem; font-weight:700; color: var(--cream); }
 
 .order-box{ background: var(--bg-card); border: 1px solid var(--line); border-radius: 8px; padding: 8px; max-width: 560px; }
 .order-tabs{ display:flex; gap: 6px; }
 .order-tab{
-  flex:1; text-align:center; padding: 13px 10px; border-radius: 5px; background: transparent; border: none;
-  color: var(--muted); font-weight: 600; font-size: 0.95rem; cursor:pointer; transition: background 0.15s ease, color 0.15s ease;
+  flex:1; text-align:center; padding: 13px 10px; border-radius: 999px; background: var(--tab-inactive-bg); border: none;
+  color: var(--tab-inactive-text); font-weight: 600; font-size: 0.95rem; cursor:pointer; transition: background 0.15s ease, color 0.15s ease;
 }
-.order-tab.active{ background: var(--ember); color: #1A0D06; }
+.order-tab.active{ background: var(--ember); color: var(--text-on-accent); }
+/* order-go sits inside the light .order-box panel (not directly on the
+   ember hero surface), so it uses the "primary action button" pattern
+   (solid ember + text-on-accent) rather than the inverted CTA pattern —
+   see the .cta-strip .btn-primary override further down for where the
+   inverted treatment actually applies. */
 .order-go{
-  display:block; width:100%; margin-top: 8px; background: var(--gold); color: #1A0D06; border:none;
-  padding: 14px; border-radius: 5px; font-weight: 700; font-size: 1rem; cursor:pointer; transition: background 0.15s ease; text-align:center;
+  display:block; width:100%; margin-top: 8px; background: var(--ember); color: var(--text-on-accent); border:none;
+  padding: 14px; border-radius: 999px; font-weight: 700; font-size: 1rem; cursor:pointer; transition: background 0.15s ease; text-align:center;
 }
-.order-go:hover{ background: #f0bc5a; }
+.order-go:hover{ background: var(--ember-dark); }
 
 /* ---------- SECTION BASE ---------- */
 section{ padding: 80px 0; }
@@ -148,7 +259,7 @@ h2{ font-family:'Anton', sans-serif; font-size: clamp(2rem, 4vw, 3rem); color: v
 .story-text p{ color: var(--muted); margin: 0 0 18px; font-size: 1.02rem; }
 .story-text p:first-of-type{ color: var(--cream); font-size: 1.15rem; }
 .story-stats{ display:flex; gap: 40px; margin-top: 32px; flex-wrap: wrap; }
-.story-stats .num{ font-family:'Anton',sans-serif; font-size: 2.2rem; color: var(--ember); display:block; }
+.story-stats .num{ font-family:'Anton',sans-serif; font-size: 2.2rem; color: var(--ember-dark); display:block; }
 .story-stats .lbl{ color: var(--muted); font-size: 0.9rem; }
 
 /* ---------- MENU ---------- */
@@ -158,13 +269,15 @@ h2{ font-family:'Anton', sans-serif; font-size: clamp(2rem, 4vw, 3rem); color: v
   position: sticky; top: 65px; z-index: 40; background: var(--bg);
 }
 .cat-tabs::-webkit-scrollbar{ display:none; }
+/* Category tabs — the approved pattern: solid-ember active pill,
+   tab-inactive-bg/tab-inactive-text inactive pill, no border. */
 .cat-tab{
-  background: var(--bg-card); border: 1px solid var(--line); color: var(--muted); padding: 9px 16px;
+  background: var(--tab-inactive-bg); border: none; color: var(--tab-inactive-text); padding: 9px 18px;
   border-radius: 999px; font-size: 0.88rem; font-weight: 600; cursor:pointer; transition: all 0.15s ease; white-space: nowrap;
   flex: 0 0 auto;
 }
-.cat-tab:hover{ color: var(--cream); border-color: var(--ember-dim); }
-.cat-tab.active{ background: var(--ember); color:#1A0D06; border-color: var(--ember); }
+.cat-tab:hover{ color: var(--cream); }
+.cat-tab.active{ background: var(--ember); color: var(--text-on-accent); }
 .menu-category{ display:block; border-top: 1px solid var(--line); padding-top: 8px; scroll-margin-top: 130px; }
 .teaser-cats{ display:flex; gap: 8px; flex-wrap: wrap; margin: 18px 0 0; }
 .menu-category h3.cat-title{ font-family:'Anton', sans-serif; font-size: 1.7rem; letter-spacing: 0.02em; color: var(--cream); margin: 26px 0 14px; }
@@ -172,31 +285,37 @@ h2{ font-family:'Anton', sans-serif; font-size: clamp(2rem, 4vw, 3rem); color: v
 
 .menu-item{
   display:flex; align-items:center; justify-content:space-between; gap: 16px;
-  background: var(--bg-card); border: 1px solid var(--line); border-radius: 16px;
-  padding: 20px; margin: 0 0 14px; cursor:pointer; border-radius: 16px;
+  background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 20px; margin: 0 0 14px; cursor:pointer;
   text-align:left; width:100%; color:inherit; transition: border-color 0.15s ease;
 }
-.menu-item:hover, .menu-item:focus-visible{ border-color: var(--ember-dim); }
+.menu-item:hover, .menu-item:focus-visible{ border-color: var(--ember-dark); }
 .menu-item:active{ border-color: var(--ember); }
-.menu-item.active{ border-color: var(--ember); background: rgba(255, 106, 61, 0.08); }
+.menu-item.active{ border-color: var(--ember); background: rgba(232, 98, 42, 0.08); }
 .menu-item-info{ flex:1; min-width:0; display:flex; flex-direction:column; gap: 10px; }
 .menu-item .name-row{ display:flex; align-items:baseline; gap: 10px; flex-wrap:wrap; }
 .menu-item h3{ font-size: 1.2rem; margin:0; color: var(--cream); font-weight:700; line-height:1.3; }
 .menu-item .tag{ font-size: 0.7rem; color: var(--gold); border: 1px solid var(--gold); border-radius: 3px; padding: 2px 7px; font-weight:600; }
 .menu-item .desc{ color: var(--muted); font-size: 0.88rem; max-width: 40ch; }
+/* Product-card price per the approved spec: --cream, not the accent
+   color (this codebase previously used --ember here). */
 .menu-item .price{
-  font-family:'Anton', sans-serif; color: var(--ember); font-size: 1.5rem; white-space: nowrap;
+  font-family:'Anton', sans-serif; color: var(--cream); font-size: 1.5rem; white-space: nowrap;
 }
+/* This site uses real product photography, not the mockup's generic
+   icon tiles, so --icon-color (for a monochrome glyph) doesn't apply
+   here — --icon-bg is used only as the neutral backing-plate color
+   behind/around the photo, replacing the old hardcoded #fff. */
 .menu-item-thumb{
-  position: relative; width: 116px; height: 116px; border-radius: 14px; overflow: visible;
-  background: #fff; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+  position: relative; width: 116px; height: 116px; border-radius: 10px; overflow: visible;
+  background: var(--icon-bg); flex-shrink:0; display:flex; align-items:center; justify-content:center;
 }
-.menu-item-thumb img{ width:100%; height:100%; object-fit:cover; border-radius: 14px; }
+.menu-item-thumb img{ width:100%; height:100%; object-fit:cover; border-radius: 10px; }
 .add-btn{
   position: absolute; right: -8px; bottom: -8px; width: 40px; height: 40px; border-radius: 50%;
-  border: 3px solid var(--bg-card); background: var(--ember); color: #1A0D06; font-size: 1.4rem;
+  border: 3px solid var(--bg-card); background: var(--ember); color: var(--text-on-accent); font-size: 1.4rem;
   font-weight:700; line-height:1; display:flex; align-items:center; justify-content:center;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.16); pointer-events: none;
 }
 .menu-note{ margin-top: 24px; color: var(--muted); font-size: 0.88rem; }
 
@@ -215,18 +334,26 @@ h2{ font-family:'Anton', sans-serif; font-size: clamp(2rem, 4vw, 3rem); color: v
 }
 .map-pin{
   position:absolute; left:52%; top:46%; width:16px; height:16px; border-radius: 50% 50% 50% 0;
-  background: var(--ember); transform: rotate(-45deg); box-shadow: 0 0 0 6px rgba(255,106,61,0.15);
+  background: var(--ember); transform: rotate(-45deg); box-shadow: 0 0 0 6px rgba(232, 98, 42, 0.15);
 }
 
-/* ---------- CTA STRIP ---------- */
-.cta-strip{ background: linear-gradient(120deg, var(--maroon), #4A150C); text-align:center; padding: 72px 24px; }
-.cta-strip h2{ margin-bottom: 12px; }
-.cta-strip p{ color: #E8CFC2; margin: 0 0 30px; }
+/* ---------- CTA STRIP ----------
+   --maroon retired (had no role in the new palette and no other usage
+   anywhere in the site or admin). This strip now uses the same
+   solid-ember treatment as the hero, which makes it the one place in
+   this codebase where the approved mockup's "inverted CTA" (light
+   background, ember text) genuinely applies — see .cta-strip
+   .btn-primary below. */
+.cta-strip{ background: var(--header-bg); text-align:center; padding: 72px 24px; }
+.cta-strip h2{ margin-bottom: 12px; color: var(--header-text); }
+.cta-strip p{ color: var(--text-on-accent-muted); margin: 0 0 30px; }
+.cta-strip .btn-primary{ background: var(--bg-card); color: var(--ember-dark); }
+.cta-strip .btn-primary:hover{ background: var(--icon-bg); color: var(--ember-dark); }
 .btn-primary{
-  background: var(--ember); color: #1A0D06; padding: 15px 28px; border-radius: var(--radius); font-weight: 700;
+  background: var(--ember); color: var(--text-on-accent); padding: 15px 28px; border-radius: 10px; font-weight: 700;
   font-size: 1rem; display:inline-block; border: none; cursor: pointer; transition: transform 0.15s ease, background 0.2s ease;
 }
-.btn-primary:hover{ background: var(--gold); transform: translateY(-2px); }
+.btn-primary:hover{ background: var(--ember-dark); transform: translateY(-2px); }
 .btn-primary:disabled{ opacity:0.5; cursor:not-allowed; transform:none; }
 .menu-teaser{ padding: 28px 0 56px; }
 .menu-teaser .btn-primary{ display:block; width:100%; text-align:center; box-sizing:border-box; }
@@ -241,17 +368,17 @@ footer{ padding: 56px 0 32px; }
   position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 500;
   max-width: 720px; margin: 0 auto;
   background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 18px 20px; box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+  padding: 18px 20px; box-shadow: 0 12px 32px rgba(35,29,25,0.18);
 }
 .cookie-banner-main{ display:flex; flex-wrap:wrap; align-items:center; gap: 14px; }
 .cookie-banner p{ flex: 1; min-width: 220px; color: var(--muted); font-size: 0.85rem; margin: 0; line-height: 1.5; }
 .cookie-banner a{ color: var(--cream); text-decoration: underline; }
 .cookie-banner-actions{ display:flex; flex-wrap: wrap; gap: 8px; flex-shrink:0; width: 100%; }
 .cookie-btn{ border-radius: 8px; padding: 10px 18px; font-weight: 700; font-size: 0.85rem; cursor:pointer; white-space:nowrap; }
-.cookie-btn-primary{ background: var(--ember); color: #1A0D06; border:none; flex: 1; min-width: 120px; }
-.cookie-btn-primary:hover{ background: var(--gold); }
+.cookie-btn-primary{ background: var(--ember); color: var(--text-on-accent); border:none; flex: 1; min-width: 120px; }
+.cookie-btn-primary:hover{ background: var(--ember-dark); }
 .cookie-btn-outline{ background:none; color: var(--cream); border: 1px solid var(--line); flex: 1; min-width: 120px; }
-.cookie-btn-outline:hover{ border-color: var(--ember-dim); }
+.cookie-btn-outline:hover{ border-color: var(--ember-dark); }
 .cookie-btn-ghost{ background:none; color: var(--muted); border: none; text-decoration: underline; padding: 10px 4px; flex-basis: 100%; text-align: left; }
 .cookie-settings{ margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); display:flex; flex-direction:column; gap: 14px; }
 .cookie-settings-row{ display:flex; align-items:flex-start; justify-content:space-between; gap: 16px; }
@@ -261,7 +388,7 @@ footer{ padding: 56px 0 32px; }
 
 /* ---------- STORE CLOSED BANNER ---------- */
 .store-closed-banner{
-  background: #FF6A5C; color: #1A0D06; text-align: center; font-weight: 700;
+  background: var(--danger); color: var(--header-text); text-align: center; font-weight: 700;
   font-size: 0.85rem; padding: 10px 16px;
 }
 /* Growth features batch 2 (Feature 5) — reuses .store-closed-banner's
@@ -269,7 +396,7 @@ footer{ padding: 56px 0 32px; }
    color: red reads as a "we're closed" warning, wrong tone for a
    promotional discount banner. */
 .store-closed-banner.scheduled-offer-banner{
-  background: var(--gold, #E3A73B); color: #1A0D06;
+  background: var(--gold, #7D5A16); color: var(--header-text);
 }
 /* Growth features (Feature 4 — referral program) added a 4th column
    (the Footer.tsx referral form) — widened from the original 3-column
@@ -277,15 +404,16 @@ footer{ padding: 56px 0 32px; }
 .footer-grid{ display:grid; grid-template-columns: 1.3fr 0.9fr 0.9fr 1fr; gap: 32px; padding-bottom: 40px; border-bottom: 1px solid var(--line); }
 .footer-grid h4{ color: var(--cream); font-size: 0.95rem; margin: 0 0 16px; }
 .footer-grid a{ display:block; color: var(--muted); padding: 6px 0; font-size: 0.94rem; }
-.footer-grid a:hover{ color: var(--ember); }
+.footer-grid a:hover{ color: var(--ember-dark); }
 /* Growth features (Feature 4 — referral program) — the Footer.tsx email
    input has no styling of its own otherwise (this project has no global
    input appearance rule — see body{} above — every other form on this
    site is styled by its own page-specific class like .track-form input,
    .checkout-page input), so without this it would render as an
-   unstyled, white, theme-clashing browser-default input. */
+   unstyled, white, theme-clashing browser-default input. Uses the same
+   bg-card + border-color input pattern as the rest of the site's forms. */
 .footer-grid input[type="email"]{
-  background: var(--bg); border: 1px solid var(--line); color: var(--cream);
+  background: var(--bg-card); border: 1px solid var(--line); color: var(--cream);
   padding: 9px 10px; border-radius: 5px; font-size: 0.9rem;
 }
 .footer-grid input[type="email"]:focus{ border-color: var(--ember); outline: none; }
@@ -298,8 +426,11 @@ footer{ padding: 56px 0 32px; }
   padding: 5px 8px; border-radius: 6px; transition: color 0.2s ease, background 0.2s ease;
 }
 .lang-switcher-opt:hover{ color: var(--cream); }
-.lang-switcher-opt.active{ color: var(--ember); background: rgba(255,106,61,0.12); }
-.lang-switcher-sep{ color: var(--line); }
+.lang-switcher-opt.active{ color: var(--ember-dark); background: rgba(232, 98, 42, 0.12); }
+/* --line's role is now strictly "thin borders" (#E7E1D6) — far too
+   light to use as text color, unlike the old dark theme where the same
+   variable happened to work for both. Uses --muted instead. */
+.lang-switcher-sep{ color: var(--muted); }
 .footer .lang-switcher{ margin-top: 14px; }
 .mobile-nav-lang{ margin-top: 10px; }
 
@@ -339,34 +470,43 @@ footer{ padding: 56px 0 32px; }
 .bundle-modal.open{ transform: translateX(0); visibility: visible; }
 .bundle-picker{ padding: 20px 0; }
 .btn-secondary{
-  background: transparent; color: var(--ember); border: 1px solid var(--ember-dim);
+  background: transparent; color: var(--ember-dark); border: 1px solid var(--ember-dark);
   padding: 10px 16px; border-radius: var(--radius); font-weight: 700; font-size: 0.9rem; cursor: pointer;
 }
-.btn-secondary:hover{ background: rgba(255,106,61,0.1); }
+.btn-secondary:hover{ background: rgba(232, 98, 42, 0.1); }
 
 /* ---------- FEATURED CARD (homepage promo: banner / product / bundle) ---------- */
 .featured-section{ padding: 28px 0 0; }
 .featured-card{
   display:block; width:100%; position:relative; text-align:left; padding:0; border:none; cursor:pointer;
-  background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius); overflow:hidden;
+  background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px; overflow:hidden;
 }
 .featured-badge{
-  position:absolute; top:14px; right:14px; background: var(--ember); color:#1A0D06;
+  position:absolute; top:14px; right:14px; background: var(--ember); color:var(--text-on-accent);
   font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; padding: 6px 14px; border-radius: 999px; z-index: 2;
 }
 .featured-img{ display:block; width:100%; height: 180px; object-fit: cover; }
+/* Was a translucent dark scrim (rgba over the old near-black --bg) —
+   worked as a "glass" effect on a dark theme, but would sit under dark
+   --cream text and become illegible on light backgrounds. Uses the
+   plain product-card surface (--bg-card) instead. */
 .featured-info{
   display:flex; justify-content:space-between; align-items:center; padding: 16px 18px;
-  background: rgba(23,17,13,0.6);
+  background: var(--bg-card);
 }
 .featured-name{ font-weight: 700; color: var(--cream); font-size: 1.05rem; }
-.featured-price{ font-family:'Anton', sans-serif; color: var(--ember); font-size: 1.2rem; }
+/* Product-card price per the approved spec: --cream, not the accent
+   color. */
+.featured-price{ font-family:'Anton', sans-serif; color: var(--cream); font-size: 1.2rem; }
+/* Was a translucent dark bar (rgba over the old near-black --bg) used
+   as page chrome, not a photo overlay — switched to the solid
+   bg-card surface used for the persistent nav, for the same reason. */
 .pp-topbar{
   display:flex; align-items:center; justify-content:space-between; padding: 14px 18px;
-  background: rgba(23,17,13,0.96); border-bottom: 1px solid var(--line); flex-shrink:0;
+  background: var(--bg-card); border-bottom: 1px solid var(--line); flex-shrink:0;
 }
 .pp-topbar-title{ font-family:'Anton', sans-serif; font-size: 1.1rem; color: var(--cream); }
-.pp-topbar-title span{ color: var(--ember); }
+.pp-topbar-title span{ color: var(--ember-dark); }
 .pp-back, .pp-cart{ background:none; border:none; color: var(--cream); font-size: 1.3rem; cursor:pointer; padding: 4px 8px; line-height:1; }
 .pp-scroll{ flex:1; overflow-y:auto; -webkit-overflow-scrolling: touch; }
 
@@ -376,16 +516,19 @@ footer{ padding: 56px 0 32px; }
   background: var(--bg-alt); height: 260px; overflow:hidden;
 }
 .pp-hero-img{ width:100%; height:100%; object-fit: cover; }
+/* This gradient dims the product PHOTO itself for legibility of
+   whatever sits over it — a photo scrim, not page chrome — so it stays
+   dark regardless of site theme, same as any photo-overlay pattern. */
 .pp-hero::after{
   content:""; position:absolute; inset:0;
   background: linear-gradient(to top, rgba(23,17,13,0.9) 0%, rgba(23,17,13,0.05) 55%, transparent 100%);
 }
 .pp-price-badge{
   position:absolute; right: 20px; bottom: -26px; z-index: 2;
-  background: linear-gradient(155deg, var(--ember), var(--ember-dim)); color: #1A0D06;
+  background: linear-gradient(155deg, var(--ember), var(--ember-dark)); color: var(--text-on-accent);
   display:flex; flex-direction:column; align-items:center; justify-content:center;
   width: 96px; height: 96px; border-radius: 50%;
-  box-shadow: 0 12px 26px rgba(0,0,0,0.5), 0 0 0 4px var(--bg);
+  box-shadow: 0 12px 26px rgba(35,29,25,0.35), 0 0 0 4px var(--bg);
 }
 .pp-price-badge .pp-price-row{ display:flex; align-items:baseline; font-family:'Anton', sans-serif; font-size: 1.75rem; }
 .pp-price-dec{ font-size: 0.95rem; align-self:flex-start; margin-top:2px; }
@@ -396,8 +539,10 @@ footer{ padding: 56px 0 32px; }
 .pp-desc{ color: var(--muted); font-size: 1rem; margin: 0 0 28px; }
 .pp-label{ color: var(--gold); font-weight:700; font-size: 0.8rem; letter-spacing: 0.05em; text-transform: uppercase; margin: 0 0 12px; }
 .pp-toggle{ display:flex; border: 1px solid var(--line); border-radius: 999px; overflow:hidden; }
-.pp-toggle-opt{ flex:1; background: transparent; border:none; color: var(--muted); padding: 14px 10px; font-weight:700; font-size: 0.95rem; cursor:pointer; transition: background 0.15s ease, color 0.15s ease; }
-.pp-toggle-opt.active{ background: var(--ember); color: #1A0D06; }
+/* Same filled active/inactive pill convention as the category tabs
+   (.cat-tab), extended here rather than inventing a new toggle style. */
+.pp-toggle-opt{ flex:1; background: var(--tab-inactive-bg); border:none; color: var(--tab-inactive-text); padding: 14px 10px; font-weight:700; font-size: 0.95rem; cursor:pointer; transition: background 0.15s ease, color 0.15s ease; }
+.pp-toggle-opt.active{ background: var(--ember); color: var(--text-on-accent); }
 .pp-toggle-sub{ display:block; font-size: 0.7rem; font-weight:500; opacity: 0.85; margin-top: 2px; }
 .pp-finish-row{ display:flex; gap: 12px; overflow-x:auto; padding-bottom: 6px; -webkit-overflow-scrolling: touch; scrollbar-width:none; }
 .pp-finish-row::-webkit-scrollbar{ display:none; }
@@ -408,8 +553,12 @@ footer{ padding: 56px 0 32px; }
 .pp-finish-tile .emoji{ font-size: 1.9rem; display:block; margin-bottom: 8px; }
 .pp-finish-tile .fname{ color: var(--cream); font-size: 0.78rem; font-weight:600; display:block; line-height:1.25; min-height: 2.2em; }
 .pp-finish-tile .fprice{ color: var(--muted); font-size: 0.72rem; }
-.pp-finish-tile.selected{ border-color: var(--ember); background: rgba(255,106,61,0.12); }
-.pp-finish-tile.selected .fprice{ color: var(--ember); font-weight:700; }
+.pp-finish-tile.selected{ border-color: var(--ember); background: rgba(232, 98, 42, 0.12); }
+/* Kept as the accent color deliberately: this marks the currently
+   SELECTED option's price (an interactive selection state), which is a
+   different role from the static listing prices the brief's product-
+   card spec covers — those were changed to --cream, this wasn't. */
+.pp-finish-tile.selected .fprice{ color: var(--ember-dark); font-weight:700; }
 .pp-footer{ display:flex; align-items:center; gap: 14px; padding: 14px 18px; border-top: 1px solid var(--line); background: var(--bg-alt); flex-shrink:0; }
 .pp-qty{ display:flex; align-items:center; gap: 14px; background: var(--bg-card); border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; flex-shrink:0; }
 .pp-qty button{ width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--bg); color: var(--cream); font-size: 1.1rem; cursor:pointer; }
@@ -418,34 +567,39 @@ footer{ padding: 56px 0 32px; }
 
 /* ---------- PRODUCT PAGE — bottom accordion / fillings (moved out of
    ProductPage.js's <style jsx> block; static export was not reliably
-   loading component-scoped styles, so these now live here as plain CSS) --- */
+   loading component-scoped styles, so these now live here as plain CSS)
+   ---
+   All the raw hex literals below were a second, disconnected copy of
+   the old dark palette (never routed through CSS variables at all) —
+   mapped onto the new shared variables here as part of the "genuine
+   palette swap, not partial" instruction. --- */
 .pp-section { margin-top: 28px; }
 .pp-heading {
-  font-size: 22px; font-weight: 800; color: #f5ede4; margin: 0 0 12px;
+  font-size: 22px; font-weight: 800; color: var(--cream); margin: 0 0 12px;
 }
 .pp-empty-hint {
-  font-size: 14px; color: #a89a8c; margin: 0; padding: 14px 16px;
-  background: #1c140f; border-radius: 10px;
+  font-size: 14px; color: var(--muted); margin: 0; padding: 14px 16px;
+  background: var(--bg-card); border-radius: 10px;
 }
 
 .pp-fillings-list, .pp-cat-body {
-  border: 1px solid #3a2c22; border-radius: 12px; overflow: hidden;
+  border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
 }
 .pp-filling-row {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 16px; border-bottom: 1px solid #2a2018; background: #1c140f;
+  padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--bg-card);
   border: 1px solid transparent; border-radius: 10px; transition: border-color 0.15s ease;
 }
 .pp-filling-row.active {
-  border-color: rgba(255,106,61,0.55);
+  border-color: rgba(232, 98, 42, 0.55);
 }
 .pp-filling-row:last-child { border-bottom: none; }
 .pp-filling-row .fname {
-  font-size: 15px; color: #f0e6da; background:none; border:none; padding:0; margin:0;
+  font-size: 15px; color: var(--cream); background:none; border:none; padding:0; margin:0;
   text-align:left; cursor:pointer; font-family:inherit; flex:1;
 }
-.pp-filling-row .fname:hover, .pp-filling-row .fname:focus-visible{ color: var(--ember); }
-.pp-filling-row .fprice, .fqty-badge { color: #f0793f; font-weight: 700; }
+.pp-filling-row .fname:hover, .pp-filling-row .fname:focus-visible{ color: var(--ember-dark); }
+.pp-filling-row .fprice, .fqty-badge { color: var(--ember-dark); font-weight: 700; }
 
 .pp-qty-stepper {
   display: flex; align-items: center; gap: 10px;
@@ -455,24 +609,24 @@ footer{ padding: 56px 0 32px; }
   font-size: 18px; font-weight: 700; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
 }
-.pp-qty-stepper button:first-child { background: #3a1f18; color: #e5533d; }
-.pp-qty-stepper button:last-child { background: #3a2a14; color: #f0973f; }
+.pp-qty-stepper button:first-child { background: var(--icon-bg); color: var(--ember-dark); }
+.pp-qty-stepper button:last-child { background: var(--icon-bg); color: var(--ember-dark); }
 .pp-qty-stepper button:disabled { opacity: 0.35; cursor: default; }
-.pp-qty-stepper span { min-width: 16px; text-align: center; font-weight: 700; color: #f0e6da; }
+.pp-qty-stepper span { min-width: 16px; text-align: center; font-weight: 700; color: var(--cream); }
 
 .pp-swatch-row {
   display: flex; align-items: center; gap: 12px;
-  border: 1px solid #3a2c22; border-radius: 12px; padding: 12px 16px; background: #1c140f;
+  border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; background: var(--bg-card);
 }
 .pp-swatch {
   width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0;
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid rgba(35,29,25,0.15);
 }
 .pp-swatch-sm { width: 18px; height: 18px; border-radius: 5px; }
-.pp-swatch-label { flex: 1; font-size: 15px; color: #f0e6da; }
+.pp-swatch-label { flex: 1; font-size: 15px; color: var(--cream); }
 
 .change-btn {
-  color: #f0793f; font-weight: 700; font-size: 14px; border: none;
+  color: var(--ember-dark); font-weight: 700; font-size: 14px; border: none;
   background: none; cursor: pointer; display: inline-flex; align-items: center; gap: 2px;
 }
 .chev { display: inline-block; transition: transform 0.15s ease; }
@@ -480,47 +634,49 @@ footer{ padding: 56px 0 32px; }
 
 .pp-bottom-row-head, .pp-select-head {
   width: 100%; display: flex; align-items: center; justify-content: space-between;
-  background: #1c140f; border: none; padding: 14px 16px; cursor: pointer;
-  font-size: 15px; color: #f0e6da; text-align: left;
+  background: var(--bg-card); border: none; padding: 14px 16px; cursor: pointer;
+  font-size: 15px; color: var(--cream); text-align: left;
 }
-.pp-bottom-row { border: 1px solid #3a2c22; border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
-.pp-select-box { border: 1px solid #f0793f; border-radius: 12px; overflow: hidden; }
+.pp-bottom-row { border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
+.pp-select-box { border: 1px solid var(--ember); border-radius: 12px; overflow: hidden; }
 
-.pp-bottom-options { border-top: 1px solid #2a2018; }
+.pp-bottom-options { border-top: 1px solid var(--line); }
 .pp-bottom-options label {
   display: flex; align-items: center; gap: 10px;
-  padding: 12px 16px; font-size: 14px; color: #f0e6da;
-  border-bottom: 1px solid #2a2018; cursor: pointer; background: #150f0c;
+  padding: 12px 16px; font-size: 14px; color: var(--cream);
+  border-bottom: 1px solid var(--line); cursor: pointer; background: var(--bg);
 }
 .pp-bottom-options label:last-child { border-bottom: none; }
-.pp-bottom-options label.is-current { background: #2a1f14; font-weight: 700; }
-.pp-bottom-options .opt-delta { margin-left: auto; color: #f0793f; font-weight: 700; }
+.pp-bottom-options label.is-current { background: rgba(232, 98, 42, 0.1); font-weight: 700; }
+.pp-bottom-options .opt-delta { margin-left: auto; color: var(--ember-dark); font-weight: 700; }
 
 .pp-cat-list { display: flex; flex-direction: column; gap: 10px; }
-.pp-cat { background: #2a2018; border-radius: 12px; overflow: hidden; }
+.pp-cat { background: var(--bg-card); border-radius: 12px; overflow: hidden; }
 .pp-cat-head {
   width: 100%; display: flex; align-items: center; gap: 12px;
   background: none; border: none; padding: 16px; cursor: pointer;
-  font-size: 17px; font-weight: 700; color: #f5ede4; text-align: left;
+  font-size: 17px; font-weight: 700; color: var(--cream); text-align: left;
 }
 .pp-cat-icon { font-size: 18px; }
 .pp-cat-title { flex: 1; }
+/* Left as-is deliberately — an unrelated blue "New" badge, already
+   high-contrast and outside the warm palette's scope. */
 .pp-cat-badge {
   background: #1e5fa8; color: #fff; font-size: 11px; font-weight: 700;
   padding: 3px 8px; border-radius: 5px;
 }
 .pp-cat-chev { font-size: 20px; }
-.pp-cat-body { background: #1c140f; }
+.pp-cat-body { background: var(--bg-card); }
 
-.pp-details-list { border-top: 1px solid #3a2c22; }
-.pp-details-row { border-bottom: 1px solid #3a2c22; }
+.pp-details-list { border-top: 1px solid var(--line); }
+.pp-details-row { border-bottom: 1px solid var(--line); }
 .pp-details-head {
   width: 100%; display: flex; align-items: center; justify-content: space-between;
   background: none; border: none; padding: 16px 0; cursor: pointer;
-  font-size: 17px; font-weight: 700; color: #f5ede4; text-align: left;
+  font-size: 17px; font-weight: 700; color: var(--cream); text-align: left;
 }
 .pp-details-body {
-  margin: 0 0 16px; font-size: 14px; line-height: 1.5; color: #a89a8c;
+  margin: 0 0 16px; font-size: 14px; line-height: 1.5; color: var(--muted);
 }
 
 /* ---------- CART DRAWER ---------- */
@@ -541,13 +697,13 @@ footer{ padding: 56px 0 32px; }
 .cart-line-body{ flex:1; min-width:0; }
 .cart-line-top{ display:flex; justify-content:space-between; gap: 10px; }
 .cart-line h4{ margin:0; font-size: 0.98rem; color: var(--cream); }
-.cart-line .line-price{ font-family:'Anton',sans-serif; color: var(--ember); white-space:nowrap; }
+.cart-line .line-price{ font-family:'Anton',sans-serif; color: var(--ember-dark); white-space:nowrap; }
 .cart-line .line-meta{ color: var(--muted); font-size: 0.82rem; margin-top: 4px; }
 .cart-line .remove-btn{ background:none; border:none; color: var(--muted); font-size: 0.78rem; cursor:pointer; margin-top: 6px; text-decoration: underline; padding:0; }
 .cart-empty{ color: var(--muted); font-size: 0.94rem; padding: 30px 0; text-align:center; }
 .cart-footer{ padding: 18px 22px 22px; border-top: 1px solid var(--line); }
 .cart-total-row{ display:flex; justify-content:space-between; font-size: 1.05rem; margin-bottom: 14px; }
-.cart-total-row span:last-child{ font-family:'Anton',sans-serif; color: var(--ember); }
+.cart-total-row span:last-child{ font-family:'Anton',sans-serif; color: var(--ember-dark); }
 
 /* ---------- CHECKOUT FULL PAGE (not a popup) ---------- */
 .checkout-page{
@@ -572,32 +728,32 @@ footer{ padding: 56px 0 32px; }
   border-bottom: 1px solid var(--line); border-radius: 10px;
   transition: background 0.2s ease; cursor: pointer;
 }
-.extra-list-row.in-cart{ background: rgba(255,106,61,0.12); }
-.extra-list-row.just-added{ background: rgba(255,106,61,0.22); }
+.extra-list-row.in-cart{ background: rgba(232, 98, 42, 0.12); }
+.extra-list-row.just-added{ background: rgba(232, 98, 42, 0.22); }
 .extra-list-row img{ width: 56px; height: 56px; border-radius: 8px; object-fit:cover; flex-shrink:0; border: 1px solid var(--line); }
 .extra-list-body{ flex:1; min-width:0; display:flex; flex-direction:column; gap: 2px; }
 .extra-list-name{ font-weight:700; color: var(--cream); }
 .extra-list-price{ color: var(--muted); font-size: 0.85rem; }
 .extra-list-added{
-  flex-direction:row; align-items:center; gap: 8px; font-weight:700; color: var(--ember); font-size: 1rem;
+  flex-direction:row; align-items:center; gap: 8px; font-weight:700; color: var(--ember-dark); font-size: 1rem;
 }
 .extra-added-check{
-  width: 22px; height: 22px; border-radius:50%; background: var(--ember); color:#1A0D06;
+  width: 22px; height: 22px; border-radius:50%; background: var(--ember); color: var(--text-on-accent);
   display:flex; align-items:center; justify-content:center; font-size: 0.8rem; flex-shrink:0;
 }
 .extra-list-add{
   flex-shrink:0; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--ember);
-  background: transparent; color: var(--ember); font-size: 1.2rem; font-weight:700; cursor:pointer;
+  background: transparent; color: var(--ember-dark); font-size: 1.2rem; font-weight:700; cursor:pointer;
   display:flex; align-items:center; justify-content:center; line-height:1; transition: background 0.15s ease, color 0.15s ease;
 }
-.extra-list-add:hover{ background: rgba(255,106,61,0.1); }
+.extra-list-add:hover{ background: rgba(232, 98, 42, 0.1); }
 .extra-footer{
   display:flex; padding: 14px 18px; border-top: 1px solid var(--line);
   background: var(--bg-alt); flex-shrink:0;
 }
 .extra-ready-btn{
   width:100%; border-radius: 999px; padding: 16px 20px;
-  box-shadow: 0 10px 26px rgba(0,0,0,0.45);
+  box-shadow: 0 10px 26px rgba(35,29,25,0.25);
 }
 
 /* ---------- CHECKOUT (kotipizza-style steps) ---------- */
@@ -608,8 +764,8 @@ footer{ padding: 56px 0 32px; }
   font-size: 0.78rem; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;
   transition: all 0.2s ease;
 }
-.checkout-step-dot.active{ background: var(--ember); border-color: var(--ember); color: #1A0D06; }
-.checkout-step-dot.done{ background: var(--gold); border-color: var(--gold); color: #1A0D06; }
+.checkout-step-dot.active{ background: var(--ember); border-color: var(--ember); color: var(--text-on-accent); }
+.checkout-step-dot.done{ background: var(--gold); border-color: var(--gold); color: var(--header-text); }
 .checkout-step-label{ font-size: 0.72rem; color: var(--muted); white-space:nowrap; }
 .checkout-step-label.active{ color: var(--cream); font-weight:700; }
 .checkout-step-line{ flex:1; height:1px; background: var(--line); margin-top: 13px; }
@@ -620,7 +776,7 @@ footer{ padding: 56px 0 32px; }
   display:flex; align-items:stretch; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--line);
   background: var(--bg-alt); flex-shrink:0;
 }
-.checkout-footer .btn-primary{ flex: 1; box-shadow: 0 10px 26px rgba(0,0,0,0.45); }
+.checkout-footer .btn-primary{ flex: 1; box-shadow: 0 10px 26px rgba(35,29,25,0.25); }
 
 /* Collapsible mini order summary shown on Details / Payment steps */
 .mini-summary{
@@ -632,7 +788,7 @@ footer{ padding: 56px 0 32px; }
   background-color: var(--bg-card); border:none; color: var(--cream); cursor:pointer; font-size: 0.92rem;
 }
 .mini-summary-head:hover{ background-color: var(--bg-alt); }
-.mini-summary-head b{ color: var(--ember); font-family:'Anton', sans-serif; font-size: 1.05rem; }
+.mini-summary-head b{ color: var(--ember-dark); font-family:'Anton', sans-serif; font-size: 1.05rem; }
 .mini-summary-chev{ color: var(--muted); transition: transform 0.2s ease; }
 .mini-summary-chev.up{ transform: rotate(180deg); }
 .mini-summary-body{ padding: 0 16px 14px; border-top: 1px solid var(--line); }
@@ -641,18 +797,18 @@ footer{ padding: 56px 0 32px; }
 /* Form field validation */
 #checkoutForm label{ display:block; font-size: 0.86rem; color: var(--muted); margin-bottom: 16px; }
 #checkoutForm input{
-  display:block; width:100%; margin-top: 6px; background: var(--bg); border: 1px solid var(--line); color: var(--cream);
+  display:block; width:100%; margin-top: 6px; background: var(--bg-card); border: 1px solid var(--line); color: var(--cream);
   padding: 11px 12px; border-radius: 5px; font-size: 0.95rem; transition: border-color 0.15s ease;
 }
 #checkoutForm input:focus{ border-color: var(--ember); outline:none; }
-#checkoutForm label.has-error input{ border-color: #ff5c5c; }
-.field-error{ display:block; color: #ff5c5c; font-size: 0.78rem; margin-top: 5px; font-weight:600; }
+#checkoutForm label.has-error input{ border-color: var(--danger); }
+.field-error{ display:block; color: var(--danger); font-size: 0.78rem; margin-top: 5px; font-weight:600; }
 
 /* Submit button loading spinner */
 .btn-primary.is-loading{ color: transparent; position:relative; pointer-events:none; }
 .btn-primary.is-loading::after{
   content:''; position:absolute; top:50%; left:50%; width: 18px; height: 18px; margin: -9px 0 0 -9px;
-  border: 2px solid rgba(26,13,6,0.35); border-top-color: #1A0D06; border-radius: 50%;
+  border: 2px solid rgba(28,18,16,0.35); border-top-color: var(--text-on-accent); border-radius: 50%;
   animation: btn-spin 0.7s linear infinite;
 }
 @keyframes btn-spin{ to{ transform: rotate(360deg); } }
@@ -662,16 +818,24 @@ footer{ padding: 56px 0 32px; }
 .checkout-empty p{ margin: 6px 0 22px; }
 .checkout-empty-icon{ font-size: 2.4rem; margin-bottom: 8px; }
 
-.payment-method{ margin: 18px 0 22px; }
-.payment-method > p{ font-size: 0.86rem; color: var(--muted); margin: 0 0 10px; }
+.payment-method{ margin: 18px 0 22px; display:flex; flex-direction:column; gap: 10px; }
+.payment-method > p{ font-size: 0.86rem; color: var(--muted); margin: 0 0 2px; text-transform:uppercase; letter-spacing: 0.03em; font-weight:600; }
+/* Unselected: quiet/neutral, same card language as the rest of the site
+   (var(--line) border, var(--bg-card) fill) — only the chosen method gets
+   the ember highlight below, so with two options it's obvious at a glance
+   which one is active instead of both looking "selected" at once. */
 .pay-option{
-  display:flex; align-items:center; gap: 12px; border: 1px solid var(--ember); background: rgba(255,106,61,0.08);
-  border-radius: 8px; padding: 14px; font-size: 0.94rem; color: var(--cream); cursor:pointer;
+  display:flex; align-items:center; gap: 12px; border: 1px solid var(--line); background: var(--bg-card);
+  border-radius: 10px; padding: 14px; font-size: 0.94rem; color: var(--cream); cursor:pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
+.pay-option:hover{ border-color: var(--ember-dark); }
+.pay-option.selected{ border: 1px solid var(--ember); background: rgba(232, 98, 42, 0.08); }
 .pay-option .pay-icon{
-  width: 34px; height: 34px; border-radius: 50%; background: var(--ember); color:#1A0D06; display:flex; align-items:center;
-  justify-content:center; font-size: 1.1rem; flex-shrink:0;
+  width: 34px; height: 34px; border-radius: 50%; background: var(--bg-alt); color: var(--muted); display:flex; align-items:center;
+  justify-content:center; font-size: 1.1rem; flex-shrink:0; transition: background 0.15s ease, color 0.15s ease;
 }
+.pay-option.selected .pay-icon{ background: var(--ember); color: var(--text-on-accent); }
 .pay-option-text b{ display:block; }
 .pay-option-text span{ color: var(--muted); font-size: 0.82rem; }
 .pay-option input{ accent-color: var(--ember); margin-left:auto; }
@@ -691,7 +855,7 @@ footer{ padding: 56px 0 32px; }
 .cs-qty{ display:flex; align-items:center; gap: 10px; background: var(--bg-card); border:1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
 .cs-qty button{ width: 22px; height: 22px; border-radius:50%; border:1px solid var(--line); background: var(--bg); color: var(--cream); cursor:pointer; font-size: 0.9rem; }
 .cs-remove{ background:none; border:none; color: var(--muted); text-decoration:underline; font-size: 0.8rem; cursor:pointer; padding:0; }
-.cs-price{ font-family:'Anton', sans-serif; color: var(--ember); white-space:nowrap; flex-shrink:0; }
+.cs-price{ font-family:'Anton', sans-serif; color: var(--ember-dark); white-space:nowrap; flex-shrink:0; }
 
 /* ---------- DRINK / EXTRAS TILES (used in checkout upsell rows) ---------- */
 .drink-upsell-row{ display:flex; gap: 12px; overflow-x:auto; padding-bottom: 6px; -webkit-overflow-scrolling: touch; scrollbar-width:none; }
@@ -706,11 +870,16 @@ footer{ padding: 56px 0 32px; }
 .drink-tile .dname{ font-size: 0.78rem; color: var(--cream); font-weight:600; line-height:1.25; min-height: 2.1em; }
 .drink-tile .dprice{ font-size: 0.75rem; color: var(--muted); }
 .drink-add-btn{
-  width: 24px; height: 24px; border-radius:50%; background: var(--ember); color:#1A0D06;
+  width: 24px; height: 24px; border-radius:50%; background: var(--ember); color: var(--text-on-accent);
   font-size: 0.95rem; font-weight:700; display:flex; align-items:center; justify-content:center; margin-top: 2px;
 }
 
-/* ---------- SHORTCUT PILLS (All drinks / Dip the edges / Snacks) ---------- */
+/* ---------- SHORTCUT PILLS (All drinks / Dip the edges / Snacks) ----------
+   Kept as its own bordered-chip convention rather than the filled
+   category-tab treatment — this is a quick-jump chip inside checkout
+   upsell rows, not the primary category navigation the brief's tab
+   spec describes, and it already has a distinct, working active state
+   (outline + accent text) worth preserving. */
 .shortcut-row{ display:flex; gap: 10px; overflow-x:auto; padding: 12px 0 4px; -webkit-overflow-scrolling: touch; scrollbar-width:none; }
 .shortcut-row::-webkit-scrollbar{ display:none; }
 .shortcut-pill{
@@ -719,7 +888,7 @@ footer{ padding: 56px 0 32px; }
   font-size: 0.85rem; font-weight:600; cursor:pointer; transition: border-color 0.15s ease;
 }
 .shortcut-pill:hover{ border-color: var(--ember); }
-.shortcut-pill.active{ border-color: var(--ember); color: var(--ember); }
+.shortcut-pill.active{ border-color: var(--ember); color: var(--ember-dark); }
 .shortcut-thumbs{ display:flex; }
 .shortcut-thumbs img{
   width: 28px; height: 28px; border-radius: 50%; object-fit: cover; border: 2px solid var(--bg-card);
@@ -753,7 +922,7 @@ footer{ padding: 56px 0 32px; }
 .upsell-card img{ width: 96px; height: 150px; object-fit:contain; }
 .upsell-card-name{ font-weight:700; color: var(--cream); font-size: 1rem; text-align:center; }
 .upsell-card-btn{
-  background: var(--ember); color:#1A0D06; font-weight:700; font-size: 0.95rem;
+  background: var(--ember); color: var(--text-on-accent); font-weight:700; font-size: 0.95rem;
   padding: 10px 20px; border-radius: 999px; white-space:nowrap; width:100%; text-align:center;
 }
 .upsell-footer{
@@ -772,14 +941,14 @@ footer{ padding: 56px 0 32px; }
 }
 .confirm-box{ text-align:center; padding: 10px 0; }
 .confirm-check{
-  width: 56px; height: 56px; border-radius: 50%; background: var(--ember); color: #1A0D06;
+  width: 56px; height: 56px; border-radius: 50%; background: var(--ember); color: var(--text-on-accent);
   display:flex; align-items:center; justify-content:center; font-size: 1.6rem; font-weight:700;
   margin: 0 auto 16px;
 }
-.confirm-box .big{ font-family:'Anton',sans-serif; font-size: 2rem; color: var(--ember); margin: 10px 0; }
+.confirm-box .big{ font-family:'Anton',sans-serif; font-size: 2rem; color: var(--ember-dark); margin: 10px 0; }
 .confirm-box p{ color: var(--muted); }
 .confirm-box .cod-note{
-  display:flex; align-items:center; gap:10px; background: rgba(255,106,61,0.08); border: 1px solid var(--ember);
+  display:flex; align-items:center; gap:10px; background: rgba(232, 98, 42, 0.08); border: 1px solid var(--ember);
   border-radius: 8px; padding: 14px; margin-top: 16px; text-align:left;
 }
 .confirm-eta{ color: var(--muted); font-size: 0.86rem; margin-top: 10px; }
@@ -789,16 +958,16 @@ footer{ padding: 56px 0 32px; }
 .order-bar{
   position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 310;
   display:flex; align-items:center; gap: 14px;
-  background: var(--ember); color: #1A0D06; border: none;
+  background: var(--ember); color: var(--text-on-accent); border: none;
   border-radius: 999px; padding: 14px 20px;
   font-family: inherit; font-weight: 700; font-size: 1rem; cursor: pointer;
-  box-shadow: 0 10px 26px rgba(0,0,0,0.45);
+  box-shadow: 0 10px 26px rgba(35,29,25,0.3);
   transition: bottom 0.2s ease, transform 0.15s ease;
 }
 .order-bar:active{ transform: scale(0.98); }
 .order-bar.on-product-page{ bottom: 92px; }
 .order-bar-count{
-  background: #1A0D06; color: var(--ember); width: 26px; height: 26px; border-radius: 50%;
+  background: var(--text-on-accent); color: var(--ember); width: 26px; height: 26px; border-radius: 50%;
   display:flex; align-items:center; justify-content:center; font-size: 0.85rem; flex-shrink:0;
 }
 .order-bar-label{ flex:1; text-align:left; }
@@ -816,7 +985,7 @@ footer{ padding: 56px 0 32px; }
 }
 .track-form label{ display:block; font-size: 0.86rem; color: var(--muted); }
 .track-form input{
-  display:block; width:100%; margin-top: 6px; background: var(--bg); border: 1px solid var(--line); color: var(--cream);
+  display:block; width:100%; margin-top: 6px; background: var(--bg-card); border: 1px solid var(--line); color: var(--cream);
   padding: 11px 12px; border-radius: 5px; font-size: 0.95rem; transition: border-color 0.15s ease;
 }
 .track-form input:focus{ border-color: var(--ember); outline:none; }
@@ -830,20 +999,20 @@ footer{ padding: 56px 0 32px; }
   padding: 12px 14px; margin-bottom: 8px; color: var(--cream); font-weight: 700; cursor:pointer; text-align:left;
 }
 .track-recent-btn:last-child{ margin-bottom:0; }
-.track-recent-btn span{ color: var(--ember); font-weight: 700; }
+.track-recent-btn span{ color: var(--ember-dark); font-weight: 700; }
 .track-recent-meta{ color: var(--muted) !important; font-weight: 400 !important; font-size: 0.82rem; }
 .track-lost-link{ background:none; border:none; color: var(--muted); text-decoration: underline; font-size: 0.85rem; cursor:pointer; padding: 12px 0 0; }
 .track-eta{
-  margin: 0 0 6px; padding: 10px 14px; background: rgba(255,106,61,0.12); border: 1px solid var(--ember-dim);
+  margin: 0 0 6px; padding: 10px 14px; background: rgba(232, 98, 42, 0.12); border: 1px solid var(--ember-dark);
   border-radius: 8px; color: var(--cream); font-size: 0.92rem;
 }
 .track-result-head{ display:flex; justify-content:space-between; align-items:flex-start; gap: 12px; flex-wrap:wrap; }
-.track-order-num{ font-family:'Anton', sans-serif; color: var(--ember); font-size: 1.4rem; }
+.track-order-num{ font-family:'Anton', sans-serif; color: var(--ember-dark); font-size: 1.4rem; }
 .track-placed-at{ color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
 
 .track-cancelled{
-  display:flex; align-items:center; gap: 12px; background: rgba(255,92,92,0.08); border: 1px solid #ff5c5c;
-  border-radius: 8px; padding: 14px; color: #ff8a75; margin: 20px 0;
+  display:flex; align-items:center; gap: 12px; background: var(--danger-bg); border: 1px solid var(--danger-border);
+  border-radius: 8px; padding: 14px; color: var(--danger); margin: 20px 0;
 }
 
 .track-items{ border-top: 1px solid var(--line); margin-top: 20px; padding-top: 4px; }

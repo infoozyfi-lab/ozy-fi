@@ -99,6 +99,16 @@ CREATE TABLE orders (
   total              REAL NOT NULL DEFAULT 0,
   status             TEXT NOT NULL DEFAULT 'received',
   payment_method     TEXT NOT NULL DEFAULT 'cod',
+  -- Stripe card payments (worker/migrations/012_stripe_payments.sql).
+  -- payment_status: 'cod' (default, nothing to track) | 'pending' (a card
+  -- order was created and a Stripe PaymentIntent exists for it, unconfirmed)
+  -- | 'paid' (the webhook confirmed the charge — sole source of truth, see
+  -- app/api/webhooks/stripe) | 'failed' (card declined). stripe_payment_
+  -- intent_id is Stripe's own id for the PaymentIntent tied to this order,
+  -- so the webhook (which only receives Stripe ids, never our order_num)
+  -- can look up which order to update.
+  payment_status     TEXT NOT NULL DEFAULT 'cod',
+  stripe_payment_intent_id TEXT,
   estimated_ready_at TEXT,
   -- Phase 7.1: who's delivering this order, set (optionally) from the
   -- Kanban board when moving an order to "on_the_way" — see
@@ -204,6 +214,13 @@ CREATE TABLE bundles (
 -- decides whether an offer is active right now — shared between the
 -- server, which enforces it, and the client, which only uses it for a
 -- banner).
+-- discount_type/discount_value (added by worker/migrations/
+-- 011_shared_discount_value.sql — see that file's header) are the
+-- shared discount-value shape (lib/types.ts's DiscountValue) this
+-- feature was folded into, and are what the app actually reads
+-- (lib/scheduledOffers.ts). discount_percent is kept (NOT NULL, still
+-- written by the admin API — 0 when discount_type is 'amount') per this
+-- project's additive-only migration convention; it's otherwise unused.
 CREATE TABLE scheduled_offers (
   id                TEXT PRIMARY KEY,
   label             TEXT NOT NULL,
@@ -211,6 +228,8 @@ CREATE TABLE scheduled_offers (
   start_time        TEXT,
   end_time          TEXT,
   discount_percent  REAL NOT NULL,
+  discount_type     TEXT NOT NULL DEFAULT 'percent',
+  discount_value    REAL,
   active            INTEGER NOT NULL DEFAULT 1,
   sort_order        INTEGER NOT NULL DEFAULT 0
 );
@@ -219,6 +238,7 @@ CREATE INDEX idx_products_category ON products(category_id);
 CREATE INDEX idx_options_group ON options(group_id);
 CREATE INDEX idx_order_items_order ON order_items(order_id);
 CREATE INDEX idx_orders_status ON orders(status);
+CREATE INDEX idx_orders_stripe_payment_intent_id ON orders (stripe_payment_intent_id);
 
 -- Failed-login tracking for /api/admin/login rate-limiting. Rows older
 -- than a day are pruned opportunistically by the login route itself, so
@@ -313,10 +333,18 @@ CREATE TABLE coupons (
 -- when the order that earned it had no eligible item to apply it to,
 -- until an order that does have one comes in. At most one un-redeemed
 -- row per phone at a time (enforced in app/api/orders/route.ts).
+-- reward_type/reward_value (added by worker/migrations/
+-- 011_shared_discount_value.sql) are the shared discount-value shape
+-- this feature was folded into, and are what the app actually reads.
+-- reward_percent is kept (NOT NULL, still written on every insert — 0
+-- when reward_type is 'amount') per this project's additive-only
+-- migration convention; it's otherwise unused.
 CREATE TABLE stamp_card_pending_rewards (
   id                 INTEGER PRIMARY KEY AUTOINCREMENT,
   phone              TEXT NOT NULL,
   reward_percent     REAL NOT NULL,
+  reward_type        TEXT NOT NULL DEFAULT 'percent',
+  reward_value       REAL,
   earned_at          TEXT NOT NULL DEFAULT (datetime('now')),
   earned_order_num   TEXT NOT NULL,
   redeemed_at        TEXT,

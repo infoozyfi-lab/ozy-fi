@@ -35,7 +35,7 @@ export default function MenuPageClient({
         <p
           style={{
             maxWidth: 720, margin: '24px auto 0', padding: '0 20px',
-            fontSize: '1.05rem', lineHeight: 1.6, color: 'var(--muted, #6b6b6b)', textAlign: 'center',
+            fontSize: '1.05rem', lineHeight: 1.6, color: 'var(--muted, #756B5F)', textAlign: 'center',
           }}
         >
           {introText}

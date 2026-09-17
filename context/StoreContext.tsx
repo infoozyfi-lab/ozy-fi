@@ -32,6 +32,7 @@ import type {
   MenuData,
   ScheduledOffer,
   DiscountSource,
+  DiscountValue,
 } from '@/lib/types';
 
 interface StoreContextValue {
@@ -106,10 +107,11 @@ interface StoreContextValue {
   drinks: Addon[];
   dipCups: Addon[];
   snacks: Addon[];
-  // Growth features — admin-configurable, 0 means "not configured" (see
-  // lib/menu-i18n.ts's normalizeMenuBlob). firstOrderDiscountPercent
-  // drives CheckoutModal.tsx's welcome-discount banner.
-  firstOrderDiscountPercent: number;
+  // Growth features — shared discount-value shape (lib/types.ts's
+  // DiscountValue). value 0 means "not configured" (see lib/menu-i18n.ts's
+  // normalizeMenuBlob). firstOrderDiscount drives CheckoutModal.tsx's
+  // welcome-discount banner.
+  firstOrderDiscount: DiscountValue;
   // Growth features batch 2 (Feature 5) — the scheduled offer that's
   // active RIGHT NOW (Helsinki day/time), recomputed every minute (see
   // the ticking effect below) so the Header/CheckoutModal banners appear
@@ -298,7 +300,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
   const [drinks, setDrinks] = useState<Addon[]>([]);
   const [dipCups, setDipCups] = useState<Addon[]>([]);
   const [snacks, setSnacks] = useState<Addon[]>([]);
-  const [firstOrderDiscountPercent, setFirstOrderDiscountPercent] = useState(0);
+  const [firstOrderDiscount, setFirstOrderDiscount] = useState<DiscountValue>({ type: 'percent', value: 0 });
   const [scheduledOffers, setScheduledOffers] = useState<ScheduledOffer[]>([]);
   // Ticks once a minute so activeScheduledOffer (below) is recomputed
   // without requiring a menu refetch or page reload — same pattern as
@@ -324,12 +326,6 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     const id = setInterval(() => setOfferClockTick((n) => n + 1), 60000);
     return () => clearInterval(id);
   }, []);
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- offerClockTick is a deliberate re-evaluation trigger, not a real dependency of the computation.
-  const activeScheduledOffer = useMemo(
-    () => findBestActiveScheduledOffer(scheduledOffers),
-    [scheduledOffers, offerClockTick]
-  );
 
   useEffect(() => {
     async function loadMenu() {
@@ -373,7 +369,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         setOpeningHours(blob.openingHours);
         setFeatured(blob.featured);
         setPopularProductIds(blob.popularProductIds);
-        setFirstOrderDiscountPercent(blob.firstOrderDiscountPercent);
+        setFirstOrderDiscount(blob.firstOrderDiscount);
         setScheduledOffers(blob.scheduledOffers);
       } catch (err) {
         console.error('Menu loading error:', err);
@@ -670,6 +666,21 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
   }, []);
 
   const cartTotal = useMemo(() => cart.reduce((sum, l) => sum + l.lineTotal, 0), [cart]);
+
+  // Growth features batch 2 (Feature 5) — moved below cartTotal (was
+  // declared right after the scheduledOffers state above) so it can pass
+  // the current cart total as findBestActiveScheduledOffer's `baseAmount`
+  // — shared discount-value pattern (part 2 of this task): "most
+  // favorable" among multiple simultaneously-active offers now needs a
+  // real euro amount to compare against, since an offer's discount can
+  // be either a percent or a flat amount (see that function's own
+  // comment). Falls back to comparing raw values when cartTotal is 0
+  // (empty cart) — same as passing no baseAmount at all.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- offerClockTick is a deliberate re-evaluation trigger, not a real dependency of the computation.
+  const activeScheduledOffer = useMemo(
+    () => findBestActiveScheduledOffer(scheduledOffers, cartTotal || undefined),
+    [scheduledOffers, cartTotal, offerClockTick]
+  );
 
   const goToCheckout = useCallback(() => {
     if (cart.length === 0) return;
@@ -1016,7 +1027,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     drinks,
     dipCups,
     snacks,
-    firstOrderDiscountPercent,
+    firstOrderDiscount,
     activeScheduledOffer,
 
     // Bundles/combos + featured-card settings.

@@ -17,7 +17,7 @@ interface AreaTrendPoint extends AreaTrendDatum {
 // Single-series revenue trend: 2px line + ~10% opacity area wash, hairline
 // gridlines, sparse date ticks, and a hover crosshair + tooltip (line/area
 // charts always ship interaction, per the dataviz interaction spec).
-export default function AreaTrendChart({ data, color = '#FF6A3D', height = 220 }: { data: AreaTrendDatum[]; color?: string; height?: number }) {
+export default function AreaTrendChart({ data, color = '#C14815', height = 220 }: { data: AreaTrendDatum[]; color?: string; height?: number }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const width = 720; // viewBox units; scales responsively via CSS width:100%
@@ -145,7 +145,7 @@ export default function AreaTrendChart({ data, color = '#FF6A3D', height = 220 }
               color: 'var(--cream)',
               pointerEvents: 'none',
               whiteSpace: 'nowrap',
-              boxShadow: '0 6px 18px rgba(0,0,0,0.35)',
+              boxShadow: '0 6px 18px rgba(35,29,25,0.25)',
               zIndex: 2,
             }}
           >

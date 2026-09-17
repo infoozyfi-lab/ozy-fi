@@ -41,8 +41,13 @@ export const ADMIN_TABLES: Record<string, AdminTableDef> = {
   // column meanings and app/api/admin/[table]/route.ts /
   // app/api/admin/[table]/[id]/route.ts for the table-specific
   // validation added alongside `products`' own offer_price check.
+  // discount_type/discount_value (shared discount-value pattern — see
+  // worker/migrations/011_shared_discount_value.sql) added alongside the
+  // legacy discount_percent column, which components/admin/
+  // ScheduledOffersManager.tsx still writes too (0 when amount-shaped)
+  // purely to satisfy that column's NOT NULL constraint.
   scheduled_offers: {
-    cols: ['id', 'label', 'days', 'start_time', 'end_time', 'discount_percent', 'active', 'sort_order'],
+    cols: ['id', 'label', 'days', 'start_time', 'end_time', 'discount_percent', 'discount_type', 'discount_value', 'active', 'sort_order'],
   },
 };
 

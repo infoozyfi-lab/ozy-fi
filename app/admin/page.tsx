@@ -138,7 +138,7 @@ export default function AdminPage() {
         alignItems: 'center',
         justifyContent: 'center',
         padding: '24px',
-        background: '#f7f7f7',
+        background: 'var(--bg, #F7F4EF)',
       }}
     >
       {checking ? null : (
@@ -147,17 +147,17 @@ export default function AdminPage() {
           width: '100%',
           maxWidth: '420px',
           padding: '32px',
-          background: '#fff',
-          border: '1px solid #ddd',
+          background: 'var(--bg-card, #FFFFFF)',
+          border: '1px solid var(--line, #E7E1D6)',
           borderRadius: '16px',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
+          boxShadow: '0 10px 30px rgba(35,29,25,0.10)',
         }}
       >
-        <h1 style={{ marginBottom: '8px' }}>
+        <h1 style={{ marginBottom: '8px', color: 'var(--cream, #231D19)' }}>
           OZY Admin
         </h1>
 
-        <p style={{ marginBottom: '24px', color: '#666' }}>
+        <p style={{ marginBottom: '24px', color: 'var(--muted, #756B5F)' }}>
           {pendingToken ? 'Enter the 6-digit code from your authenticator app.' : 'Sign in to manage your restaurant.'}
         </p>
 
@@ -167,8 +167,8 @@ export default function AdminPage() {
               marginBottom: '16px',
               padding: '12px',
               borderRadius: '8px',
-              background: '#ffe5e5',
-              color: '#b00020',
+              background: 'var(--danger-bg, #FBEAE7)',
+              color: 'var(--danger, #B3261E)',
             }}
           >
             {error}
@@ -194,7 +194,7 @@ export default function AdminPage() {
                   padding: '12px',
                   marginTop: '6px',
                   boxSizing: 'border-box',
-                  border: '1px solid #ccc',
+                  border: '1px solid var(--line, #E7E1D6)',
                   borderRadius: '8px',
                   fontSize: '20px',
                   letterSpacing: '4px',
@@ -212,8 +212,8 @@ export default function AdminPage() {
                 cursor: loading ? 'not-allowed' : 'pointer',
                 border: 'none',
                 borderRadius: '8px',
-                background: '#111',
-                color: '#fff',
+                background: 'var(--ember, #E8622A)',
+                color: 'var(--text-on-accent, #1C1210)',
                 fontSize: '16px',
               }}
             >
@@ -230,7 +230,7 @@ export default function AdminPage() {
                 cursor: 'pointer',
                 border: 'none',
                 background: 'none',
-                color: '#666',
+                color: 'var(--muted, #756B5F)',
                 fontSize: '13px',
               }}
             >
@@ -253,7 +253,7 @@ export default function AdminPage() {
                 padding: '12px',
                 marginTop: '6px',
                 boxSizing: 'border-box',
-                border: '1px solid #ccc',
+                border: '1px solid var(--line, #E7E1D6)',
                 borderRadius: '8px',
               }}
             />
@@ -273,7 +273,7 @@ export default function AdminPage() {
                 padding: '12px',
                 marginTop: '6px',
                 boxSizing: 'border-box',
-                border: '1px solid #ccc',
+                border: '1px solid var(--line, #E7E1D6)',
                 borderRadius: '8px',
               }}
             />
@@ -288,8 +288,8 @@ export default function AdminPage() {
               cursor: loading ? 'not-allowed' : 'pointer',
               border: 'none',
               borderRadius: '8px',
-              background: '#111',
-              color: '#fff',
+              background: 'var(--ember, #E8622A)',
+              color: 'var(--text-on-accent, #1C1210)',
               fontSize: '16px',
             }}
           >

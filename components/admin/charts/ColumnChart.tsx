@@ -10,7 +10,7 @@ interface ColumnChartDatum {
 // single brand hue since there's only one series.
 export default function ColumnChart({
   data,
-  color = '#FF6A3D',
+  color = '#C14815',
   height = 120,
   labelEvery = 4,
 }: {

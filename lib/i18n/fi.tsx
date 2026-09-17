@@ -21,7 +21,9 @@ const fi = {
     cartAriaLabel: 'Ostoskori',
     openMenuAriaLabel: 'Avaa valikko',
     storeClosedBanner: 'Olemme tilapäisesti suljettu emmekä ota juuri nyt vastaan uusia tilauksia.',
-    scheduledOfferBanner: (label: string, pct: number) => `🔥 ${label}: ${pct}% alennus juuri nyt!`,
+    // amountText is a pre-formatted "10%" tai "2.00 €" (jaettu discount-
+    // value-malli — ks. lib/pricing.ts:n describeDiscountValue).
+    scheduledOfferBanner: (label: string, amountText: string) => `🔥 ${label}: ${amountText} alennus juuri nyt!`,
   },
 
   footer: {
@@ -257,8 +259,9 @@ const fi = {
     snacks: 'Naposteltavat',
     added: 'Lisätty',
     // Growth features (Feature 2 — first-order welcome discount).
-    welcomeDiscountBanner: (pct: number) => `🎉 Ensimmäinen tilaus? Saat ${pct}% alennuksen — lisätään automaattisesti kassalla!`,
-    scheduledOfferBanner: (label: string, pct: number) => `🔥 ${label}: ${pct}% alennus — lisätään automaattisesti kassalla!`,
+    // amountText: ks. header.scheduledOfferBanner:n kommentti.
+    welcomeDiscountBanner: (amountText: string) => `🎉 Ensimmäinen tilaus? Saat ${amountText} alennuksen — lisätään automaattisesti kassalla!`,
+    scheduledOfferBanner: (label: string, amountText: string) => `🔥 ${label}: ${amountText} alennus — lisätään automaattisesti kassalla!`,
   },
 
   confirm: {

@@ -8,8 +8,8 @@ export default function manifest() {
     // /fi rather than bouncing through the bare "/" redirect.
     start_url: '/fi',
     display: 'standalone',
-    background_color: '#17110D',
-    theme_color: '#17110D',
+    background_color: '#F7F4EF',
+    theme_color: '#E8622A',
     icons: [
       { src: '/icon.png', sizes: '512x512', type: 'image/png' },
     ],

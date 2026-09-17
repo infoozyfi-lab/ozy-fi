@@ -1,4 +1,5 @@
 import type { CouponRow, CouponValidationResult } from '@/lib/types';
+import { computeDiscountAmount } from '@/lib/pricing';
 
 // Shared coupon validation + discount math — used by BOTH the public
 // preview endpoint (app/api/coupons/validate/route.js, called from
@@ -63,14 +64,18 @@ export async function validateCoupon(env: CloudflareEnv, rawCode: unknown, subto
     };
   }
 
-  let discountAmount = coupon.discount_type === 'percent'
-    ? subtotal * (coupon.discount_value / 100)
-    : coupon.discount_value;
-
-  // Never let a discount take the order below 0 (a flat-amount coupon
-  // bigger than a small order, e.g. "5€ off" on a 3€ item).
-  discountAmount = Math.min(discountAmount, subtotal);
-  discountAmount = Math.round(discountAmount * 100) / 100;
+  // Shared discount-value pattern (see lib/types.ts's DiscountValue) —
+  // this table's own discount_type/discount_value columns are exactly
+  // that shape (they predate this task and are what it generalized), so
+  // this is a pure refactor: same math as before (including the "never
+  // let a discount take the order below 0" clamp for a flat-amount
+  // coupon bigger than a small order), now shared with the other four
+  // growth features via lib/pricing.ts's computeDiscountAmount rather
+  // than duplicated here.
+  const discountAmount = computeDiscountAmount(
+    { type: coupon.discount_type, value: coupon.discount_value },
+    subtotal
+  );
 
   const finalTotal = Math.round((subtotal - discountAmount) * 100) / 100;
 

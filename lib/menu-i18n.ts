@@ -18,6 +18,7 @@
 // See lib/i18n/locales.js's resolveText().
 import { resolveText } from './i18n/locales';
 import { normalizeScheduledOffer } from './scheduledOffers';
+import { readDiscountSetting } from './pricing';
 import type {
   Locale,
   RawCategory,
@@ -173,16 +174,17 @@ export function normalizeMenuBlob(raw: MenuData, locale: Locale): MenuBlob {
   const settings = raw.settings || {};
   const sizeLargeUpcharge = Number(settings.size_large_upcharge) || 0;
   const storeClosed = settings.store_closed === '1';
-  // Growth features — admin-configurable percentages, both 0 (disabled)
-  // until an admin actually sets them in Menu & Pricing's "Pricing
-  // rules" box (same fallback pattern as sizeLargeUpcharge above).
-  const firstOrderDiscountPercent = Number(settings.first_order_discount_percent) || 0;
-  const stampCardRewardPercent = Number(settings.stamp_card_reward_percent) || 0;
+  // Growth features — shared discount-value shape (see lib/types.ts's
+  // DiscountValue). readDiscountSetting falls back to a value of 0 when
+  // unconfigured, same "0 means disabled" behavior these were as bare
+  // percent fields before this task.
+  const firstOrderDiscount = readDiscountSetting(settings, 'first_order_discount');
+  const stampCardReward = readDiscountSetting(settings, 'stamp_card_reward');
   // Growth features batch 2 (Feature 5) — normalize once here (parsing
-  // `days` JSON, coercing discount_percent to a number) rather than in
-  // every consumer. Whether one is active RIGHT NOW is NOT decided here
-  // — see lib/scheduledOffers.ts's findBestActiveScheduledOffer, called
-  // from context/StoreContext.tsx (client) and app/api/orders/route.ts
+  // `days` JSON, resolving the discount shape) rather than in every
+  // consumer. Whether one is active RIGHT NOW is NOT decided here — see
+  // lib/scheduledOffers.ts's findBestActiveScheduledOffer, called from
+  // context/StoreContext.tsx (client) and app/api/orders/route.ts
   // (server, the one that actually enforces it).
   const scheduledOffers = (raw.scheduledOffers || []).map(normalizeScheduledOffer);
   const trackingConfig: TrackingConfig = {
@@ -238,8 +240,8 @@ export function normalizeMenuBlob(raw: MenuData, locale: Locale): MenuBlob {
     openingHours,
     featured,
     popularProductIds,
-    firstOrderDiscountPercent,
-    stampCardRewardPercent,
+    firstOrderDiscount,
+    stampCardReward,
     scheduledOffers,
   };
 }

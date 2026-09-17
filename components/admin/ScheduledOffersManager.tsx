@@ -28,8 +28,8 @@ const btn: CSSProperties = {
   padding: '8px 14px', border: '1px solid var(--line)', borderRadius: '8px',
   background: 'var(--bg-alt)', color: 'var(--cream)', cursor: 'pointer', fontSize: 13, marginRight: 8,
 };
-const btnPrimary: CSSProperties = { ...btn, background: 'var(--ember)', color: '#1A0D06', border: 'none', fontWeight: 700 };
-const btnDanger: CSSProperties = { ...btn, color: '#FF8A75', borderColor: '#5A2A1F' };
+const btnPrimary: CSSProperties = { ...btn, background: 'var(--ember)', color: 'var(--text-on-accent)', border: 'none', fontWeight: 700 };
+const btnDanger: CSSProperties = { ...btn, color: 'var(--danger)', borderColor: 'var(--danger-border)' };
 const th: CSSProperties = { textAlign: 'left', padding: '10px', borderBottom: '2px solid var(--line)', fontSize: 13, color: 'var(--muted)' };
 const td: CSSProperties = { padding: '10px', borderBottom: '1px solid var(--line)', fontSize: 14, color: 'var(--cream)' };
 
@@ -44,13 +44,18 @@ interface OfferFormState {
   allDay: boolean;
   start_time: string;
   end_time: string;
-  discount_percent: string;
+  // Shared discount-value pattern (see lib/types.ts's DiscountValue) —
+  // replaces the old bare discount_percent field; stored to
+  // scheduled_offers.discount_type/discount_value (worker/migrations/
+  // 011_shared_discount_value.sql).
+  discount_type: 'percent' | 'amount';
+  discount_value: string;
   active: boolean;
   sort_order: number | string;
 }
 
 function emptyOffer(): OfferFormState {
-  return { id: '', label: '', days: [], allDay: true, start_time: '17:00', end_time: '21:00', discount_percent: '', active: true, sort_order: 0 };
+  return { id: '', label: '', days: [], allDay: true, start_time: '17:00', end_time: '21:00', discount_type: 'percent', discount_value: '', active: true, sort_order: 0 };
 }
 
 function slugify(text: unknown): string {
@@ -93,6 +98,11 @@ export default function ScheduledOffersManager({ onChanged }: { onChanged?: () =
       days = [];
     }
     const hasWindow = Boolean(row.start_time && row.end_time);
+    // A row from BEFORE migration 011 (discount_type/discount_value both
+    // unset/null) falls back to the old percent-only column — same
+    // "unmigrated data still behaves the way it always did" fallback
+    // lib/scheduledOffers.ts's normalizeScheduledOffer uses.
+    const hasNewShape = row.discount_value !== undefined && row.discount_value !== null && row.discount_value !== '';
     setForm({
       id: row.id,
       label: row.label || '',
@@ -100,7 +110,8 @@ export default function ScheduledOffersManager({ onChanged }: { onChanged?: () =
       allDay: !hasWindow,
       start_time: row.start_time || '17:00',
       end_time: row.end_time || '21:00',
-      discount_percent: String(row.discount_percent ?? ''),
+      discount_type: row.discount_type === 'percent' || row.discount_type === 'amount' ? row.discount_type : 'percent',
+      discount_value: hasNewShape ? String(row.discount_value) : String(row.discount_percent ?? ''),
       active: row.active === undefined ? true : Boolean(row.active),
       sort_order: row.sort_order ?? 0,
     });
@@ -125,8 +136,9 @@ export default function ScheduledOffersManager({ onChanged }: { onChanged?: () =
     setError('');
     try {
       if (form.days.length === 0) throw new Error('Select at least one day.');
-      const pct = Number(form.discount_percent);
-      if (!Number.isFinite(pct) || pct <= 0 || pct > 100) throw new Error('Discount must be a percentage greater than 0 and at most 100.');
+      const discountValue = Number(form.discount_value);
+      if (!Number.isFinite(discountValue) || discountValue <= 0) throw new Error('Discount must be a number greater than 0.');
+      if (form.discount_type === 'percent' && discountValue > 100) throw new Error('A percentage discount can be at most 100.');
 
       const body: Record<string, unknown> = {
         id: form.id || `${slugify(form.label)}-${Date.now().toString(36).slice(-4)}`,
@@ -134,7 +146,13 @@ export default function ScheduledOffersManager({ onChanged }: { onChanged?: () =
         days: JSON.stringify(form.days),
         start_time: form.allDay ? null : form.start_time,
         end_time: form.allDay ? null : form.end_time,
-        discount_percent: pct,
+        discount_type: form.discount_type,
+        discount_value: discountValue,
+        // Legacy column, kept NOT NULL per worker/migrations/
+        // 011_shared_discount_value.sql — still written (0 when
+        // amount-shaped) so the constraint never needs relaxing; no
+        // longer read by app/api/orders/route.ts.
+        discount_percent: form.discount_type === 'percent' ? discountValue : 0,
         active: form.active ? 1 : 0,
         sort_order: Number(form.sort_order) || 0,
       };
@@ -191,7 +209,7 @@ export default function ScheduledOffersManager({ onChanged }: { onChanged?: () =
         )}
       </div>
       <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: -8 }}>
-        A percentage discount that automatically applies at checkout on the day(s) and, optionally,
+        A discount (percent or a flat euro amount) that automatically applies at checkout on the day(s) and, optionally,
         the time window you pick below — e.g. a Monday/Tuesday slow-day boost, or your own Friday
         special. The label you enter here is shown to customers on the homepage and at checkout
         while the offer is live. Never stacks with a coupon code or the first-order discount — if
@@ -199,7 +217,7 @@ export default function ScheduledOffersManager({ onChanged }: { onChanged?: () =
       </p>
 
       {error && (
-        <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: '#3A1712', color: '#FF8A75', border: '1px solid #5A2A1F' }}>
+        <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: 'var(--danger-bg)', color: 'var(--danger)', border: '1px solid var(--danger-border)' }}>
           {error}
         </div>
       )}
@@ -214,8 +232,27 @@ export default function ScheduledOffersManager({ onChanged }: { onChanged?: () =
               <input style={inputStyle} required value={form.label} onChange={(e: ChangeEvent<HTMLInputElement>) => setField('label', e.target.value)} placeholder="e.g. Monday Boost, Pizzaperjantai Special" />
             </label>
             <label>
-              Discount (%)
-              <input style={inputStyle} type="number" min="1" max="100" step="1" required value={form.discount_percent} onChange={(e: ChangeEvent<HTMLInputElement>) => setField('discount_percent', e.target.value)} />
+              Discount
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                <select
+                  style={{ ...inputStyle, marginTop: 0, width: 84, flexShrink: 0 }}
+                  value={form.discount_type}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) => setField('discount_type', e.target.value as 'percent' | 'amount')}
+                >
+                  <option value="percent">%</option>
+                  <option value="amount">€</option>
+                </select>
+                <input
+                  style={{ ...inputStyle, marginTop: 0 }}
+                  type="number"
+                  min="0"
+                  max={form.discount_type === 'percent' ? 100 : undefined}
+                  step={form.discount_type === 'percent' ? '1' : '0.5'}
+                  required
+                  value={form.discount_value}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setField('discount_value', e.target.value)}
+                />
+              </div>
             </label>
             <label>
               Sort order
@@ -278,7 +315,11 @@ export default function ScheduledOffersManager({ onChanged }: { onChanged?: () =
                   <td style={td}>{row.label}</td>
                   <td style={td}>{describeDays(row.days)}</td>
                   <td style={td}>{row.start_time && row.end_time ? `${row.start_time}–${row.end_time}` : 'All day'}</td>
-                  <td style={td}>{Number(row.discount_percent)}%</td>
+                  <td style={td}>
+                    {row.discount_value !== undefined && row.discount_value !== null && row.discount_value !== ''
+                      ? (row.discount_type === 'amount' ? `${Number(row.discount_value).toFixed(2)} €` : `${Number(row.discount_value)}%`)
+                      : `${Number(row.discount_percent)}%`}
+                  </td>
                   <td style={td}>{row.active ? 'Yes' : 'No'}</td>
                   <td style={td}>
                     <button type="button" style={btn} onClick={() => startEdit(row)}>Edit</button>

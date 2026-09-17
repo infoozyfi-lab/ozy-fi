@@ -13,7 +13,7 @@ interface FaqItem {
 
 function FaqRow({ item, isOpen, onToggle }: { item: FaqItem; isOpen: boolean; onToggle: () => void }) {
   return (
-    <div style={{ borderBottom: '1px solid var(--line, #e5e5e5)' }}>
+    <div style={{ borderBottom: '1px solid var(--line, #E7E1D6)' }}>
       <button
         type="button"
         onClick={onToggle}
@@ -28,7 +28,7 @@ function FaqRow({ item, isOpen, onToggle }: { item: FaqItem; isOpen: boolean; on
         <span aria-hidden="true" style={{ fontSize: '1.3rem', flexShrink: 0 }}>{isOpen ? '−' : '+'}</span>
       </button>
       {isOpen && (
-        <p style={{ margin: '0 0 18px', color: 'var(--muted, #6b6b6b)', lineHeight: 1.6 }}>{item.a}</p>
+        <p style={{ margin: '0 0 18px', color: 'var(--muted, #756B5F)', lineHeight: 1.6 }}>{item.a}</p>
       )}
     </div>
   );

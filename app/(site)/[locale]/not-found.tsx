@@ -55,10 +55,10 @@ export default function LocaleNotFound() {
       }}
     >
       <p style={{ fontSize: '1.4rem', fontWeight: 700, margin: '0 0 10px' }}>{t.heading}</p>
-      <p style={{ color: '#6b6b6b', margin: '0 0 24px', maxWidth: 340 }}>{t.body}</p>
+      <p style={{ color: 'var(--muted, #756B5F)', margin: '0 0 24px', maxWidth: 340 }}>{t.body}</p>
       <a
         href={`/${locale}`}
-        style={{ background: '#FF6A3D', color: '#1A0D06', border: 'none', borderRadius: 8, padding: '12px 22px', fontWeight: 700, fontSize: 15, textDecoration: 'none' }}
+        style={{ background: 'var(--ember, #E8622A)', color: 'var(--text-on-accent, #1C1210)', border: 'none', borderRadius: 8, padding: '12px 22px', fontWeight: 700, fontSize: 15, textDecoration: 'none' }}
       >
         {t.goHome}
       </a>

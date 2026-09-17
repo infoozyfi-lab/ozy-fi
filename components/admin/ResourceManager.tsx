@@ -38,8 +38,8 @@ const btn: CSSProperties = {
   marginRight: 8,
 };
 
-const btnPrimary: CSSProperties = { ...btn, background: 'var(--ember)', color: '#1A0D06', border: 'none', fontWeight: 700 };
-const btnDanger: CSSProperties = { ...btn, color: '#FF8A75', borderColor: '#5A2A1F' };
+const btnPrimary: CSSProperties = { ...btn, background: 'var(--ember)', color: 'var(--text-on-accent)', border: 'none', fontWeight: 700 };
+const btnDanger: CSSProperties = { ...btn, color: 'var(--danger)', borderColor: 'var(--danger-border)' };
 
 type ResourceRow = Record<string, any>;
 type ResourceFormState = Record<string, any>;
@@ -493,7 +493,7 @@ export default function ResourceManager({
       )}
 
       {error && (
-        <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: '#3A1712', color: '#FF8A75', border: '1px solid #5A2A1F' }}>
+        <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: 'var(--danger-bg)', color: 'var(--danger)', border: '1px solid var(--danger-border)' }}>
           {error}
         </div>
       )}
@@ -647,8 +647,8 @@ export default function ResourceManager({
                           onClick={() => toggleActive(row)}
                           style={{
                             border: 'none', borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                            background: row.active ? 'rgba(124,184,106,0.18)' : 'rgba(255,106,92,0.18)',
-                            color: row.active ? '#7CB86A' : '#FF6A5C',
+                            background: row.active ? 'rgba(46,125,50,0.14)' : 'rgba(179,38,30,0.14)',
+                            color: row.active ? 'var(--success)' : 'var(--danger)',
                           }}
                         >
                           {row.active ? 'In stock' : 'Out of stock'}

@@ -88,7 +88,29 @@ export default function CardPaymentStep({ clientSecret, amountLabel, onSuccess, 
   return (
     <Elements
       stripe={getStripePromise()}
-      options={{ clientSecret, appearance: { theme: 'stripe', variables: { colorPrimary: '#7D5A16' } } }}
+      options={{
+        clientSecret,
+        // Daylight Ember tokens (app/globals.css) — colorPrimary drives
+        // Stripe's own focus rings/selected-tab styling inside
+        // PaymentElement, colorText/colorTextPlaceholder/colorDanger match
+        // this app's body-text/muted/danger colors so the embedded iframe
+        // reads as part of this page rather than a foreign widget dropped
+        // into it. Literal hex, not var(...) — Stripe's Elements
+        // `appearance` API reads these values itself (in an iframe, where
+        // CSS custom properties from the host page don't apply), so the
+        // current token values are duplicated here rather than referenced.
+        appearance: {
+          theme: 'stripe',
+          variables: {
+            colorPrimary: '#C14815', // --ember-dark
+            colorText: '#231D19', // --cream
+            colorTextPlaceholder: '#756B5F', // --muted
+            colorDanger: '#B3261E', // --danger
+            fontFamily: "'Work Sans', Arial, sans-serif",
+            borderRadius: '8px',
+          },
+        },
+      }}
     >
       <PayButton amountLabel={amountLabel} onSuccess={onSuccess} t={t} />
     </Elements>

@@ -28,10 +28,15 @@ function minutesAgo(createdAt: string): number {
   return Math.max(0, Math.floor(ms / 60000));
 }
 
+// These are solid badge FILL colors paired with light (--text-on-accent)
+// text, same pairing convention as the ember buttons — not the same
+// tokens used for plain danger/gold/success TEXT elsewhere in admin,
+// which were darkened specifically for legibility as text on a light
+// background and would be too dark to use as a badge fill here.
 function ageColor(mins: number): string {
-  if (mins >= 20) return '#FF6A5C';
-  if (mins >= 10) return '#E3A73B';
-  return '#7CB86A';
+  if (mins >= 20) return 'var(--danger)';
+  if (mins >= 10) return 'var(--gold)';
+  return 'var(--success)';
 }
 
 // The admin order-detail fetch (/api/admin/orders/:id) returns the order row
@@ -106,7 +111,7 @@ function OrderDetailModal({
             <h2 style={{ margin: 0, fontSize: 22 }}>{order.order_num}</h2>
             <span
               style={{
-                display: 'inline-block', marginTop: 6, fontSize: 12, fontWeight: 700, color: '#1A0D06',
+                display: 'inline-block', marginTop: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-on-accent)',
                 background: ageColor(mins), borderRadius: 999, padding: '3px 10px',
               }}
             >
@@ -130,7 +135,7 @@ function OrderDetailModal({
               <p style={{ margin: '6px 0 0', fontSize: 16 }}>📞 {detail.phone}</p>
               <p style={{ margin: '4px 0 0', fontSize: 15, color: 'var(--cream)' }}>📍 {detail.address}</p>
               {detail.notes && (
-                <p style={{ margin: '10px 0 0', fontSize: 14, color: '#E3A73B' }}>📝 {detail.notes}</p>
+                <p style={{ margin: '10px 0 0', fontSize: 14, color: 'var(--gold)' }}>📝 {detail.notes}</p>
               )}
               {detail.driver_name && (
                 <p style={{ margin: '10px 0 0', fontSize: 14 }}>🛵 Driver: <strong>{detail.driver_name}</strong></p>
@@ -168,7 +173,7 @@ function OrderDetailModal({
                   disabled={movingId === order.id}
                   onClick={() => onAdvance(order, nextStatus)}
                   style={{
-                    flex: 1, background: 'var(--ember)', color: '#1A0D06', border: 'none',
+                    flex: 1, background: 'var(--ember)', color: 'var(--text-on-accent)', border: 'none',
                     borderRadius: 10, padding: '14px', fontSize: 15, fontWeight: 700, cursor: 'pointer',
                   }}
                 >
@@ -181,7 +186,7 @@ function OrderDetailModal({
                   disabled={movingId === order.id}
                   onClick={() => onCancel(order)}
                   style={{
-                    background: 'none', color: '#FF8A75', border: '1px solid #5A2A1F',
+                    background: 'none', color: 'var(--danger)', border: '1px solid var(--danger-border)',
                     borderRadius: 10, padding: '14px 16px', fontSize: 14, cursor: 'pointer',
                   }}
                 >
@@ -277,7 +282,7 @@ function EtaPromptModal({
             type="button"
             disabled={!custom || Number(custom) <= 0}
             onClick={() => onConfirm(Number(custom))}
-            style={{ background: 'var(--ember)', color: '#1A0D06', border: 'none', borderRadius: 8, padding: '12px 18px', fontWeight: 700, cursor: 'pointer' }}
+            style={{ background: 'var(--ember)', color: 'var(--text-on-accent)', border: 'none', borderRadius: 8, padding: '12px 18px', fontWeight: 700, cursor: 'pointer' }}
           >
             Confirm
           </button>
@@ -353,7 +358,7 @@ function DriverPromptModal({
             type="button"
             disabled={!name.trim()}
             onClick={() => onConfirm(name.trim())}
-            style={{ background: 'var(--ember)', color: '#1A0D06', border: 'none', borderRadius: 8, padding: '12px 18px', fontWeight: 700, cursor: 'pointer' }}
+            style={{ background: 'var(--ember)', color: 'var(--text-on-accent)', border: 'none', borderRadius: 8, padding: '12px 18px', fontWeight: 700, cursor: 'pointer' }}
           >
             Confirm
           </button>
@@ -551,13 +556,13 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
       <audio ref={audioRef} src="/notification.wav" preload="auto" />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: large ? 20 : 14, flexWrap: 'wrap', gap: 10 }}>
-        <h2 style={{ margin: 0, fontSize: large ? 28 : undefined }}>Orders {flash && <span style={{ color: '#FF6A3D' }}>● New!</span>}</h2>
+        <h2 style={{ margin: 0, fontSize: large ? 28 : undefined }}>Orders {flash && <span style={{ color: 'var(--ember)' }}>● New!</span>}</h2>
         {!soundUnlocked ? (
           <button
             type="button"
             onClick={unlockSound}
             style={{
-              background: 'var(--ember)', color: '#1A0D06', border: 'none', borderRadius: 8,
+              background: 'var(--ember)', color: 'var(--text-on-accent)', border: 'none', borderRadius: 8,
               padding: large ? '12px 18px' : '8px 14px', fontSize: large ? 16 : 13, fontWeight: 700, cursor: 'pointer',
             }}
           >
@@ -617,7 +622,7 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
                             <span
                               title={`${mins} min ago`}
                               style={{
-                                fontSize: large ? 15 : 11, fontWeight: 700, color: '#1A0D06', background: ageColor(mins),
+                                fontSize: large ? 15 : 11, fontWeight: 700, color: 'var(--text-on-accent)', background: ageColor(mins),
                                 borderRadius: 999, padding: large ? '4px 10px' : '2px 7px', flexShrink: 0,
                               }}
                             >
@@ -642,7 +647,7 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
                                 disabled={movingId === order.id}
                                 onClick={() => handleAdvanceClick(order, nextStatus)}
                                 style={{
-                                  flex: 1, minWidth: large ? 140 : 100, background: 'var(--ember)', color: '#1A0D06', border: 'none',
+                                  flex: 1, minWidth: large ? 140 : 100, background: 'var(--ember)', color: 'var(--text-on-accent)', border: 'none',
                                   borderRadius: 6, padding: large ? '14px 10px' : '7px 8px', fontSize: large ? 16 : 12, fontWeight: 700, cursor: 'pointer',
                                 }}
                               >
@@ -655,7 +660,7 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
                                 disabled={movingId === order.id}
                                 onClick={() => cancelOrder(order)}
                                 style={{
-                                  background: 'none', color: '#FF8A75', border: '1px solid #5A2A1F',
+                                  background: 'none', color: 'var(--danger)', border: '1px solid var(--danger-border)',
                                   borderRadius: 6, padding: large ? '14px 12px' : '7px 8px', fontSize: large ? 15 : 12, cursor: 'pointer',
                                 }}
                               >

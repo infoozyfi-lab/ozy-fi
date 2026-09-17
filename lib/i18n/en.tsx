@@ -22,8 +22,11 @@ const en = {
     // Growth features batch 2 (Feature 5) — homepage banner for whichever
     // scheduled offer is active right now. `label` is plain admin-entered
     // text (see admin/dashboard's Scheduled offers section) — never a
-    // hardcoded campaign name.
-    scheduledOfferBanner: (label: string, pct: number) => `🔥 ${label}: ${pct}% off right now!`,
+    // hardcoded campaign name. `amountText` is a pre-formatted "10%" or
+    // "2.00 €" (lib/pricing.ts's describeDiscountValue) — shared
+    // discount-value pattern, part 2 of this task: an offer's discount
+    // can now be either shape, so this is no longer always a percentage.
+    scheduledOfferBanner: (label: string, amountText: string) => `🔥 ${label}: ${amountText} off right now!`,
   },
 
   footer: {
@@ -258,12 +261,16 @@ const en = {
     snacks: 'Snacks',
     added: 'Added',
     // Growth features (Feature 2 — first-order welcome discount).
-    welcomeDiscountBanner: (pct: number) => `🎉 First order? Enjoy ${pct}% off — applied automatically at checkout!`,
+    // `amountText` is a pre-formatted "10%" or "2.00 €" (shared
+    // discount-value pattern — see lib/pricing.ts's describeDiscountValue
+    // and header.scheduledOfferBanner's comment above for why this is no
+    // longer always a raw percentage).
+    welcomeDiscountBanner: (amountText: string) => `🎉 First order? Enjoy ${amountText} off — applied automatically at checkout!`,
     // Growth features batch 2 (Feature 5) — shown instead of the welcome
     // banner above when a scheduled offer is active and more favorable
     // (see CheckoutModal.tsx's bestAutoDiscount). `label` is plain
     // admin-entered text, never a hardcoded campaign name.
-    scheduledOfferBanner: (label: string, pct: number) => `🔥 ${label}: ${pct}% off — applied automatically at checkout!`,
+    scheduledOfferBanner: (label: string, amountText: string) => `🔥 ${label}: ${amountText} off — applied automatically at checkout!`,
   },
 
   confirm: {

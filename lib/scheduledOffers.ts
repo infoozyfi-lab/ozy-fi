@@ -20,6 +20,9 @@
 // correct wall-clock day/time in Finland regardless of the server's own
 // clock/timezone, without adding a timezone library dependency.
 
+import type { DiscountValue } from './types';
+import { computeDiscountAmount } from './pricing';
+
 export const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 export type DayKey = (typeof DAY_KEYS)[number];
 
@@ -35,21 +38,36 @@ export interface RawScheduledOffer {
   days?: string; // JSON-encoded DayKey[]
   start_time?: string | null;
   end_time?: string | null;
+  // Legacy column, kept per this project's additive-only migration
+  // convention (worker/migrations/011_shared_discount_value.sql) — still
+  // written by the admin API on every save (0 when discount_type is
+  // 'amount') so its NOT NULL constraint never needs relaxing, but no
+  // longer read by app/api/orders/route.ts. discount_type/discount_value
+  // are authoritative; see that migration's header comment.
   discount_percent: number | string;
+  discount_type?: 'percent' | 'amount';
+  discount_value?: number | string;
   active?: number;
   sort_order?: number;
   [key: string]: unknown;
 }
 
 // Normalized shape used by MenuBlob (lib/menu-i18n.ts) and everywhere
-// else in the app — parsed once, not re-parsed on every use.
+// else in the app — parsed once, not re-parsed on every use. `discount`
+// is the shared DiscountValue shape (lib/types.ts) this feature was
+// folded into; discountPercent is DELIBERATELY NOT kept here (unlike
+// RawScheduledOffer's legacy column) since every real consumer of this
+// normalized shape (findBestActiveScheduledOffer, the admin UI, the
+// order route) was updated to use `discount` directly — keeping a stale
+// "…Percent" field around here would invite exactly the kind of silent
+// percent-only assumption this task exists to remove.
 export interface ScheduledOffer {
   id: string;
   label: string;
   days: DayKey[];
   startTime: string | null; // 'HH:MM', null means "all day" (with endTime)
   endTime: string | null;
-  discountPercent: number;
+  discount: DiscountValue;
 }
 
 // Parses scheduled_offers.days (a JSON-encoded array, same "JSON in a
@@ -68,13 +86,24 @@ export function parseDays(raw: string | null | undefined): DayKey[] {
 }
 
 export function normalizeScheduledOffer(row: RawScheduledOffer): ScheduledOffer {
+  // A row from BEFORE migration 011 (discount_type/discount_value both
+  // unset/null) falls back to the old percent-only column — same
+  // "unmigrated data still behaves the way it always did" fallback used
+  // for admin_settings keys elsewhere in this task (see
+  // lib/pricing.ts's readDiscountSetting).
+  const type: DiscountValue['type'] = row.discount_type === 'percent' || row.discount_type === 'amount'
+    ? row.discount_type
+    : 'percent';
+  const value = row.discount_value !== undefined && row.discount_value !== null && row.discount_value !== ''
+    ? Number(row.discount_value) || 0
+    : Number(row.discount_percent) || 0;
   return {
     id: row.id,
     label: row.label,
     days: parseDays(row.days),
     startTime: row.start_time && row.start_time.trim() ? row.start_time.trim() : null,
     endTime: row.end_time && row.end_time.trim() ? row.end_time.trim() : null,
-    discountPercent: Number(row.discount_percent) || 0,
+    discount: { type, value },
   };
 }
 
@@ -153,10 +182,23 @@ export function validateScheduledOfferInput(body: Record<string, unknown>): stri
     }
   }
 
-  if ('discount_percent' in body) {
-    const pct = Number(body.discount_percent);
-    if (!Number.isFinite(pct) || pct <= 0 || pct > 100) {
-      return 'Discount must be a percentage greater than 0 and at most 100.';
+  // Shared discount-value shape — discount_type/discount_value replace
+  // the old bare discount_percent as the fields this route actually
+  // validates going forward (see worker/migrations/
+  // 011_shared_discount_value.sql). Validated together since one implies
+  // the other: a type with no value (or vice versa) is an incomplete
+  // update, same "both or neither" reasoning as start_time/end_time below.
+  if ('discount_type' in body || 'discount_value' in body) {
+    const type = body.discount_type;
+    if (type !== 'percent' && type !== 'amount') {
+      return "Discount type must be 'percent' or 'amount'.";
+    }
+    const value = Number(body.discount_value);
+    if (!Number.isFinite(value) || value <= 0) {
+      return 'Discount must be a number greater than 0.';
+    }
+    if (type === 'percent' && value > 100) {
+      return 'A percentage discount can be at most 100.';
     }
   }
 
@@ -189,20 +231,44 @@ export function validateScheduledOfferInput(body: Record<string, unknown>): stri
 
 // Among all ACTIVE (active=1, already filtered by the caller/DB query)
 // scheduled offers, returns the one that is live right now and most
-// favorable to the customer (highest discountPercent) — or null if none
-// apply. If more than one offer happens to be active at once (e.g.
-// overlapping configurations), the higher percentage wins, consistent
-// with "the discount most favorable to the customer applies" used
-// elsewhere (coupon vs. welcome discount).
+// favorable to the customer — or null if none apply. If more than one
+// offer happens to be active at once (e.g. overlapping configurations),
+// whichever is most favorable wins, consistent with "the discount most
+// favorable to the customer applies" used elsewhere (coupon vs. welcome
+// discount).
+//
+// `baseAmount`, when given, is the real euro amount the winning offer
+// would apply against (an order subtotal, or a client's current cart
+// total) — with it, "most favorable" is decided by the ACTUAL euro
+// discount each active offer works out to (via lib/pricing.ts's
+// computeDiscountAmount), which is the only comparison that stays
+// correct now that two simultaneously-active offers can be different
+// types (a 10%-off offer vs. a flat 2€-off offer — comparing their raw
+// `value`s directly, 10 vs 2, would say the wrong thing). Every real
+// caller in this codebase (app/api/orders/route.ts, context/
+// StoreContext.tsx) has a base amount in hand and passes one. Omitting
+// it falls back to comparing raw `value`s the same way this function
+// always did before this task — only meaningful when every active offer
+// happens to share the same type, kept as a safe default for any future
+// caller that genuinely has no base amount rather than removing the
+// no-argument case outright.
 export function findBestActiveScheduledOffer(
   offers: ScheduledOffer[],
+  baseAmount?: number,
   at: Date = new Date()
 ): ScheduledOffer | null {
   const { dayKey, minutes } = getHelsinkiNow(at);
   let best: ScheduledOffer | null = null;
+  let bestScore = -1;
   for (const offer of offers) {
     if (!isOfferActiveAt(offer, dayKey, minutes)) continue;
-    if (!best || offer.discountPercent > best.discountPercent) best = offer;
+    const score = baseAmount !== undefined
+      ? computeDiscountAmount(offer.discount, baseAmount)
+      : offer.discount.value;
+    if (!best || score > bestScore) {
+      best = offer;
+      bestScore = score;
+    }
   }
   return best;
 }

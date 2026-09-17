@@ -44,9 +44,21 @@ const MENU_PRICING_KEYS = new Set([
 // growth-feature control (scheduled_offers via the generic admin CRUD,
 // which already allows manager+owner; the Customers tab's loyalty-by-
 // phone view) — these settings should be no different.
+// Shared discount-value pattern (worker/migrations/
+// 011_shared_discount_value.sql) — first_order_discount_percent,
+// stamp_card_reward_percent, referral_discount_amount, and
+// wow_moment_reward_percent are retired here in favor of their
+// `_type`/`_value` sibling-key pairs; the admin UI (app/admin/dashboard/
+// page.tsx's RewardsTab, components/admin/ScheduledOffersManager.tsx)
+// no longer sends the old keys, so a Manager gains no new access by
+// their removal — the old rows themselves are left in the database
+// (migration is additive-only) but are simply no longer reachable
+// through this allow-list, same as any other retired setting.
 const REWARDS_KEYS = new Set([
-  'first_order_discount_percent',
-  'stamp_card_reward_percent',
+  'first_order_discount_type',
+  'first_order_discount_value',
+  'stamp_card_reward_type',
+  'stamp_card_reward_value',
   'stamp_card_every_n_orders',
   // Stamp-card redesign — the business owner's chosen list of eligible
   // product ids (a JSON-array-in-TEXT value, same pattern as
@@ -54,9 +66,11 @@ const REWARDS_KEYS = new Set([
   // config. See app/api/orders/route.ts and app/admin/dashboard/
   // page.tsx's StampCardSettingsForm.
   'stamp_card_eligible_product_ids',
-  'referral_discount_amount',
+  'referral_discount_type',
+  'referral_discount_value',
   'wow_moment_chance_percent',
-  'wow_moment_reward_percent',
+  'wow_moment_reward_type',
+  'wow_moment_reward_value',
 ]);
 
 function managerCanAccessKey(key: string): boolean {

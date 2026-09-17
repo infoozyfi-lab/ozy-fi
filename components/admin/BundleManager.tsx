@@ -16,8 +16,8 @@ const btn: CSSProperties = {
   padding: '8px 14px', border: '1px solid var(--line)', borderRadius: '8px',
   background: 'var(--bg-alt)', color: 'var(--cream)', cursor: 'pointer', fontSize: 13, marginRight: 8,
 };
-const btnPrimary: CSSProperties = { ...btn, background: 'var(--ember)', color: '#1A0D06', border: 'none', fontWeight: 700 };
-const btnDanger: CSSProperties = { ...btn, color: '#FF8A75', borderColor: '#5A2A1F' };
+const btnPrimary: CSSProperties = { ...btn, background: 'var(--ember)', color: 'var(--text-on-accent)', border: 'none', fontWeight: 700 };
+const btnDanger: CSSProperties = { ...btn, color: 'var(--danger)', borderColor: 'var(--danger-border)' };
 const th: CSSProperties = { textAlign: 'left', padding: '10px', borderBottom: '2px solid var(--line)', fontSize: 13, color: 'var(--muted)' };
 const td: CSSProperties = { padding: '10px', borderBottom: '1px solid var(--line)', fontSize: 14, color: 'var(--cream)' };
 
@@ -235,7 +235,7 @@ export default function BundleManager({
       </p>
 
       {error && (
-        <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: '#3A1712', color: '#FF8A75', border: '1px solid #5A2A1F' }}>
+        <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: 'var(--danger-bg)', color: 'var(--danger)', border: '1px solid var(--danger-border)' }}>
           {error}
         </div>
       )}
