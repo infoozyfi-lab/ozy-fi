@@ -4,9 +4,10 @@ import { trackPurchaseServerSide } from '@/lib/server-tracking';
 import { validateCoupon, normalizeCouponCode } from '@/lib/coupons';
 import { loadMenuData } from '@/lib/menu-data';
 import { normalizeMenuBlob } from '@/lib/menu-i18n';
-import { verifyCartLine } from '@/lib/pricing';
+import { verifyCartLine, computeDiscountAmount, readDiscountSetting } from '@/lib/pricing';
 import { findBestActiveScheduledOffer } from '@/lib/scheduledOffers';
-import type { DiscountSource } from '@/lib/types';
+import { getStripe } from '@/lib/stripe';
+import type { DiscountSource, DiscountValue } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,6 +50,11 @@ interface CreateOrderBody {
   // informational/reporting, never used in any price or discount
   // calculation — same trust level already given to marketingConsent.
   isReorder?: boolean;
+  // Stripe card payments — 'cod' (default, unchanged behaviour) or
+  // 'card'. Anything else client-supplied is rejected below rather than
+  // silently falling back, since this value decides whether a real
+  // charge gets created.
+  paymentMethod?: 'cod' | 'card';
 }
 
 export async function POST(request: Request) {
@@ -85,6 +91,8 @@ export async function POST(request: Request) {
   if (!customer.name || !customer.address || !customer.postalCode || !customer.phone) {
     return json({ error: 'Missing customer details' }, 400);
   }
+
+  const paymentMethod: 'cod' | 'card' = body.paymentMethod === 'card' ? 'card' : 'cod';
 
   // Delivery zone check — only enforced if the admin has actually listed
   // any postal codes/prefixes in Settings. Leaving that field blank (the
@@ -135,14 +143,20 @@ export async function POST(request: Request) {
   // un-trigger one either — an accepted tradeoff, same as coupon usage
   // counting elsewhere in this route.
   const nonCancelledOrderCount = priorOrders.filter((o) => o.status !== 'cancelled').length + 1;
-  const stampRewardPct = Number(rawMenu.settings?.stamp_card_reward_percent) || 0;
+  // Shared discount-value pattern (see lib/types.ts's DiscountValue) —
+  // was a bare stamp_card_reward_percent; `.value > 0` below is exactly
+  // the same "is this feature configured at all" gate the old bare
+  // percent used, just one level down inside the shape. Eligibility/
+  // trigger logic (whether THIS order reaches the milestone, etc.) is
+  // unchanged — see reachedStampMilestone below.
+  const stampCardRewardSetting = readDiscountSetting(rawMenu.settings, 'stamp_card_reward');
   // Rewards dashboard consolidation — the "every Nth order" threshold,
   // admin-configurable (stamp_card_every_n_orders). Blank/unset falls
   // back to 5. Floored and clamped to at least 1 so a stray non-numeric
   // or negative stored value can never turn into a `% 0` (NaN, silently
   // never rewarding) or `% -3`.
   const stampEveryNOrders = Math.max(1, Math.floor(Number(rawMenu.settings?.stamp_card_every_n_orders) || 5));
-  const reachedStampMilestone = stampRewardPct > 0 && nonCancelledOrderCount > 0 && nonCancelledOrderCount % stampEveryNOrders === 0;
+  const reachedStampMilestone = stampCardRewardSetting.value > 0 && nonCancelledOrderCount > 0 && nonCancelledOrderCount % stampEveryNOrders === 0;
 
   // Stamp-card redesign (Part A) — the business owner's chosen list of
   // eligible product ids, same JSON-array-in-a-flat-settings-key pattern
@@ -162,10 +176,10 @@ export async function POST(request: Request) {
   // looked up once here and reused below both to decide whether THIS
   // order should redeem it and, after the order is written, whether to
   // mark it redeemed. Skipped entirely while the feature is off
-  // (stampRewardPct <= 0), so disabling it pauses both new-earning and
+  // (stampCardRewardSetting.value <= 0), so disabling it pauses both new-earning and
   // redemption of anything already pending — a judgment call, documented
   // in this task's delivery summary.
-  const existingPendingReward = stampRewardPct > 0 ? await findPendingStampCardReward(env, customer.phone) : null;
+  const existingPendingReward = stampCardRewardSetting.value > 0 ? await findPendingStampCardReward(env, customer.phone) : null;
 
   // --- Server-side price/quantity validation (money-correctness pass) ---
   // The client computes prices (base + toppings + size upcharge, or a
@@ -216,7 +230,7 @@ export async function POST(request: Request) {
   // only ONE unit of the cheapest eligible line gets discounted — never
   // the whole line, never the whole order.
   let cheapestEligibleUnitPrice: number | null = null;
-  if (stampRewardPct > 0 && stampEligibleProductIds.length > 0) {
+  if (stampCardRewardSetting.value > 0 && stampEligibleProductIds.length > 0) {
     for (const line of items) {
       if (!line.productId || !stampEligibleProductIds.includes(line.productId)) continue;
       const qty = Number(line.qty);
@@ -280,9 +294,17 @@ export async function POST(request: Request) {
     // customer, same rule as coupon-vs-welcome before it.
     const candidates: Array<{ amount: number; apply: () => void }> = [];
 
-    const welcomePct = Number(rawMenu.settings?.first_order_discount_percent) || 0;
-    if (isFirstOrderEver && welcomePct > 0) {
-      const amount = Math.min(Math.round(recomputedTotal * (welcomePct / 100) * 100) / 100, recomputedTotal);
+    // Shared discount-value pattern — see lib/types.ts's DiscountValue
+    // and lib/pricing.ts's computeDiscountAmount/readDiscountSetting.
+    // Each of these three settings can now independently be configured
+    // as a percentage OR a flat euro amount; the eligibility/trigger
+    // condition on each `if` below (isFirstOrderEver, an active offer
+    // existing, the stamp-card pending/milestone check) is exactly what
+    // it was before this task — only how the resulting euro amount is
+    // computed has changed.
+    const firstOrderDiscountSetting = readDiscountSetting(rawMenu.settings, 'first_order_discount');
+    if (isFirstOrderEver && firstOrderDiscountSetting.value > 0) {
+      const amount = computeDiscountAmount(firstOrderDiscountSetting, recomputedTotal);
       candidates.push({
         amount,
         apply: () => {
@@ -294,12 +316,14 @@ export async function POST(request: Request) {
       });
     }
 
-    const activeOffer = findBestActiveScheduledOffer(menu.scheduledOffers);
+    // `recomputedTotal` passed as the base amount so "most favorable"
+    // among multiple simultaneously-active offers is decided by actual
+    // euro discount, not a raw percent-vs-amount value comparison — see
+    // findBestActiveScheduledOffer's own comment for why that matters
+    // now that an offer's discount can be either type.
+    const activeOffer = findBestActiveScheduledOffer(menu.scheduledOffers, recomputedTotal);
     if (activeOffer) {
-      const amount = Math.min(
-        Math.round(recomputedTotal * (activeOffer.discountPercent / 100) * 100) / 100,
-        recomputedTotal
-      );
+      const amount = computeDiscountAmount(activeOffer.discount, recomputedTotal);
       candidates.push({
         amount,
         apply: () => {
@@ -313,16 +337,23 @@ export async function POST(request: Request) {
     // Stamp card (Part A redesign) — only a candidate when there's an
     // eligible item in THIS cart to actually discount, and either an
     // existing pending reward is waiting to be redeemed or this order
-    // freshly reaches the milestone. The percentage used is the pending
-    // reward's own banked percentage when redeeming one (captured at the
+    // freshly reaches the milestone. The discount used is the pending
+    // reward's own banked type+value when redeeming one (captured at the
     // moment it was earned, never re-read from current settings — see the
     // migration file), otherwise the current setting.
     if (cheapestEligibleUnitPrice !== null && (existingPendingReward || reachedStampMilestone)) {
-      const usedPercent = existingPendingReward ? existingPendingReward.reward_percent : stampRewardPct;
-      const amount = Math.min(
-        Math.round(cheapestEligibleUnitPrice * (usedPercent / 100) * 100) / 100,
-        cheapestEligibleUnitPrice
-      );
+      // Defensive fallback (type||'percent', value ?? the legacy column)
+      // for a pending-reward row from before migration 011's backfill
+      // somehow still being read here — shouldn't happen (the migration
+      // backfills every existing row), but costs nothing to guard, same
+      // spirit as this route's other `Number(x) || 0` fallbacks.
+      const usedDiscount: DiscountValue = existingPendingReward
+        ? {
+            type: existingPendingReward.reward_type || 'percent',
+            value: existingPendingReward.reward_value ?? existingPendingReward.reward_percent,
+          }
+        : stampCardRewardSetting;
+      const amount = computeDiscountAmount(usedDiscount, cheapestEligibleUnitPrice);
       const viaExistingPending = Boolean(existingPendingReward);
       candidates.push({
         amount,
@@ -351,7 +382,7 @@ export async function POST(request: Request) {
   // delivery's summary for the worked examples covering every branch here.
   let createNewPendingReward = false;
   let redeemPendingRewardId: number | null = null;
-  if (stampRewardPct > 0) {
+  if (stampCardRewardSetting.value > 0) {
     if (existingPendingReward) {
       // Only redeem it if it's the one that actually won the comparison
       // above (or was the outright winner via a manual coupon path, which
@@ -392,14 +423,17 @@ export async function POST(request: Request) {
   // rewards.
   let wowMomentRewardCode: string | null = null;
   const wowChancePct = Number(rawMenu.settings?.wow_moment_chance_percent) || 0;
-  const wowRewardPct = Number(rawMenu.settings?.wow_moment_reward_percent) || 0;
+  // Shared discount-value pattern — was a bare wow_moment_reward_percent.
+  // wow_moment_chance_percent (the ODDS of triggering at all) is a
+  // separate concept, not a discount value, and is untouched.
+  const wowMomentRewardSetting = readDiscountSetting(rawMenu.settings, 'wow_moment_reward');
 
-  if (wowChancePct > 0 && wowRewardPct > 0 && Math.random() * 100 < wowChancePct) {
+  if (wowChancePct > 0 && wowMomentRewardSetting.value > 0 && Math.random() * 100 < wowChancePct) {
     wowMomentRewardCode = makeCouponCode('WOW');
     await env.DB.prepare(
       `INSERT INTO coupons (code, discount_type, discount_value, active, usage_limit)
-       VALUES (?, 'percent', ?, 1, 1)`
-    ).bind(wowMomentRewardCode, wowRewardPct).run();
+       VALUES (?, ?, ?, 1, 1)`
+    ).bind(wowMomentRewardCode, wowMomentRewardSetting.type, wowMomentRewardSetting.value).run();
   }
   // Discount-source tracking (Part B) — kept as its OWN column rather than
   // folded into discount_source: this order may separately have a real
@@ -415,13 +449,19 @@ export async function POST(request: Request) {
   // same as no email, no extra empty-string checks needed there.
   const email = (customer.email || '').trim();
 
+  // Card orders start life as payment_status 'pending' — the PaymentIntent
+  // created below (and the row updated with its id) is what /api/webhooks/
+  // stripe later matches against to flip this to 'paid' (or 'failed').
+  // COD orders keep payment_status = payment_method ('cod'), same as
+  // before this feature — nothing to track for cash paid on delivery.
   const insertOrder = await env.DB.prepare(
     `INSERT INTO orders
-      (order_num, customer_name, address, email, phone, notes, total, status, payment_method, coupon_code, discount_amount, marketing_consent, discount_source, triggered_wow_moment, is_reorder)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'received', 'cod', ?, ?, ?, ?, ?, ?)`
+      (order_num, customer_name, address, email, phone, notes, total, status, payment_method, payment_status, coupon_code, discount_amount, marketing_consent, discount_source, triggered_wow_moment, is_reorder)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'received', ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       orderNum, customer.name, customer.address, email, customer.phone, customer.notes || '', finalTotal,
+      paymentMethod, paymentMethod === 'card' ? 'pending' : 'cod',
       appliedCouponCode, discountAmount, body.marketingConsent ? 1 : 0,
       discountSource, triggeredWowMoment ? 1 : 0, body.isReorder ? 1 : 0
     )
@@ -451,6 +491,42 @@ export async function POST(request: Request) {
 
   if (stmts.length) {
     await env.DB.batch(stmts);
+  }
+
+  // --- Stripe: create the PaymentIntent for a card order ---
+  // Done after the order + items are safely committed above, same
+  // "order row exists first" ordering the rest of this route already
+  // uses for its own secondary writes. finalTotal <= 0 (fully covered by
+  // a discount) has nothing to charge — treated as paid immediately
+  // rather than asking Stripe to create a €0 PaymentIntent, which it
+  // rejects.
+  let clientSecret: string | null = null;
+  if (paymentMethod === 'card') {
+    if (finalTotal <= 0) {
+      await env.DB.prepare(`UPDATE orders SET payment_status = 'paid' WHERE id = ?`).bind(orderId).run();
+    } else {
+      try {
+        const stripe = getStripe(env);
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: Math.round(finalTotal * 100), // Stripe wants the smallest currency unit (cents).
+          currency: 'eur',
+          automatic_payment_methods: { enabled: true }, // lets Stripe offer card, Google Pay, Apple Pay itself.
+          metadata: { orderNum, orderId: String(orderId) },
+        });
+        clientSecret = paymentIntent.client_secret;
+        await env.DB.prepare(`UPDATE orders SET stripe_payment_intent_id = ? WHERE id = ?`)
+          .bind(paymentIntent.id, orderId)
+          .run();
+      } catch (err) {
+        // The order row already exists (payment_status stays 'pending') —
+        // intentionally NOT rolled back: the kitchen/admin can still see
+        // and, if needed, manually follow up on an order whose payment
+        // step failed to even start, same as a card that gets declined
+        // further down the flow. The customer sees this as a normal
+        // order-placement error and can retry.
+        return json({ error: 'Could not start card payment. Please try again.' }, 502);
+      }
+    }
   }
 
   // Coupon usage counter — best-effort, after the order row itself is
@@ -486,10 +562,22 @@ export async function POST(request: Request) {
       ).bind(orderNum, redeemPendingRewardId).run()
     );
   } else if (createNewPendingReward) {
+    // reward_percent (legacy) is still populated for the NOT NULL
+    // constraint — 0 when the setting is amount-shaped — but
+    // reward_type/reward_value are what's actually read back later (see
+    // the candidates[] block above). See worker/migrations/
+    // 011_shared_discount_value.sql's header for why the old column
+    // isn't dropped.
     ctx.waitUntil(
       env.DB.prepare(
-        `INSERT INTO stamp_card_pending_rewards (phone, reward_percent, earned_order_num) VALUES (?, ?, ?)`
-      ).bind(customer.phone, stampRewardPct, orderNum).run()
+        `INSERT INTO stamp_card_pending_rewards (phone, reward_percent, reward_type, reward_value, earned_order_num) VALUES (?, ?, ?, ?, ?)`
+      ).bind(
+        customer.phone,
+        stampCardRewardSetting.type === 'percent' ? stampCardRewardSetting.value : 0,
+        stampCardRewardSetting.type,
+        stampCardRewardSetting.value,
+        orderNum
+      ).run()
     );
   }
 
@@ -524,5 +612,11 @@ export async function POST(request: Request) {
     scheduledOfferApplied,
     loyalty: { orderCount: nonCancelledOrderCount, everyNOrders: stampEveryNOrders, pendingRewardCreated: createNewPendingReward },
     wowMomentRewardCode,
+    paymentMethod,
+    // Non-null only when paymentMethod === 'card' and there was something
+    // to charge — the frontend uses its presence (not paymentMethod
+    // alone) to decide whether it still needs to collect a card payment
+    // before this order can be treated as placed.
+    clientSecret,
   }, 201);
 }
