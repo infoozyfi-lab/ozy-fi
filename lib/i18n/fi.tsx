@@ -248,6 +248,7 @@ const fi = {
     card: 'Kortti',
     cardDesc: 'Kortti, Google Pay tai Apple Pay',
     cardGenericError: 'Maksua ei voitu suorittaa. Tarkista korttitietosi ja yritä uudelleen.',
+    cardUnavailableError: 'Korttimaksu ei ole juuri nyt käytettävissä. Valitse maksu noudettaessa tai yritä hetken kuluttua uudelleen.',
     continue: 'Jatka',
     continueWithTotal: (total: string) => `Jatka — ${total}`,
     placeOrder: (total: string) => `Tilaa — ${total}`,

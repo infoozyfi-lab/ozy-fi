@@ -250,6 +250,7 @@ const en = {
     card: 'Card',
     cardDesc: 'Card, Google Pay or Apple Pay',
     cardGenericError: 'Payment could not be completed. Please check your card details and try again.',
+    cardUnavailableError: 'Card payment is temporarily unavailable. Please choose Cash on delivery, or try again shortly.',
     continue: 'Continue',
     continueWithTotal: (total: string) => `Continue — ${total}`,
     placeOrder: (total: string) => `Place order — ${total}`,

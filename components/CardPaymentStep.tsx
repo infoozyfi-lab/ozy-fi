@@ -12,11 +12,19 @@ import {
 // Loaded once per page (module scope, not per-render) — loadStripe caches
 // the script/instance itself anyway, but this avoids re-triggering that
 // on every CheckoutModal re-render.
+//
+// NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is inlined into this CLIENT bundle at
+// `next build` time (see cloudflare-env.d.ts for the full explanation of
+// where that value has to be configured on Cloudflare Workers Builds). If
+// it's missing here, that's a deploy-time misconfiguration, not something
+// a page reload will fix — so this module also tracks whether the key was
+// present at all, and CardPaymentStep below renders a visible error
+// instead of silently mounting a dead Elements provider when it wasn't.
+const stripeKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 let stripePromise: Promise<StripeJs | null> | null = null;
 function getStripePromise() {
   if (!stripePromise) {
-    const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-    stripePromise = key ? loadStripe(key) : Promise.resolve(null);
+    stripePromise = stripeKey ? loadStripe(stripeKey) : Promise.resolve(null);
   }
   return stripePromise;
 }
@@ -85,6 +93,19 @@ function PayButton({ amountLabel, onSuccess, t }: Omit<CardPaymentStepProps, 'cl
 }
 
 export default function CardPaymentStep({ clientSecret, amountLabel, onSuccess, t }: CardPaymentStepProps) {
+  // Fail loud: previously, a missing key silently produced a `null` Stripe
+  // instance and an inert Elements/PaymentElement — "nothing visibly
+  // happens" when the customer picks Card. Surface it instead, so the
+  // customer isn't stuck on a blank step and can fall back to
+  // cash-on-delivery.
+  if (!stripeKey) {
+    return (
+      <div>
+        <p className="field-error">{t.checkout.cardUnavailableError}</p>
+      </div>
+    );
+  }
+
   return (
     <Elements
       stripe={getStripePromise()}

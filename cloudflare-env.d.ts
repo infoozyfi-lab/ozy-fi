@@ -27,18 +27,40 @@ interface CloudflareEnv extends Env {
   ADMIN_PASSWORD?: string;
   SESSION_SECRET?: string;
 
-  // Stripe — set via the Cloudflare dashboard (Workers & Pages → ozyfi →
-  // Settings → Variables and Secrets), same pattern as the three above.
-  // STRIPE_SECRET_KEY is a Secret (encrypted); NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-  // is a plain Variable — it's public by design (used client-side to load
-  // Stripe.js) and the NEXT_PUBLIC_ prefix is what lets Next.js inline it
-  // into the client bundle at build time. STRIPE_WEBHOOK_SECRET verifies
-  // that POST /api/webhooks/stripe requests genuinely came from Stripe
-  // (see that route) — get it from the webhook endpoint's settings page
-  // in the Stripe Dashboard once the endpoint is created there.
+  // Stripe (server-side, runtime only) — set via the Cloudflare dashboard
+  // under the Worker's Settings → Variables and Secrets, same pattern as
+  // the three above. Both are read through `env.X` inside a request
+  // handler (lib/stripe.ts, app/api/webhooks/stripe/route.ts), which is
+  // exactly what that panel is for. STRIPE_SECRET_KEY is a Secret
+  // (encrypted); STRIPE_WEBHOOK_SECRET verifies that POST /api/webhooks/
+  // stripe requests genuinely came from Stripe (see that route) — get it
+  // from the webhook endpoint's settings page in the Stripe Dashboard
+  // once the endpoint is created there.
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
-  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?: string;
+
+  // NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is DELIBERATELY NOT declared here.
+  // Despite living in "the same env vars area" conceptually, it does not
+  // go through this CloudflareEnv/`env.X` runtime binding mechanism at
+  // all — components/CardPaymentStep.tsx reads it as
+  // `process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, a plain build-time
+  // constant Next.js inlines into the CLIENT bundle while `next build`
+  // runs, before the Worker ever starts serving requests.
+  //
+  // This is the one Stripe var that must be set under the Worker's
+  // Settings → Build → "Build variables and secrets" panel, NOT
+  // Settings → Variables and Secrets (that one only reaches `env.X` at
+  // runtime — Workers Builds' build step runs in a separate environment
+  // and never sees it — see https://developers.cloudflare.com/workers/
+  // ci-cd/builds/configuration/ and https://opennext.js.org/cloudflare/
+  // howtos/env-vars, both of which document this split explicitly). An
+  // earlier version of this comment conflated the two panels and told
+  // the Cloudflare dashboard's runtime-only "Variables and Secrets" panel
+  // to be used for this — that was the actual root cause of "choosing
+  // Card renders nothing": the deployed client bundle had this baked in
+  // as `undefined`, so `loadStripe(undefined)` silently resolved to
+  // `null` with no error. See CardPaymentStep.tsx's own comment for the
+  // fail-loud handling added once that was diagnosed.
 
   // wrangler.jsonc correctly declares IMAGES under r2_buckets (bucket_name
   // "ozyfi-images") — but the generated Env interface inferred it as a
