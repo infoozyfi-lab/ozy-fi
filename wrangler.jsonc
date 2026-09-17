@@ -1,5 +1,5 @@
 {
-  "name": "ozyfi",
+  "name": "ozy-fi",
   "compatibility_date": "2025-05-05",
   "compatibility_flags": ["nodejs_compat"],
   "main": ".open-next/worker.js",
