@@ -2,7 +2,7 @@ import { getCloudflareContext } from '@opennextjs/cloudflare';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request, { params }: { params: { key: string | string[] } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ key: string | string[] }> }) {
   const { env } = await getCloudflareContext({ async: true });
 
   if (!env.IMAGES) {
@@ -12,7 +12,8 @@ export async function GET(request: Request, { params }: { params: { key: string 
     });
   }
 
-  const key = Array.isArray(params.key) ? params.key.join('/') : params.key;
+  const { key: rawKey } = await params;
+  const key = Array.isArray(rawKey) ? rawKey.join('/') : rawKey;
   const object = await env.IMAGES.get(key);
 
   if (!object) {

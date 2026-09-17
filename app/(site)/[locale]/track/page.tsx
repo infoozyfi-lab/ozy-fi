@@ -5,8 +5,8 @@ import { getDictionary, hreflangAlternates } from '@/lib/i18n/locales';
 // needs a Server Component; the actual page (order lookup, live ETA
 // countdown, etc.) is genuinely interactive so it stays a Client
 // Component (components/TrackPageClient.js).
-export function generateMetadata({ params }: { params: { locale: string } }) {
-  const { locale } = params;
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
   const t = getDictionary(locale);
   const title = `${t.track.heading} — ozy.fi`;
 

@@ -11,8 +11,8 @@ export const dynamic = 'force-dynamic';
 // points at THIS locale's own URL and `alternates.languages` lists both,
 // which is what tells Google these two URLs are translations of each
 // other rather than duplicate content.
-export function generateMetadata({ params }: { params: { locale: string } }) {
-  const { locale } = params;
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
   const title = locale === 'fi'
     ? 'ozy.fi — Pizzaa, kebabia ja hampurilaisia | Kotiinkuljetus ja nouto'
     : 'ozy.fi — Pizza, Kebab & Burgers | Delivery & Pickup';
@@ -37,7 +37,7 @@ export function generateMetadata({ params }: { params: { locale: string } }) {
   };
 }
 
-export default async function Home({ params }: { params: { locale: string } }) {
+export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
   // Bug-fix (bilingual-site crash, Sept 2026): this D1/Cloudflare-context
   // call used to be unguarded. It's the one call in this render path that
   // talks to live infrastructure rather than local logic, and it now runs
@@ -50,12 +50,13 @@ export default async function Home({ params }: { params: { locale: string } }) {
   // just gets the client-side /api/menu fetch (context/StoreContext.js
   // already handles initialData being absent) instead of pre-seeded SSR
   // content for that one request.
+  const { locale } = await params;
   let initialData: StoreProviderInitialData | null = null;
   try {
     const { env } = await getCloudflareContext({ async: true });
     initialData = await loadMenuData(env);
   } catch (err) {
-    console.error(`[/${params?.locale}] Home: failed to load SSR menu data:`, err);
+    console.error(`[/${locale}] Home: failed to load SSR menu data:`, err);
   }
 
   return <HomePageClient initialData={initialData} />;

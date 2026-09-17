@@ -12,24 +12,26 @@ export const dynamic = 'force-dynamic';
 // any of this; Manager and Owner both manage the menu.
 const TABLE_ROLES: StaffRole[] = ['manager', 'owner'];
 
-export async function GET(request: Request, { params }: { params: { table: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ table: string }> }) {
   const { env } = await getCloudflareContext({ async: true });
   const denied = await requireRole(request, env, TABLE_ROLES);
   if (denied) return denied;
 
-  const table = ADMIN_TABLES[params.table];
+  const { table: tableName } = await params;
+  const table = ADMIN_TABLES[tableName];
   if (!table) return json({ error: 'Unknown table' }, 404);
 
-  const rows = await env.DB.prepare(`SELECT * FROM ${params.table} ORDER BY sort_order`).all();
+  const rows = await env.DB.prepare(`SELECT * FROM ${tableName} ORDER BY sort_order`).all();
   return json(rows.results);
 }
 
-export async function POST(request: Request, { params }: { params: { table: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ table: string }> }) {
   const { env, ctx } = await getCloudflareContext({ async: true });
   const denied = await requireRole(request, env, TABLE_ROLES);
   if (denied) return denied;
 
-  const table = ADMIN_TABLES[params.table];
+  const { table: tableName } = await params;
+  const table = ADMIN_TABLES[tableName];
   if (!table) return json({ error: 'Unknown table' }, 404);
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
@@ -46,7 +48,7 @@ export async function POST(request: Request, { params }: { params: { table: stri
 
   // Same rule as the PUT route (app/api/admin/[table]/[id]/route.js) —
   // an offer price is a discount off the regular price, never higher.
-  if (params.table === 'products' && body.offer_price !== null && body.offer_price !== undefined && body.offer_price !== '') {
+  if (tableName === 'products' && body.offer_price !== null && body.offer_price !== undefined && body.offer_price !== '') {
     if (Number(body.offer_price) > Number(body.price || 0)) {
       return json({ error: 'Offer price cannot be higher than the regular price.' }, 400);
     }
@@ -56,7 +58,7 @@ export async function POST(request: Request, { params }: { params: { table: stri
   // validation, same "inline per-table check in the generic route" style
   // as the products check above (see lib/scheduledOffers.ts for the
   // shared rules, also used by the PUT route below).
-  if (params.table === 'scheduled_offers') {
+  if (tableName === 'scheduled_offers') {
     const validationError = validateScheduledOfferInput(body);
     if (validationError) return json({ error: validationError }, 400);
   }
@@ -66,14 +68,14 @@ export async function POST(request: Request, { params }: { params: { table: stri
   const values = cols.map((c) => body[c]);
 
   await env.DB.prepare(
-    `INSERT INTO ${params.table} (${cols.join(', ')}) VALUES (${placeholders})`
+    `INSERT INTO ${tableName} (${cols.join(', ')}) VALUES (${placeholders})`
   ).bind(...values).run();
 
   await purgeMenuCache(request, ctx);
 
   const session = await getSession(request, env);
   const label = body.name || body.label || body.id;
-  ctx.waitUntil(logActivity(env, session, `${params.table}.created`, `Created ${params.table} "${label}"`));
+  ctx.waitUntil(logActivity(env, session, `${tableName}.created`, `Created ${tableName} "${label}"`));
 
   return json({ ok: true, id: body.id }, 201);
 }

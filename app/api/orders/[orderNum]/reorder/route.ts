@@ -45,14 +45,15 @@ function parseExtras(raw: string | null | undefined): StoredLineExtras {
 // product/bundle no longer exists rather than failing the whole reorder.
 // Same auth as GET /api/orders/[orderNum] — order number alone isn't
 // enough, the phone number used at checkout is required too.
-export async function GET(request: Request, { params }: { params: { orderNum: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ orderNum: string }> }) {
   const { env } = await getCloudflareContext({ async: true });
 
   const url = new URL(request.url);
   const phone = url.searchParams.get('phone') || '';
+  const { orderNum } = await params;
 
   const order = await env.DB.prepare('SELECT * FROM orders WHERE order_num = ?')
-    .bind(params.orderNum)
+    .bind(orderNum)
     .first<OrderRow>();
 
   if (!order || !phoneMatches(order.phone, phone)) {

@@ -4,14 +4,15 @@ import type { OrderRow, OrderItemRow } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request, { params }: { params: { orderNum: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ orderNum: string }> }) {
   const { env } = await getCloudflareContext({ async: true });
 
   const url = new URL(request.url);
   const phone = url.searchParams.get('phone') || '';
+  const { orderNum } = await params;
 
   const order = await env.DB.prepare('SELECT * FROM orders WHERE order_num = ?')
-    .bind(params.orderNum)
+    .bind(orderNum)
     .first<OrderRow>();
 
   // Order number alone isn't secret enough to hand back a stranger's name,

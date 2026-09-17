@@ -6,8 +6,8 @@ import type { StoreProviderInitialData } from '@/context/StoreContext';
 
 export const dynamic = 'force-dynamic';
 
-export function generateMetadata({ params }: { params: { locale: string } }) {
-  const { locale } = params;
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
   const title = locale === 'fi'
     ? 'Koko ruokalista — Pizzaa, kebabia ja hampurilaisia | ozy.fi'
     : 'Full Menu — Pizza, Kebab & Burgers | ozy.fi';
@@ -26,15 +26,16 @@ export function generateMetadata({ params }: { params: { locale: string } }) {
   };
 }
 
-export default async function MenuPage({ params }: { params: { locale: string } }) {
+export default async function MenuPage({ params }: { params: Promise<{ locale: string }> }) {
   // See app/(site)/[locale]/page.js for why this is wrapped — same fix,
   // same reasoning (bug-fix, bilingual-site crash, Sept 2026).
+  const { locale } = await params;
   let initialData: StoreProviderInitialData | null = null;
   try {
     const { env } = await getCloudflareContext({ async: true });
     initialData = await loadMenuData(env);
   } catch (err) {
-    console.error(`[/${params?.locale}/menu] failed to load SSR menu data:`, err);
+    console.error(`[/${locale}/menu] failed to load SSR menu data:`, err);
   }
 
   return <MenuPageClient initialData={initialData} />;

@@ -1,8 +1,8 @@
 import FaqPageClient from '@/components/FaqPageClient';
 import { getDictionary, hreflangAlternates } from '@/lib/i18n/locales';
 
-export function generateMetadata({ params }: { params: { locale: string } }) {
-  const { locale } = params;
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
   const t = getDictionary(locale);
 
   return {
@@ -15,8 +15,9 @@ export function generateMetadata({ params }: { params: { locale: string } }) {
   };
 }
 
-export default function FaqPage({ params }: { params: { locale: string } }) {
-  const t = getDictionary(params.locale);
+export default async function FaqPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
+  const t = getDictionary(locale);
 
   // Schema.org FAQPage — built from the exact same t.faq.items the page
   // itself renders (see components/FaqPageClient.tsx), so the structured
