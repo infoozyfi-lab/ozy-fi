@@ -80,7 +80,7 @@ export default function CheckoutReturnClient() {
       }
 
       if (paymentIntent.status === 'succeeded') {
-        const orderNum = readOrderNum(paymentIntent.metadata);
+        const orderNum = readOrderNum((paymentIntent as any).metadata);
         if (orderNum) {
           setOutcome({ kind: 'success', orderNum: `#${orderNum}`, total: paymentIntent.amount / 100 });
         } else {
