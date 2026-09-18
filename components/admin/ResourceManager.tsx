@@ -90,6 +90,68 @@ async function compressImage(file: File, maxDim = 1600, quality = 0.82): Promise
   }
 }
 
+// Words that are too generic to ever be worth putting in a filename — normal
+// English stopwords plus the marketing filler that shows up constantly in
+// food descriptions ("delicious", "topped", "served", ...). Keeping this
+// list is what stops the extractor from picking junk like "with" or "our"
+// as if it were an ingredient.
+const DESCRIPTION_STOPWORDS = new Set([
+  'a', 'an', 'the', 'and', 'or', 'but', 'with', 'without', 'of', 'in', 'on',
+  'at', 'to', 'for', 'from', 'by', 'is', 'are', 'was', 'were', 'be', 'been',
+  'this', 'that', 'these', 'those', 'it', 'its', 'we', 'our', 'you', 'your',
+  'all', 'over', 'into', 'onto', 'top', 'topped', 'served', 'made', 'baked',
+  'fresh', 'freshly', 'delicious', 'tasty', 'perfect', 'enjoy', 'taste',
+  'flavor', 'flavour', 'flavors', 'flavours', 'classic', 'favorite',
+  'favourite', 'signature', 'special', 'homemade', 'traditional', 'recipe',
+  'style', 'includes', 'include', 'featuring', 'features', 'comes', 'each',
+  'more', 'some', 'just', 'also', 'plus', 'extra', 'add', 'added', 'not',
+  'pizza', 'menu', 'item', 'pieces', 'piece', 'slice', 'slices',
+]);
+
+// Pulls the 2-3 most meaningful ingredient-looking words out of a product's
+// English description, so a filename can carry real ingredient keywords
+// without the admin having to type them anywhere twice. Deliberately dumb
+// (no NLP, just stopword-filtering + first-mentioned-wins) because
+// descriptions tend to lead with the ingredients that matter most
+// ("Ground beef, tomato sauce, mozzarella and red onion...") — good enough
+// for an SEO filename, which only needs a few relevant words, not a
+// complete or perfectly-ranked ingredient list.
+function extractIngredientKeywords(description: string, exclude: Set<string>, max = 3): string[] {
+  if (!description) return [];
+  const words = description
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+
+  const picked: string[] = [];
+  const seen = new Set<string>();
+  for (const word of words) {
+    if (word.length < 3) continue;
+    if (DESCRIPTION_STOPWORDS.has(word)) continue;
+    if (exclude.has(word)) continue;
+    if (seen.has(word)) continue;
+    seen.add(word);
+    picked.push(word);
+    if (picked.length >= max) break;
+  }
+  return picked;
+}
+
+// Builds the text handed to the upload route as the "filename" — the
+// product's own name plus a couple of ingredient words pulled from its
+// description, e.g. "Bolognese Pizza" + "ground beef" description ->
+// "Bolognese Pizza ground beef" -> (server-side) "bolognese-pizza-ground-beef-xxxxxxxx.webp".
+// No separate field for the admin to fill in; it derives automatically
+// from Name + Description, which are already required/likely filled in.
+function buildSeoFilenameHint(name: string, description: string): string {
+  const cleanName = (name || '').trim();
+  if (!cleanName) return '';
+  const nameWords = new Set(cleanName.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+  const ingredientWords = extractIngredientKeywords(description || '', nameWords);
+  return [cleanName, ...ingredientWords].join(' ');
+}
+
 function formToBody(form: ResourceFormState, fields: ResourceField[]): Record<string, unknown> {
   const body: Record<string, unknown> = {};
   fields.forEach((f) => {
@@ -195,13 +257,22 @@ export default function ResourceManager({
 
   const setField = (key: string, value: unknown) => setForm((f) => ({ ...f, [key]: value }));
 
-  const uploadImage = async (key: string, file: File) => {
+  // `nameHint` is a pre-built "Name + ingredient keywords" string (see
+  // buildSeoFilenameHint) — a camera or phone export gives files generic
+  // names like "36503.jpg", which slugify down to a meaningless key
+  // ("36503-...") even though the upload route's slugifier is working
+  // correctly. Product name + a couple of description keywords makes a far
+  // better SEO filename than whatever the source file happened to be
+  // called, so we prefer it and only fall back to the original file name
+  // when there's no hint (e.g. name field still empty).
+  const uploadImage = async (key: string, file: File, nameHint?: string) => {
     setUploading((u) => ({ ...u, [key]: true }));
     setError('');
     try {
       const processed = await compressImage(file);
       const body = new FormData();
-      body.append('file', processed, file.name || 'upload.jpg');
+      const hinted = nameHint && nameHint.trim() ? nameHint.trim() : '';
+      body.append('file', processed, hinted || file.name || 'upload.jpg');
       const res = await fetch('/api/admin/upload', {
         method: 'POST',
         body,
@@ -568,7 +639,11 @@ export default function ResourceManager({
                       disabled={!!uploading[f.key]}
                       onChange={(e: ChangeEvent<HTMLInputElement>) => {
                         const file = e.target.files && e.target.files[0];
-                        if (file) uploadImage(f.key, file);
+                        if (file) {
+                          const name = typeof form.name === 'string' ? form.name : '';
+                          const description = typeof form.description === 'string' ? form.description : '';
+                          uploadImage(f.key, file, buildSeoFilenameHint(name, description));
+                        }
                         e.target.value = '';
                       }}
                     />
