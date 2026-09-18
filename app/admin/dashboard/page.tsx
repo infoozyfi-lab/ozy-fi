@@ -420,6 +420,16 @@ function OrderDetailRow({ token, order }: { token: string; order: OrderRow }) {
               </p>
               {detail.notes && <p style={{ margin: 0 }}>Notes: {detail.notes}</p>}
               {detail.driver_name && <p style={{ margin: 0 }}>🛵 Driver: {detail.driver_name}</p>}
+              <p style={{ margin: '10px 0 0' }}>
+                <a
+                  href={`/admin/orders/${order.id}/invoice`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ ...btn, display: 'inline-block', textDecoration: 'none' }}
+                >
+                  View invoice ↗
+                </a>
+              </p>
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <p style={{ margin: '0 0 4px', color: 'var(--muted)', fontSize: 13 }}>Items</p>

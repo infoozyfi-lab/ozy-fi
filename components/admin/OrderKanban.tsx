@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ChangeEvent } from 'react';
 import { formatCurrency } from '@/components/admin/charts/colors';
+import PaymentStatusPill from '@/components/admin/charts/PaymentStatusPill';
 import type { OrderRow, OrderItemRow, OrderStatus } from '@/lib/types';
 
 interface KanbanColumn {
@@ -46,6 +47,11 @@ interface OrderDetail {
   customer_name: string;
   phone: string;
   address: string;
+  payment_method: string;
+  // Present on the real API response (SELECT * FROM orders — see
+  // app/api/admin/orders/[id]/route.ts) but declared optional here for the
+  // same reason as OrderRow.payment_status in lib/types.ts.
+  payment_status?: string;
   notes?: string | null;
   driver_name?: string | null;
   items: OrderItemRow[];
@@ -134,6 +140,9 @@ function OrderDetailModal({
               <p style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{detail.customer_name}</p>
               <p style={{ margin: '6px 0 0', fontSize: 16 }}>📞 {detail.phone}</p>
               <p style={{ margin: '4px 0 0', fontSize: 15, color: 'var(--cream)' }}>📍 {detail.address}</p>
+              <p style={{ margin: '10px 0 0', fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                Payment: {detail.payment_method} <PaymentStatusPill status={detail.payment_status} />
+              </p>
               {detail.notes && (
                 <p style={{ margin: '10px 0 0', fontSize: 14, color: 'var(--gold)' }}>📝 {detail.notes}</p>
               )}
@@ -166,7 +175,18 @@ function OrderDetailModal({
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
+            <div style={{ display: 'flex', gap: 10, marginTop: 22, flexWrap: 'wrap' }}>
+              <a
+                href={`/admin/orders/${order.id}/invoice`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  background: 'none', color: 'var(--cream)', border: '1px solid var(--line)', textDecoration: 'none',
+                  borderRadius: 10, padding: '14px 16px', fontSize: 14, cursor: 'pointer', display: 'inline-block',
+                }}
+              >
+                View invoice ↗
+              </a>
               {col && nextStatus && (
                 <button
                   type="button"
@@ -630,8 +650,11 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
                             </span>
                           </div>
 
-                          <div style={{ fontSize: large ? 19 : 13, fontWeight: 700, margin: large ? '10px 0' : '6px 0' }}>
-                            {formatCurrency(order.total)}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, margin: large ? '10px 0' : '6px 0' }}>
+                            <span style={{ fontSize: large ? 19 : 13, fontWeight: 700 }}>
+                              {formatCurrency(order.total)}
+                            </span>
+                            <PaymentStatusPill status={order.payment_status} />
                           </div>
 
                           {order.driver_name && (
@@ -707,7 +730,10 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
                         <strong style={{ fontSize: 13 }}>{order.order_num}</strong>
                         <span style={{ color: 'var(--muted)', fontSize: 12, marginLeft: 8 }}>{order.customer_name}</span>
                       </span>
-                      <span style={{ fontSize: 13, color: 'var(--muted)' }}>{formatCurrency(order.total)}</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <PaymentStatusPill status={order.payment_status} />
+                        <span style={{ fontSize: 13, color: 'var(--muted)' }}>{formatCurrency(order.total)}</span>
+                      </span>
                     </button>
                   ))}
                 </div>

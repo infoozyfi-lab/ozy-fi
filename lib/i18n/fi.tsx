@@ -438,6 +438,46 @@ const fi = {
     goHome: 'Etusivulle',
   },
 
+  // Tilauskohtainen lasku (admin-paneeli, app/admin/orders/[id]/invoice) —
+  // ainoa kaksikielinen kohta admin-paneelissa, koska toisin kuin muu
+  // (tarkoituksella englanninkielinen, sisäinen) admin-käyttöliittymä,
+  // tämän sivun voi tulostaa/tallentaa ja antaa suoraan asiakkaalle.
+  invoice: {
+    documentTitle: 'Lasku',
+    orderNumber: 'Tilausnumero',
+    orderDate: 'Tilauspäivä',
+    customer: 'Asiakas',
+    itemsHeading: 'Tuotteet',
+    columnItem: 'Tuote',
+    columnQty: 'Määrä',
+    columnUnitPrice: 'Á-hinta',
+    columnLineTotal: 'Yhteensä',
+    subtotal: 'Välisumma',
+    discount: 'Alennus',
+    adjustment: 'Toimitusmaksu / muu lisäys',
+    total: 'Loppusumma',
+    paymentMethod: 'Maksutapa',
+    paymentStatus: 'Maksun tila',
+    vatNote: 'Hinnat sisältävät ALV:n, mikäli sovellettavissa.',
+    printButton: 'Tulosta / tallenna PDF',
+    backToOrder: '← Takaisin tilaukseen',
+    loading: 'Ladataan laskua…',
+    notFound: 'Tilausta ei voitu ladata.',
+    forbidden: 'Sinulla ei ole oikeutta laskuihin — pyydä esihenkilöä tai omistajaa.',
+    signInRequired: 'Kirjaudu sisään nähdäksesi tämän laskun.',
+    discountSourceLabel: {
+      manual_coupon: 'Alennuskoodi',
+      referral: 'Suosituspalkkio',
+      first_order_welcome: 'Ensitilausalennus',
+      stamp_card: 'Kanta-asiakaspalkkio',
+      scheduled_offer: 'Erikoistarjous',
+    } as Record<string, string>,
+    paymentMethodLabel: {
+      cod: 'Käteinen toimituksessa',
+      card: 'Kortti',
+    } as Record<string, string>,
+  },
+
   languageSwitcher: {
     fi: 'Suomi',
     en: 'English',

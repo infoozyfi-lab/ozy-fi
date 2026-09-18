@@ -464,6 +464,46 @@ const en = {
     goHome: 'Go to homepage',
   },
 
+  // Per-order invoice (admin panel, app/admin/orders/[id]/invoice) — the
+  // one admin-panel surface that's bilingual, since unlike the rest of
+  // the (deliberately English-only, internal-tool) admin UI, this page
+  // can be printed/downloaded and handed straight to a customer.
+  invoice: {
+    documentTitle: 'Invoice',
+    orderNumber: 'Order number',
+    orderDate: 'Order date',
+    customer: 'Customer',
+    itemsHeading: 'Items',
+    columnItem: 'Item',
+    columnQty: 'Qty',
+    columnUnitPrice: 'Unit price',
+    columnLineTotal: 'Line total',
+    subtotal: 'Subtotal',
+    discount: 'Discount',
+    adjustment: 'Delivery / other adjustment',
+    total: 'Total',
+    paymentMethod: 'Payment method',
+    paymentStatus: 'Payment status',
+    vatNote: 'Prices include VAT where applicable.',
+    printButton: 'Print / Save as PDF',
+    backToOrder: '← Back to order',
+    loading: 'Loading invoice…',
+    notFound: 'Could not load this order.',
+    forbidden: "You don't have access to invoices — ask a manager or the owner.",
+    signInRequired: 'Please sign in to view this invoice.',
+    discountSourceLabel: {
+      manual_coupon: 'Coupon code',
+      referral: 'Referral reward',
+      first_order_welcome: 'First order discount',
+      stamp_card: 'Stamp card reward',
+      scheduled_offer: 'Special offer',
+    } as Record<string, string>,
+    paymentMethodLabel: {
+      cod: 'Cash on delivery',
+      card: 'Card',
+    } as Record<string, string>,
+  },
+
   languageSwitcher: {
     fi: 'Suomi',
     en: 'English',
