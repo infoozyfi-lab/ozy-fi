@@ -81,10 +81,19 @@ function formHintText(form: FormData | null, key: string): string {
 // `nameHint` alone (no description) is enough to prefer the hint — the
 // description is just extra keywords tacked on when there is one.
 function buildHintedSlug(form: FormData | null, file: File): string {
-  const nameHint = formHintText(form, 'nameHint');
+  // Menu items on this project are commonly named with a leading
+  // sort-order/category code, e.g. "10. Quattro", "B1. Texas Style BBQ",
+  // "PE2. Pesto Veggie" (see data/menu.ts) — meaningful for menu
+  // organization but not for an SEO filename, so strip a leading
+  // "<optional short letter code><digits>. " (or ") " / " - ") pattern
+  // before slugifying, without touching the actual product name shown
+  // anywhere else.
+  const rawNameHint = formHintText(form, 'nameHint');
+  const nameHint = rawNameHint.replace(/^\s*[A-Za-z]{0,4}\d+\s*[.)-]\s*/, '').trim();
   if (!nameHint) {
-    // No name yet (e.g. a brand-new, not-yet-named product) — same
-    // fallback as before this feature existed: slugify the file's own name.
+    // No name yet (e.g. a brand-new, not-yet-named product), or the name
+    // was nothing but the leading number — same fallback as before this
+    // feature existed: slugify the file's own name.
     return slugifyFilename(file.name || '');
   }
   const descriptionHint = formHintText(form, 'descriptionHint');
