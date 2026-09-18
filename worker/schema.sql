@@ -39,8 +39,21 @@ CREATE TABLE products (
   category_id     TEXT NOT NULL REFERENCES categories(id),
   name            TEXT NOT NULL,
   name_fi         TEXT,
+  -- Customer-facing ingredients list, shown on the product page. Separate
+  -- from meta_description/meta_description_fi below (worker/migrations/
+  -- 014_product_meta_description.sql) — this field's job is describing
+  -- what's in the product, not writing a search-result snippet.
   description     TEXT,
   description_fi  TEXT,
+  -- SEO meta description (014_product_meta_description.sql) — what
+  -- generateMetadata (app/(site)/[locale]/product/[id]/page.tsx) uses for
+  -- <meta name="description"> and the Open Graph description, when set.
+  -- Nullable: NULL means "not written yet", not "empty on purpose" — that
+  -- distinction is what lets generateMetadata fall back to `description`/
+  -- `description_fi` and then to a generic auto-generated sentence for any
+  -- product the business owner hasn't filled this in for.
+  meta_description    TEXT,
+  meta_description_fi TEXT,
   price           REAL NOT NULL DEFAULT 0,
   offer_price     REAL,
   image           TEXT,

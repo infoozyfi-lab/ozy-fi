@@ -27,7 +27,12 @@ export const ADMIN_TABLES: Record<string, AdminTableDef> = {
   categories: { cols: ['id', 'title', 'title_fi', 'sub', 'sub_fi', 'image', 'sort_order'] },
   products: {
     cols: [
-      'id', 'category_id', 'name', 'name_fi', 'description', 'description_fi', 'price', 'offer_price',
+      'id', 'category_id', 'name', 'name_fi', 'description', 'description_fi',
+      // SEO meta description (worker/migrations/014_product_meta_description.sql)
+      // — independent of description/description_fi above; see generateMetadata
+      // in app/(site)/[locale]/product/[id]/page.tsx for the fallback chain.
+      'meta_description', 'meta_description_fi',
+      'price', 'offer_price',
       'image', 'tag', 'has_toppings', 'sort_order', 'active',
     ],
   },

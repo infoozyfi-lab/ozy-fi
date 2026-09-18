@@ -582,6 +582,11 @@ export default function ResourceManager({
                 return (
                   <label key={f.key} style={{ gridColumn: '1 / -1' }}>
                     {f.label}
+                    {f.hint && (
+                      <span style={{ display: 'block', fontSize: 12, color: 'var(--muted)', fontWeight: 400, marginTop: 2 }}>
+                        {f.hint}
+                      </span>
+                    )}
                     <textarea
                       style={{ ...inputStyle, minHeight: 70 }}
                       value={form[f.key]}

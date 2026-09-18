@@ -26,9 +26,17 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   }
 
   const name = resolveText(product.name, product.name_fi, locale);
-  const desc = resolveText(product.description, product.description_fi, locale);
   const title = `${name} — ozy.fi`;
-  const description = desc || (locale === 'fi'
+  // SEO meta description fallback chain (worker/migrations/
+  // 014_product_meta_description.sql): a purpose-written meta_description
+  // first, since a good search-result snippet reads differently from an
+  // ingredients list; then the ingredients description (today's existing
+  // behavior); then the generic auto-generated sentence. This means a
+  // product the business owner hasn't filled meta_description in for yet
+  // renders exactly as it did before this field existed.
+  const metaDesc = resolveText(product.meta_description, product.meta_description_fi, locale);
+  const desc = resolveText(product.description, product.description_fi, locale);
+  const description = metaDesc || desc || (locale === 'fi'
     ? `Tilaa ${name} verkosta kotiinkuljetuksena tai noutona ozy.fi:stä.`
     : `Order ${name} online for delivery or pickup from ozy.fi.`);
 

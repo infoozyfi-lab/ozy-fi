@@ -63,6 +63,14 @@ export interface RawProduct {
   name_fi?: string | null;
   description?: string | null;
   description_fi?: string | null;
+  // SEO meta description (worker/migrations/014_product_meta_description.sql)
+  // — independent of `description`/`description_fi` above, which stay the
+  // customer-facing ingredients text. NULL until the business owner writes
+  // one in the admin panel; generateMetadata (app/(site)/[locale]/product/
+  // [id]/page.tsx) falls back to `description`/`description_fi` and then a
+  // generic sentence when unset.
+  meta_description?: string | null;
+  meta_description_fi?: string | null;
   price: number | string;
   offer_price?: number | string | null;
   image?: string | null;
@@ -852,6 +860,12 @@ interface ResourceFieldBase {
   key: string;
   label: string;
   required?: boolean;
+  // Optional short helper text rendered beneath the field's label in the
+  // admin form (see ResourceManager.tsx) — for guidance that needs to stay
+  // visible while the admin is actively typing (e.g. a character-count
+  // target), which a `placeholder` can't do since it disappears on input.
+  // Omitted by every existing field array, so this is purely additive.
+  hint?: string;
 }
 
 export interface ResourceTextField extends ResourceFieldBase {

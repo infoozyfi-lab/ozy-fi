@@ -2549,6 +2549,14 @@ function MenuTabs({ token }: { token: string }) {
     { key: 'name_fi', label: 'Name (Finnish, optional)', type: 'text' },
     { key: 'description', label: 'Description (English)', type: 'textarea' },
     { key: 'description_fi', label: 'Description (Finnish, optional)', type: 'textarea' },
+    {
+      key: 'meta_description', label: 'Meta description (English, optional)', type: 'textarea',
+      hint: 'Shown in Google search results — aim for under ~160 characters. Leave blank to use the description above.',
+    },
+    {
+      key: 'meta_description_fi', label: 'Meta description (Finnish, optional)', type: 'textarea',
+      hint: 'Shown in Google search results — aim for under ~160 characters. Leave blank to use the description above.',
+    },
     { key: 'price', label: 'Price (€)', type: 'number', step: '0.1', required: true },
     { key: 'offer_price', label: 'Offer price (€, optional)', type: 'number', step: '0.1' },
     { key: 'image', label: 'Image', type: 'image' },
