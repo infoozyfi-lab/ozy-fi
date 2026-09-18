@@ -12,6 +12,7 @@ import BarChart from '@/components/admin/charts/BarChart';
 import ColumnChart from '@/components/admin/charts/ColumnChart';
 import StatusMixBar from '@/components/admin/charts/StatusMixBar';
 import StatusPill, { STATUS_LABELS as STATUS_LABELS_LOCAL } from '@/components/admin/charts/StatusPill';
+import PaymentStatusPill from '@/components/admin/charts/PaymentStatusPill';
 import { CATEGORICAL, BRAND, GOLD, formatCurrency, formatCompactCurrency, formatNumber, percentChange } from '@/components/admin/charts/colors';
 import type {
   OrderStatus,
@@ -340,6 +341,7 @@ function OverviewTab({
                   <th style={th}>Customer</th>
                   <th style={th}>Total</th>
                   <th style={th}>Status</th>
+                  <th style={th}>Payment</th>
                 </tr>
               </thead>
               <tbody>
@@ -349,6 +351,7 @@ function OverviewTab({
                     <td style={td}>{o.customer_name}</td>
                     <td style={td}>{formatCurrency(o.total)}</td>
                     <td style={td}><StatusPill status={o.status} /></td>
+                    <td style={td}><PaymentStatusPill status={o.payment_status} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -372,6 +375,10 @@ interface OrderDetailData {
   address: string;
   created_at: string;
   payment_method: string;
+  // Present on the real API response (SELECT * FROM orders — see
+  // app/api/admin/orders/[id]/route.ts) but declared optional here for the
+  // same reason as OrderRow.payment_status in lib/types.ts.
+  payment_status?: string;
   notes?: string | null;
   driver_name?: string | null;
   items: OrderItemRow[];
@@ -391,7 +398,7 @@ function OrderDetailRow({ token, order }: { token: string; order: OrderRow }) {
 
   return (
     <tr>
-      <td colSpan={5} style={{ padding: 16, background: 'var(--bg-alt)', borderTop: '1px solid var(--line)' }}>
+      <td colSpan={6} style={{ padding: 16, background: 'var(--bg-alt)', borderTop: '1px solid var(--line)' }}>
         {loading ? (
           <p style={{ margin: 0 }}>Loading details…</p>
         ) : !detail ? (
@@ -408,7 +415,9 @@ function OrderDetailRow({ token, order }: { token: string; order: OrderRow }) {
             <div>
               <p style={{ margin: '0 0 4px', color: 'var(--muted)', fontSize: 13 }}>Order info</p>
               <p style={{ margin: 0 }}>Placed: {detail.created_at}</p>
-              <p style={{ margin: 0 }}>Payment: {detail.payment_method}</p>
+              <p style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                Payment: {detail.payment_method} <PaymentStatusPill status={detail.payment_status} />
+              </p>
               {detail.notes && <p style={{ margin: 0 }}>Notes: {detail.notes}</p>}
               {detail.driver_name && <p style={{ margin: 0 }}>🛵 Driver: {detail.driver_name}</p>}
             </div>
@@ -503,6 +512,7 @@ function OrdersTab({ token }: { token: string }) {
                 <th style={th}>Customer</th>
                 <th style={th}>Total</th>
                 <th style={th}>Status</th>
+                <th style={th}>Payment</th>
                 <th style={th}></th>
               </tr>
             </thead>
@@ -525,6 +535,7 @@ function OrdersTab({ token }: { token: string }) {
                         ))}
                       </select>
                     </td>
+                    <td style={td}><PaymentStatusPill status={order.payment_status} /></td>
                     <td style={td}>
                       <button type="button" style={btn} onClick={() => setExpandedId(expandedId === order.id ? null : order.id)}>
                         {expandedId === order.id ? 'Hide' : 'Details'}

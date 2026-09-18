@@ -57,6 +57,20 @@ export const ORDER_STATUS_COLOR: Record<OrderStatus, string> = {
   cancelled: STATUS.critical,
 };
 
+// Payment-status palette (Stripe card payments — worker/migrations/
+// 012_stripe_payments.sql, orders.payment_status). A separate scale from
+// ORDER_STATUS_COLOR above — order status and payment status are two
+// different questions about an order — but reuses the same semantic tones
+// (good/warning/critical/neutral) so "paid" and "failed" read as
+// unambiguously positive/negative, consistent with every other such
+// indicator in this admin panel.
+export const PAYMENT_STATUS_COLOR = {
+  cod: STATUS.neutral, // nothing to track — paid in person on delivery
+  pending: STATUS.warning, // card order created, Stripe hasn't confirmed the charge yet
+  paid: STATUS.good,
+  failed: STATUS.critical,
+} as const;
+
 export function categoryColor(index: number): string {
   if (index < CATEGORICAL.length) return CATEGORICAL[index];
   return '#6B5D50'; // "Other" — muted neutral, outside the categorical set on purpose
