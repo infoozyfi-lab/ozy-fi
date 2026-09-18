@@ -2,17 +2,21 @@
 
 import { PAYMENT_STATUS_COLOR } from './colors';
 
-type KnownPaymentStatus = keyof typeof PAYMENT_STATUS_COLOR; // 'cod' | 'pending' | 'paid' | 'failed'
+type KnownPaymentStatus = keyof typeof PAYMENT_STATUS_COLOR; // 'cod' | 'pending' | 'paid' | 'failed' | 'refunded' | 'partially_refunded'
 
 const PAYMENT_STATUS_LABELS: Record<KnownPaymentStatus, string> = {
   cod: 'Cash on delivery',
   pending: 'Payment pending',
   paid: 'Paid',
   failed: 'Payment failed',
+  // Part C (admin-initiated refunds) — set only by the Stripe webhook
+  // (charge.refunded), never directly by the admin refund action itself.
+  refunded: 'Refunded',
+  partially_refunded: 'Partially refunded',
 };
 
 function isKnownPaymentStatus(s: string): s is KnownPaymentStatus {
-  return s === 'cod' || s === 'pending' || s === 'paid' || s === 'failed';
+  return s === 'cod' || s === 'pending' || s === 'paid' || s === 'failed' || s === 'refunded' || s === 'partially_refunded';
 }
 
 // `order.payment_status` (lib/types.ts) is typed as an optional plain

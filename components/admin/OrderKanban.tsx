@@ -40,6 +40,31 @@ function ageColor(mins: number): string {
   return 'var(--success)';
 }
 
+// Part C (admin-initiated refunds) — shared eligibility/remaining-balance
+// logic, used by both the detail popup here and app/admin/dashboard/
+// page.tsx's OrderDetailRow so the two views can't drift on when a
+// "Refund" action is even shown. A card order can be refunded once Stripe
+// has actually confirmed the charge ('paid') or after an earlier partial
+// refund ('partially_refunded') — never a 'pending'/'failed'/'cod' status,
+// and never once it's already fully 'refunded'. A COD order never touches
+// Stripe (see the refund route's own comment), so its only requirement is
+// "not already marked fully refunded".
+// Exported (not just module-private) so app/admin/dashboard/page.tsx's
+// OrderDetailRow — the list view's equivalent of this file's detail popup —
+// can gate its own "Refund" button on the exact same logic, rather than a
+// hand-copied second version that could quietly drift from this one.
+export function isRefundEligible(order: OrderRow): boolean {
+  if (order.payment_method === 'card') {
+    return order.payment_status === 'paid' || order.payment_status === 'partially_refunded';
+  }
+  return order.payment_status !== 'refunded';
+}
+
+export function refundRemaining(order: OrderRow): number {
+  const already = Number(order.refunded_amount) || 0;
+  return Math.max(0, Math.round((Number(order.total) - already) * 100) / 100);
+}
+
 // The admin order-detail fetch (/api/admin/orders/:id) returns the order row
 // plus its line items — a narrower shape than the full OrderRow (only the
 // fields this modal actually displays).
@@ -63,6 +88,7 @@ function OrderDetailModal({
   onClose,
   onAdvance,
   onCancel,
+  onRefund,
   movingId,
 }: {
   token: string | null;
@@ -70,6 +96,7 @@ function OrderDetailModal({
   onClose: () => void;
   onAdvance: (order: OrderRow, next: OrderStatus) => void;
   onCancel: (order: OrderRow) => void;
+  onRefund: (order: OrderRow) => void;
   movingId: number | null;
 }) {
   const [detail, setDetail] = useState<OrderDetail | null>(null);
@@ -211,6 +238,19 @@ function OrderDetailModal({
                   }}
                 >
                   Cancel order
+                </button>
+              )}
+              {isRefundEligible(order) && (
+                <button
+                  type="button"
+                  disabled={movingId === order.id}
+                  onClick={() => onRefund(order)}
+                  style={{
+                    background: 'none', color: 'var(--cream)', border: '1px solid var(--line)',
+                    borderRadius: 10, padding: '14px 16px', fontSize: 14, cursor: 'pointer',
+                  }}
+                >
+                  Refund
                 </button>
               )}
             </div>
@@ -392,6 +432,97 @@ function DriverPromptModal({
   );
 }
 
+// Part C (admin-initiated refunds) — same overlay/card shape as
+// EtaPromptModal/DriverPromptModal above. Offers a one-tap full refund
+// (the common case) plus a free-entry partial amount, capped at what's
+// actually left to refund (order.total minus anything already refunded —
+// a second partial refund against the same order should never be able to
+// request more than the remaining balance). For a card order this only
+// ever CALLS the refund API — it never assumes success itself; the actual
+// payment_status change comes back later via the Stripe webhook (see
+// app/api/admin/orders/[id]/refund/route.ts's own comment). For a COD
+// order there's no Stripe call at all, so the confirmation copy below
+// reads differently for the two cases.
+function RefundPromptModal({
+  order,
+  remaining,
+  submitting,
+  error,
+  onConfirm,
+  onClose,
+}: {
+  order: OrderRow;
+  remaining: number;
+  submitting: boolean;
+  error: string;
+  onConfirm: (amount?: number) => void;
+  onClose: () => void;
+}) {
+  const [partial, setPartial] = useState('');
+  const isCod = order.payment_method !== 'card';
+
+  return (
+    <div
+      role="dialog"
+      aria-label={`Refund ${order.order_num}`}
+      style={{ position: 'fixed', inset: 0, zIndex: 950, background: 'rgba(10,6,4,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+      onClick={submitting ? undefined : onClose}
+    >
+      <div
+        onClick={(e: MouseEvent<HTMLDivElement>) => e.stopPropagation()}
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--line)', borderRadius: 14, padding: 22, width: '100%', maxWidth: 380, maxHeight: '85vh', overflowY: 'auto' }}
+      >
+        <h3 style={{ margin: '0 0 4px' }}>Refund {order.order_num}</h3>
+        <p style={{ margin: '0 0 16px', color: 'var(--muted)', fontSize: 14 }}>
+          {isCod
+            ? `This marks up to ${formatCurrency(remaining)} as refunded. No Stripe charge exists for a cash-on-delivery order, so nothing is actually processed here — it's a record-keeping marker only.`
+            : `Refunds through Stripe. Up to ${formatCurrency(remaining)} can still be refunded on this order. The payment status here will update once Stripe confirms the refund.`}
+        </p>
+
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={() => onConfirm(undefined)}
+          style={{
+            width: '100%', background: 'var(--ember)', color: 'var(--text-on-accent)', border: 'none',
+            borderRadius: 8, padding: '14px', fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 14,
+          }}
+        >
+          {submitting ? 'Processing…' : `Refund full amount (${formatCurrency(remaining)})`}
+        </button>
+
+        <p style={{ margin: '0 0 8px', color: 'var(--muted)', fontSize: 13 }}>Or refund a specific amount:</p>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="number"
+            min="0.01"
+            max={remaining}
+            step="0.01"
+            placeholder={`Up to ${remaining.toFixed(2)}`}
+            value={partial}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setPartial(e.target.value)}
+            style={{ flex: 1, padding: 12, border: '1px solid var(--line)', borderRadius: 8, background: 'var(--bg-alt)', color: 'var(--cream)', fontSize: 15 }}
+          />
+          <button
+            type="button"
+            disabled={submitting || !partial || Number(partial) <= 0 || Number(partial) > remaining}
+            onClick={() => onConfirm(Number(partial))}
+            style={{ background: 'var(--bg-alt)', color: 'var(--cream)', border: '1px solid var(--line)', borderRadius: 8, padding: '12px 18px', fontWeight: 700, cursor: 'pointer' }}
+          >
+            Refund amount
+          </button>
+        </div>
+
+        {error && <p style={{ marginTop: 12, color: 'var(--danger)', fontSize: 13 }}>{error}</p>}
+
+        <button type="button" disabled={submitting} onClick={onClose} style={{ marginTop: 16, background: 'none', border: 'none', color: 'var(--muted)', textDecoration: 'underline', fontSize: 13, cursor: 'pointer', padding: 0 }}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function OrderKanban({ token, size = 'normal' }: { token: string | null; size?: 'normal' | 'large' }) {
   const large = size === 'large';
   const [orders, setOrders] = useState<OrderRow[]>([]);
@@ -400,6 +531,9 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
   const [viewingOrder, setViewingOrder] = useState<OrderRow | null>(null);
   const [etaOrder, setEtaOrder] = useState<OrderRow | null>(null); // order currently being accepted (ETA prompt open)
   const [driverOrder, setDriverOrder] = useState<OrderRow | null>(null); // order currently being sent out (driver prompt open)
+  const [refundOrder, setRefundOrder] = useState<OrderRow | null>(null); // Part C — order currently being refunded (refund prompt open)
+  const [refundSubmitting, setRefundSubmitting] = useState(false);
+  const [refundError, setRefundError] = useState('');
   const [soundOn, setSoundOn] = useState(true);
   const [soundUnlocked, setSoundUnlocked] = useState(false);
   const [showCancelled, setShowCancelled] = useState(false);
@@ -561,6 +695,45 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
       setOrders((list) => list.map((o) => (o.id === order.id ? { ...o, status: 'cancelled' } : o)));
     } finally {
       setMovingId(null);
+    }
+  };
+
+  // Part C (admin-initiated refunds) — calls the refund API and reflects
+  // what it actually reported back, nothing more. For a COD order that's a
+  // real, immediate payment_status change (the route writes it directly —
+  // no Stripe involved to wait on). For a card order the route only ever
+  // starts the Stripe refund; the real payment_status flip lands later via
+  // the webhook (app/api/webhooks/stripe/route.ts's charge.refunded
+  // branch) and shows up here on this board's own 15s poll — this handler
+  // does NOT optimistically mark a card order refunded, since that would
+  // be trusting the admin action succeeded instead of the webhook, exactly
+  // what this project's brief says not to do.
+  const submitRefund = async (order: OrderRow, amount?: number) => {
+    setRefundSubmitting(true);
+    setRefundError('');
+    try {
+      const res = await fetch(`/api/admin/orders/${order.id}/refund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(amount ? { amount } : {}),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; paymentStatus?: string };
+      if (!res.ok) {
+        setRefundError(data.error || 'Refund failed.');
+        return;
+      }
+      // The COD path returns the new status directly (no webhook to wait
+      // on) — reflect it immediately. The card path doesn't return one on
+      // purpose (see the comment above); that order's pill updates once
+      // the next poll picks up the webhook's write.
+      if (data.paymentStatus) {
+        setOrders((list) => list.map((o) => (o.id === order.id ? { ...o, payment_status: data.paymentStatus } : o)));
+      }
+      setRefundOrder(null);
+    } catch {
+      setRefundError('Refund failed. Please try again.');
+    } finally {
+      setRefundSubmitting(false);
     }
   };
 
@@ -785,6 +958,21 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
             await cancelOrder(order);
             setViewingOrder(null);
           }}
+          onRefund={(order) => {
+            setRefundError('');
+            setRefundOrder(order);
+          }}
+        />
+      )}
+
+      {refundOrder && (
+        <RefundPromptModal
+          order={refundOrder}
+          remaining={refundRemaining(refundOrder)}
+          submitting={refundSubmitting}
+          error={refundError}
+          onClose={() => { if (!refundSubmitting) { setRefundOrder(null); setRefundError(''); } }}
+          onConfirm={(amount) => submitRefund(refundOrder, amount)}
         />
       )}
     </div>

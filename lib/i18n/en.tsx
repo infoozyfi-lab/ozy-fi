@@ -292,6 +292,12 @@ const en = {
     codNote: (total: ReactNode) => (
       <>Pay <b>{total}</b> by cash on delivery when your order arrives.</>
     ),
+    // Part A (order confirmation screen) — shown instead of codNote when
+    // paymentMethod is 'card', so a customer who already paid by card
+    // isn't told to pay cash on delivery.
+    cardPaidNote: (total: ReactNode) => (
+      <>Paid <b>{total}</b> — thank you!</>
+    ),
     saveOrderNumber: (trackLink: ReactNode) => (
       <>Save your order number — you can check its status anytime on our {trackLink} page.</>
     ),
@@ -317,6 +323,32 @@ const en = {
     // shows a copyable code (unlike the redesigned stamp-card reward
     // above) — Wow Moment itself is unchanged by the stamp-card redesign.
     wowMomentReward: '✨ Wow Moment! You’ve won a surprise reward for your next order:',
+  },
+
+  // Part B (Stripe return_url / redirect handling) — /checkout-return, the
+  // page a customer lands on after a redirect-based payment method (some
+  // Google Pay/Apple Pay flows on mobile) sends them back here instead of
+  // resolving in-page. Separate from `confirm` above because the possible
+  // outcomes here are different (a redirect can come back processing or
+  // failed, not just succeeded) and none of this page's copy applies to
+  // the ordinary in-page card flow at all.
+  checkoutReturn: {
+    checkingTitle: 'Checking your payment…',
+    checkingMessage: 'One moment while we confirm your payment with Stripe.',
+    processingTitle: 'Payment processing',
+    processingMessage: 'Your payment is still being processed. We’ll update your order as soon as it’s confirmed — you can check its status anytime on the Track order page.',
+    failedTitle: 'Payment not completed',
+    failedMessage: 'This payment didn’t go through, so your order hasn’t been placed. Please try again.',
+    errorTitle: 'Something went wrong',
+    errorMessage: 'We couldn’t confirm your payment status here. If you’re not sure whether your order went through, please check the Track order page or contact us before trying again.',
+    // Fallback for the rare case a successful payment's PaymentIntent
+    // didn't carry an order number (should not normally happen — see
+    // app/api/orders/route.ts's paymentIntents.create metadata) — still
+    // confirms the charge succeeded without claiming an order number we
+    // don't actually have.
+    successNoOrderNumMessage: 'Your payment went through — thank you! If your order number doesn’t appear here, you can look up your order by phone number on the Track order page.',
+    backToMenu: 'Back to menu',
+    trackOrderLink: 'Track order',
   },
 
   track: {

@@ -41,12 +41,19 @@ export const GOLD = '#7D5A16'; // var(--gold)
 // #ec835a) — both read fine as text/fills on a near-black card but drop
 // well below AA contrast on the new light card background; good/critical
 // already had adequate contrast on white and were left as-is.
-export const STATUS: Record<'good' | 'warning' | 'serious' | 'critical' | 'neutral', string> = {
+export const STATUS: Record<'good' | 'warning' | 'serious' | 'critical' | 'neutral' | 'refund', string> = {
   good: '#0ca30c',
   warning: '#A66A00',
   serious: '#A8532E',
   critical: '#d03b3b',
   neutral: '#756B5F', // muted — "not started yet" (received)
+  // Part C (admin-initiated refunds) — a genuinely new tone, not a reuse of
+  // good (paid) or critical (failed): a refund isn't "bad" the way a failed
+  // charge is, but it also isn't the ordinary "paid" success state, so it
+  // gets its own identity. Pulled from CATEGORICAL[0] (#3987e5, blue) below
+  // rather than inventing an unrelated hex, so it stays inside this file's
+  // already-validated palette instead of adding an unvetted color.
+  refund: '#3987e5',
 };
 
 export const ORDER_STATUS_COLOR: Record<OrderStatus, string> = {
@@ -69,6 +76,12 @@ export const PAYMENT_STATUS_COLOR = {
   pending: STATUS.warning, // card order created, Stripe hasn't confirmed the charge yet
   paid: STATUS.good,
   failed: STATUS.critical,
+  // Part C (admin-initiated refunds, worker/migrations/013_refunds.sql) —
+  // both refund states share one tone (STATUS.refund); the pill's label
+  // text is what tells "fully" and "partially" apart, same way "cod" and
+  // "pending" already share no special distinction beyond their label.
+  refunded: STATUS.refund,
+  partially_refunded: STATUS.refund,
 } as const;
 
 export function categoryColor(index: number): string {

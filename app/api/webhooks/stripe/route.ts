@@ -18,9 +18,10 @@ export const dynamic = 'force-dynamic';
 // paying.
 //
 // Set this endpoint's URL (https://ozy.fi/api/webhooks/stripe) in Stripe
-// Dashboard → Developers → Webhooks, listening for payment_intent.succeeded
-// and payment_intent.payment_failed, then copy its "Signing secret" into
-// the STRIPE_WEBHOOK_SECRET Cloudflare secret (see cloudflare-env.d.ts).
+// Dashboard → Developers → Webhooks, listening for payment_intent.succeeded,
+// payment_intent.payment_failed, and (Part C — admin-initiated refunds)
+// charge.refunded, then copy its "Signing secret" into the
+// STRIPE_WEBHOOK_SECRET Cloudflare secret (see cloudflare-env.d.ts).
 export async function POST(request: Request) {
   const { env } = await getCloudflareContext({ async: true });
 
@@ -54,6 +55,35 @@ export async function POST(request: Request) {
     await env.DB.prepare(
       `UPDATE orders SET payment_status = ? WHERE stripe_payment_intent_id = ?`
     ).bind(status, paymentIntent.id).run();
+  }
+
+  // Part C (admin-initiated refunds) — the admin refund route
+  // (app/api/admin/orders/[id]/refund/route.ts) only ever CALLS
+  // stripe.refunds.create(...); it deliberately never writes
+  // orders.payment_status itself, so nothing marks an order refunded in
+  // this database until Stripe confirms it really happened, here — same
+  // "webhook is the sole source of truth for payment state" rule this file
+  // already applies to paid/failed above. charge.refunded fires once per
+  // refund (so a second, later partial refund against the same charge
+  // fires this again) — amount_refunded/refunded on the Charge object are
+  // always the CUMULATIVE total-so-far, not just this refund's own amount,
+  // so this always overwrites refunded_amount with the authoritative
+  // running total rather than trying to add to it.
+  if (event.type === 'charge.refunded') {
+    const charge = event.data.object as Stripe.Charge;
+    const paymentIntentId = typeof charge.payment_intent === 'string'
+      ? charge.payment_intent
+      : charge.payment_intent?.id;
+
+    if (paymentIntentId) {
+      const status = charge.refunded ? 'refunded' : 'partially_refunded';
+      const refundedAmount = charge.amount_refunded / 100;
+      const refundedAt = new Date(event.created * 1000).toISOString();
+
+      await env.DB.prepare(
+        `UPDATE orders SET payment_status = ?, refunded_amount = ?, refunded_at = ? WHERE stripe_payment_intent_id = ?`
+      ).bind(status, refundedAmount, refundedAt, paymentIntentId).run();
+    }
   }
 
   // Every other event type is acknowledged but ignored — Stripe retries

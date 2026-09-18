@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { loadStripe, type Stripe as StripeJs, type StripeError } from '@stripe/stripe-js';
+import type { StripeError } from '@stripe/stripe-js';
 import {
   Elements,
   PaymentElement,
   useStripe,
   useElements,
 } from '@stripe/react-stripe-js';
+import { useLocalePath } from '@/lib/i18n';
+import { stripePublishableKey as stripeKey, getStripePromise } from '@/lib/stripe-client';
 
 // How long we give Stripe's own PaymentElement skeleton to finish loading
 // before treating it as failed even without an explicit loaderror event
@@ -16,25 +18,11 @@ import {
 // slow connection doesn't get falsely flagged.
 const ELEMENT_LOAD_TIMEOUT_MS = 12000;
 
-// Loaded once per page (module scope, not per-render) — loadStripe caches
-// the script/instance itself anyway, but this avoids re-triggering that
-// on every CheckoutModal re-render.
-//
-// NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is inlined into this CLIENT bundle at
-// `next build` time (see cloudflare-env.d.ts for the full explanation of
-// where that value has to be configured on Cloudflare Workers Builds). If
-// it's missing here, that's a deploy-time misconfiguration, not something
-// a page reload will fix — so this module also tracks whether the key was
-// present at all, and CardPaymentStep below renders a visible error
-// instead of silently mounting a dead Elements provider when it wasn't.
-const stripeKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-let stripePromise: Promise<StripeJs | null> | null = null;
-function getStripePromise() {
-  if (!stripePromise) {
-    stripePromise = stripeKey ? loadStripe(stripeKey) : Promise.resolve(null);
-  }
-  return stripePromise;
-}
+// stripeKey/getStripePromise now come from lib/stripe-client.ts (Part B —
+// shared with the new /checkout-return landing page, see that file's
+// header comment). Behavior is unchanged: still one loadStripe() call per
+// page, still a visible error below instead of a silently-dead Elements
+// provider when the publishable key is missing.
 
 interface CardPaymentStepProps {
   clientSecret: string;
@@ -46,6 +34,7 @@ interface CardPaymentStepProps {
 function PayButton({ amountLabel, onSuccess, t }: Omit<CardPaymentStepProps, 'clientSecret'>) {
   const stripe = useStripe();
   const elements = useElements();
+  const lp = useLocalePath();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -111,10 +100,22 @@ function PayButton({ amountLabel, onSuccess, t }: Omit<CardPaymentStepProps, 'cl
     // card / Google Pay / Apple Pay (the only methods enabled server-side
     // — see app/api/orders/route.ts's automatic_payment_methods) resolve
     // in place, including any 3-D Secure challenge, which Stripe.js shows
-    // as an in-page modal, not a redirect.
+    // as an in-page modal, not a redirect — MOST of the time. This project
+    // has observed Google Pay/Apple Pay occasionally hit this path on
+    // mobile anyway, and Stripe's own API requires confirmParams.return_url
+    // even with redirect: 'if_required', as the destination for those
+    // unpredictable cases (Stripe throws an integration error without one —
+    // this was previously missing entirely). A full page reload happens on
+    // an actual redirect, so any in-memory state here (this whole
+    // CheckoutModal) is lost; /checkout-return (Part B) is what picks the
+    // customer back up on the other side, using the same clientSecret via
+    // Stripe's own appended query params.
     const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
       elements,
       redirect: 'if_required',
+      confirmParams: {
+        return_url: `${window.location.origin}${lp('/checkout-return')}`,
+      },
     });
 
     if (confirmError) {

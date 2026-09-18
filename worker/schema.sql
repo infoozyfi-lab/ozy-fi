@@ -103,12 +103,23 @@ CREATE TABLE orders (
   -- payment_status: 'cod' (default, nothing to track) | 'pending' (a card
   -- order was created and a Stripe PaymentIntent exists for it, unconfirmed)
   -- | 'paid' (the webhook confirmed the charge — sole source of truth, see
-  -- app/api/webhooks/stripe) | 'failed' (card declined). stripe_payment_
-  -- intent_id is Stripe's own id for the PaymentIntent tied to this order,
-  -- so the webhook (which only receives Stripe ids, never our order_num)
-  -- can look up which order to update.
+  -- app/api/webhooks/stripe) | 'failed' (card declined) | 'refunded' (Part C
+  -- — the full charge was refunded) | 'partially_refunded' (Part C — some
+  -- but not all of the charge was refunded). The two refund values, same as
+  -- 'paid'/'failed', are set ONLY by the webhook (charge.refunded), never
+  -- directly by the admin refund action — see worker/migrations/
+  -- 013_refunds.sql. A COD order's "refund" is a plain manual marker with
+  -- no Stripe involvement at all, so it never produces these two values.
+  -- stripe_payment_intent_id is Stripe's own id for the PaymentIntent tied
+  -- to this order, so the webhook (which only receives Stripe ids, never
+  -- our order_num) can look up which order to update.
   payment_status     TEXT NOT NULL DEFAULT 'cod',
   stripe_payment_intent_id TEXT,
+  -- Refunds (worker/migrations/013_refunds.sql) — set by the webhook from
+  -- Stripe's own charge.refunded event, not trusted from the admin's
+  -- refund request. NULL for every order that was never refunded.
+  refunded_amount    REAL,
+  refunded_at        TEXT,
   estimated_ready_at TEXT,
   -- Phase 7.1: who's delivering this order, set (optionally) from the
   -- Kanban board when moving an order to "on_the_way" — see

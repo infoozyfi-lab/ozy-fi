@@ -725,7 +725,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     scheduledOfferApplied?: { id: string; label: string } | null;
     loyalty?: { orderCount: number; everyNOrders: number; pendingRewardCreated: boolean };
     wowMomentRewardCode?: string | null;
-  }) => {
+  }, paymentMethod: 'cod' | 'card' = 'cod') => {
     // Use the server's own total (post-discount, if a coupon applied) for
     // both the purchase event and the confirmation screen — it's the
     // authoritative number, not the client's pre-validation preview.
@@ -742,6 +742,12 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       scheduledOfferApplied: data.scheduledOfferApplied,
       wowMomentRewardCode: data.wowMomentRewardCode,
       discountSource: data.discountSource,
+      // Part A (order confirmation screen) — the caller already knows
+      // which method this order was placed with (placeOrder's own
+      // `paymentMethod` param, in scope at both call sites below); just
+      // threading it through here so ConfirmModal can show the right
+      // message. Doesn't change what gets charged or how — purely display.
+      paymentMethod,
     });
     setCheckoutOpen(false);
     setCart([]);
@@ -838,11 +844,11 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       return {
         requiresPayment: true as const,
         clientSecret: data.clientSecret,
-        finalize: () => finalizeOrder(customer, data),
+        finalize: () => finalizeOrder(customer, data, 'card'),
       };
     }
 
-    finalizeOrder(customer, data);
+    finalizeOrder(customer, data, paymentMethod);
     return { requiresPayment: false as const };
   }, [cart, cartTotal, storeClosed, t, isReorderCart, finalizeOrder]);
 

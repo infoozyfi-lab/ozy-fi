@@ -277,6 +277,11 @@ const fi = {
     codNote: (total: ReactNode) => (
       <>Maksa <b>{total}</b> käteisellä, kun tilauksesi saapuu.</>
     ),
+    // Part A (order confirmation screen) — shown instead of codNote when
+    // paymentMethod is 'card'.
+    cardPaidNote: (total: ReactNode) => (
+      <>Maksettu <b>{total}</b> — kiitos!</>
+    ),
     saveOrderNumber: (trackLink: ReactNode) => (
       <>Tallenna tilausnumerosi — voit tarkistaa tilauksesi tilan milloin tahansa {trackLink}-sivulla.</>
     ),
@@ -291,6 +296,22 @@ const fi = {
     codeCopied: 'Kopioitu!',
     // Growth features batch 2 (Feature 6 — "Ozy Wow Moment").
     wowMomentReward: '✨ Wow-hetki! Voitit yllätyspalkinnon seuraavaan tilaukseesi:',
+  },
+
+  // Part B (Stripe return_url / redirect handling) — ks. lib/i18n/en.tsx:n
+  // sama kommentti.
+  checkoutReturn: {
+    checkingTitle: 'Tarkistetaan maksuasi…',
+    checkingMessage: 'Hetki, vahvistamme maksusi Stripen kautta.',
+    processingTitle: 'Maksua käsitellään',
+    processingMessage: 'Maksusi on vielä käsittelyssä. Päivitämme tilauksesi heti, kun maksu on vahvistettu — voit tarkistaa tilanteen milloin tahansa Seuraa tilausta -sivulla.',
+    failedTitle: 'Maksua ei suoritettu',
+    failedMessage: 'Maksu ei mennyt läpi, joten tilaustasi ei tehty. Yritä uudelleen.',
+    errorTitle: 'Jokin meni pieleen',
+    errorMessage: 'Emme voineet vahvistaa maksusi tilaa täällä. Jos et ole varma, meniikö tilauksesi läpi, tarkista tilanne Seuraa tilausta -sivulta tai ota meihin yhteyttä ennen uutta yritystä.',
+    successNoOrderNumMessage: 'Maksusi meni läpi — kiitos! Jos tilausnumerosi ei näy tässä, voit hakea tilauksesi puhelinnumerolla Seuraa tilausta -sivulla.',
+    backToMenu: 'Takaisin menuun',
+    trackOrderLink: 'Seuraa tilausta',
   },
 
   track: {

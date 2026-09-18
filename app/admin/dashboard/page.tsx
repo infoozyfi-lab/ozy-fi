@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState, type CSSProperties, type F
 import ResourceManager from '@/components/admin/ResourceManager';
 import BundleManager from '@/components/admin/BundleManager';
 import ScheduledOffersManager from '@/components/admin/ScheduledOffersManager';
-import OrderKanban from '@/components/admin/OrderKanban';
+import OrderKanban, { isRefundEligible, refundRemaining } from '@/components/admin/OrderKanban';
 import MyAccountModal from '@/components/admin/MyAccountModal';
 import StatTile from '@/components/admin/charts/StatTile';
 import AreaTrendChart from '@/components/admin/charts/AreaTrendChart';
@@ -384,9 +384,25 @@ interface OrderDetailData {
   items: OrderItemRow[];
 }
 
-function OrderDetailRow({ token, order }: { token: string; order: OrderRow }) {
+function OrderDetailRow({
+  token,
+  order,
+  onOrderUpdated,
+}: {
+  token: string;
+  order: OrderRow;
+  // Part C (admin-initiated refunds) — lets this row report a refund
+  // result back up to OrdersTab's own `orders` state (same as
+  // changeStatus's setOrders call above it), instead of this row keeping
+  // its own separate copy that the rest of the table wouldn't see.
+  onOrderUpdated: (orderId: number, patch: Partial<OrderRow>) => void;
+}) {
   const [detail, setDetail] = useState<OrderDetailData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refunding, setRefunding] = useState(false);
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundSubmitting, setRefundSubmitting] = useState(false);
+  const [refundError, setRefundError] = useState('');
 
   useEffect(() => {
     fetch(`/api/admin/orders/${order.id}`)
@@ -395,6 +411,37 @@ function OrderDetailRow({ token, order }: { token: string; order: OrderRow }) {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [token, order.id]);
+
+  const remaining = refundRemaining(order);
+
+  // Same request/response shape and same "don't trust the admin action,
+  // wait for the webhook on a card order" rule as OrderKanban.tsx's
+  // submitRefund — see that function's comment for the full reasoning.
+  const submitRefund = async (amount?: number) => {
+    setRefundSubmitting(true);
+    setRefundError('');
+    try {
+      const res = await fetch(`/api/admin/orders/${order.id}/refund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(amount ? { amount } : {}),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; paymentStatus?: string };
+      if (!res.ok) {
+        setRefundError(data.error || 'Refund failed.');
+        return;
+      }
+      if (data.paymentStatus) {
+        onOrderUpdated(order.id, { payment_status: data.paymentStatus });
+      }
+      setRefunding(false);
+      setRefundAmount('');
+    } catch {
+      setRefundError('Refund failed. Please try again.');
+    } finally {
+      setRefundSubmitting(false);
+    }
+  };
 
   return (
     <tr>
@@ -420,7 +467,7 @@ function OrderDetailRow({ token, order }: { token: string; order: OrderRow }) {
               </p>
               {detail.notes && <p style={{ margin: 0 }}>Notes: {detail.notes}</p>}
               {detail.driver_name && <p style={{ margin: 0 }}>🛵 Driver: {detail.driver_name}</p>}
-              <p style={{ margin: '10px 0 0' }}>
+              <p style={{ margin: '10px 0 0', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <a
                   href={`/admin/orders/${order.id}/invoice`}
                   target="_blank"
@@ -429,7 +476,55 @@ function OrderDetailRow({ token, order }: { token: string; order: OrderRow }) {
                 >
                   View invoice ↗
                 </a>
+                {isRefundEligible(order) && !refunding && (
+                  <button type="button" style={btn} onClick={() => { setRefunding(true); setRefundError(''); }}>
+                    Refund
+                  </button>
+                )}
               </p>
+              {refunding && (
+                <div style={{ marginTop: 10, padding: 12, background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 8, maxWidth: 340 }}>
+                  <p style={{ margin: '0 0 8px', fontSize: 13, color: 'var(--muted)' }}>
+                    {order.payment_method === 'card'
+                      ? `Refunds through Stripe. Up to ${formatCurrency(remaining)} can still be refunded — the payment status here updates once Stripe confirms it.`
+                      : `Marks up to ${formatCurrency(remaining)} as refunded. No Stripe charge exists for a cash-on-delivery order, so nothing is actually processed — this is a record-keeping marker only.`}
+                  </p>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <button type="button" style={btnPrimary} disabled={refundSubmitting} onClick={() => submitRefund(undefined)}>
+                      {refundSubmitting ? 'Processing…' : `Full refund (${formatCurrency(remaining)})`}
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      type="number"
+                      min="0.01"
+                      max={remaining}
+                      step="0.01"
+                      placeholder={`Up to ${remaining.toFixed(2)}`}
+                      value={refundAmount}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setRefundAmount(e.target.value)}
+                      style={{ ...inputStyle, marginTop: 0, width: 130 }}
+                    />
+                    <button
+                      type="button"
+                      style={btn}
+                      disabled={refundSubmitting || !refundAmount || Number(refundAmount) <= 0 || Number(refundAmount) > remaining}
+                      onClick={() => submitRefund(Number(refundAmount))}
+                    >
+                      Refund amount
+                    </button>
+                  </div>
+                  {refundError && <p style={{ margin: '8px 0 0', color: 'var(--danger)', fontSize: 13 }}>{refundError}</p>}
+                  <button
+                    type="button"
+                    disabled={refundSubmitting}
+                    onClick={() => { setRefunding(false); setRefundError(''); }}
+                    style={{ marginTop: 8, background: 'none', border: 'none', color: 'var(--muted)', textDecoration: 'underline', fontSize: 13, cursor: 'pointer', padding: 0 }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <p style={{ margin: '0 0 4px', color: 'var(--muted)', fontSize: 13 }}>Items</p>
@@ -552,7 +647,13 @@ function OrdersTab({ token }: { token: string }) {
                       </button>
                     </td>
                   </tr>
-                  {expandedId === order.id && <OrderDetailRow token={token} order={order} />}
+                  {expandedId === order.id && (
+                    <OrderDetailRow
+                      token={token}
+                      order={order}
+                      onOrderUpdated={(orderId, patch) => setOrders((list) => list.map((o) => (o.id === orderId ? { ...o, ...patch } : o)))}
+                    />
+                  )}
                 </React.Fragment>
               ))}
             </tbody>
@@ -1062,16 +1163,6 @@ function RestaurantInfoSettings({ token }: { token: string }) {
 
   return (
     <div style={box}>
-      {/* TEMPORARY DIAGNOSTIC — placed here on purpose to compare against
-          the same component's behavior in Menu & Pricing's landing page,
-          which is reportedly showing nothing at all. Remove once the
-          Menu & Pricing issue is resolved. */}
-      <div style={{ border: '2px dashed var(--ember)', padding: 8, marginBottom: 16 }}>
-        <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--ember)' }}>
-          ⬇ DIAGNOSTIC COPY (Settings tab) — compare against Menu &amp; Pricing
-        </p>
-        <PricingRulesBox token={token} />
-      </div>
       <h2 style={{ marginTop: 0 }}>Restaurant Settings</h2>
 
       <div

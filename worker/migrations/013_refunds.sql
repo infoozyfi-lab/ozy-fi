@@ -1,0 +1,27 @@
+-- Admin-initiated refunds (Part C — see this task's brief).
+--
+-- orders.payment_status (worker/migrations/012_stripe_payments.sql) gains
+-- two new values, both set ONLY by the Stripe webhook handler
+-- (app/api/webhooks/stripe/route.ts's new charge.refunded branch) — never
+-- directly by the admin refund API route (app/api/admin/orders/[id]/
+-- refund/route.ts), same "webhook is the sole source of truth for payment
+-- state" principle this project already applies to 'paid'/'failed':
+--
+--   'refunded'            — the full charged amount was refunded via Stripe.
+--   'partially_refunded'  — some, but not all, of the charge was refunded.
+--
+-- A COD order's "refund" never touches Stripe at all (there's nothing to
+-- refund through Stripe for cash that was never processed through it) — for
+-- those the admin route sets a plain manual status marker directly, no
+-- webhook round-trip involved, since there's no Stripe event to wait for.
+--
+-- refunded_amount/refunded_at record what the webhook actually confirmed,
+-- for display on the order (admin order detail, invoice) — not trusted from
+-- the admin's refund request, but from Stripe's own charge.refunded event
+-- (event.data.object.amount_refunded, in cents) and the time that webhook
+-- was processed. Nullable: unset for every order that was never refunded,
+-- same additive-only convention as every other migration in this project
+-- (see 011_shared_discount_value.sql, 012_stripe_payments.sql) — no
+-- existing row or query is affected by these being NULL.
+ALTER TABLE orders ADD COLUMN refunded_amount REAL;
+ALTER TABLE orders ADD COLUMN refunded_at TEXT;

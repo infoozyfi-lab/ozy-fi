@@ -26,6 +26,12 @@
     "@types/react-dom": "^19.3.0"
   },
   "overrides": {
+    "@opennextjs/cloudflare": {
+      "next": "$next"
+    },
+    "@opennextjs/aws": {
+      "next": "$next"
+    },
     "@stripe/react-stripe-js": {
       "react": "$react",
       "react-dom": "$react-dom"

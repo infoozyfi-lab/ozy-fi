@@ -491,6 +491,15 @@ export interface ConfirmedOrder {
   // win specifically, distinct from welcomeDiscountApplied/
   // scheduledOfferApplied above (which already carry their own labels).
   discountSource?: DiscountSource | null;
+  // Order confirmation screen (Part A) — which payment method this order
+  // was placed with, so ConfirmModal.tsx can show a message that actually
+  // matches what happened ("Paid — thank you!" for a successful card
+  // charge vs. "Pay on delivery" for COD) instead of always showing the
+  // cash-on-delivery note regardless of how the order was actually paid
+  // for. Set by finalizeOrder in context/StoreContext.tsx from the same
+  // paymentMethod placeOrder was called with — never re-derived or
+  // guessed here.
+  paymentMethod: 'cod' | 'card';
 }
 
 export interface OpenProductOptions {
@@ -726,6 +735,13 @@ export interface OrderRow {
   // only a subset of columns.
   payment_status?: string;
   stripe_payment_intent_id?: string | null;
+  // Part C (admin-initiated refunds, worker/migrations/013_refunds.sql) —
+  // set by the webhook (charge.refunded) for a card order, or written
+  // directly by the refund route for a COD order (see that route's own
+  // comment on why COD never waits on a webhook). NULL for every order
+  // that was never refunded.
+  refunded_amount?: number | null;
+  refunded_at?: string | null;
   estimated_ready_at?: string | null;
   driver_name?: string | null;
   coupon_code?: string | null;
