@@ -150,12 +150,19 @@ export default function BundleManager({
     }),
   }));
 
-  const uploadImage = async (file: File) => {
+  // See ResourceManager.tsx's identical nameHint/descriptionHint pattern —
+  // the upload route (app/api/admin/upload/route.ts's buildHintedSlug)
+  // prefers this bundle's own title/description text over the uploaded
+  // file's own name when building the storage key/URL, falling back to the
+  // file's name when the bundle has no title yet.
+  const uploadImage = async (file: File, nameHint?: string, descriptionHint?: string) => {
     setUploading(true);
     setError('');
     try {
       const body = new FormData();
       body.append('file', file, file.name || 'upload.jpg');
+      if (nameHint) body.append('nameHint', nameHint);
+      if (descriptionHint) body.append('descriptionHint', descriptionHint);
       const res = await fetch('/api/admin/upload', {
         method: 'POST', body,
       });
@@ -265,7 +272,7 @@ export default function BundleManager({
                 {form.image && <img src={form.image} alt="" style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--line)' }} />}
                 <input style={{ ...inputStyle, flex: 1, minWidth: 160 }} value={form.image} onChange={(e: ChangeEvent<HTMLInputElement>) => setField('image', e.target.value)} placeholder="Upload below, or paste an image URL" />
               </div>
-              <input type="file" accept="image/*" style={{ marginTop: 8, color: 'var(--cream)' }} disabled={uploading} onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files && e.target.files[0]; if (f) uploadImage(f); e.target.value = ''; }} />
+              <input type="file" accept="image/*" style={{ marginTop: 8, color: 'var(--cream)' }} disabled={uploading} onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files && e.target.files[0]; if (f) uploadImage(f, form.title.trim(), form.description.trim()); e.target.value = ''; }} />
               {uploading && <p style={{ fontSize: 12, color: 'var(--muted)' }}>Uploading…</p>}
             </label>
           </div>

@@ -25,12 +25,18 @@ function extFromContentType(type: string): string {
 // called) is still what actually prevents collisions.
 const MAX_SLUG_LENGTH = 80;
 
-function slugifyFilename(name: string): string {
+// `stripExtension` defaults on for the original use (a real uploaded
+// filename, which may end in ".jpg" etc.) but is turned off when this is
+// called on name+description hint text (see nameHint/descriptionHint
+// below) — that text was never a filename, so trimming a trailing
+// "extension-shaped" fragment off it (e.g. a description that happens to
+// end in "v2." or a decimal) would be wrong, not helpful.
+function slugifyFilename(name: string, stripExtension = true): string {
   // Drop a trailing extension if the original name had one — the real
   // extension used in the final key comes from the validated content-type
   // (extFromContentType), not from whatever the browser/OS put on the
   // original file, so there's no reason to carry a second one into the slug.
-  const withoutExt = name.replace(/\.[^./\\]+$/, '');
+  const withoutExt = stripExtension ? name.replace(/\.[^./\\]+$/, '') : name;
 
   let slug = withoutExt
     .toLowerCase()
@@ -54,6 +60,36 @@ function slugifyFilename(name: string): string {
   // Empty, symbols-only, or missing original name — fall back to something
   // reasonable rather than producing an all-but-empty key.
   return slug || 'image';
+}
+
+// A FormData field that's genuinely absent comes back `null`; one a
+// browser/client sent as an empty string is still `''`. Both mean "no
+// hint" here, and a non-string (shouldn't happen for these two fields,
+// but FormData is untyped) is treated the same way rather than throwing.
+function formHintText(form: FormData | null, key: string): string {
+  const value = form ? form.get(key) : null;
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+// Auto-SEO-filename fix — the admin panel already knows a product's name
+// and ingredients (or a bundle's title, or the homepage banner's title)
+// at the moment an image is uploaded for it, so the upload requests from
+// components/admin/ResourceManager.tsx, components/admin/BundleManager.tsx
+// and app/admin/dashboard/page.tsx's banner uploader all send that text
+// along as `nameHint`/`descriptionHint` form fields, ahead of a camera-roll
+// filename like "IMG_4521.jpg" that carries no useful SEO information.
+// `nameHint` alone (no description) is enough to prefer the hint — the
+// description is just extra keywords tacked on when there is one.
+function buildHintedSlug(form: FormData | null, file: File): string {
+  const nameHint = formHintText(form, 'nameHint');
+  if (!nameHint) {
+    // No name yet (e.g. a brand-new, not-yet-named product) — same
+    // fallback as before this feature existed: slugify the file's own name.
+    return slugifyFilename(file.name || '');
+  }
+  const descriptionHint = formHintText(form, 'descriptionHint');
+  const hintText = descriptionHint ? `${nameHint} ${descriptionHint}` : nameHint;
+  return slugifyFilename(hintText, false);
 }
 
 // Used for menu/category/addon photos (Manager, Owner) and the homepage
@@ -89,10 +125,12 @@ export async function POST(request: Request) {
   }
 
   const ext = extFromContentType(file.type);
-  // file.name comes from the FormData entry — not always present depending
-  // on how the upload was built client-side, so this still falls back
-  // cleanly via slugifyFilename('') -> 'image' rather than erroring.
-  const slug = slugifyFilename(file.name || '');
+  // Prefer an SEO-meaningful name/description hint sent alongside the
+  // file over the file's own (often meaningless, e.g. "IMG_4521.jpg")
+  // name — see buildHintedSlug. Falls back to slugifying file.name when
+  // no hint was sent, exactly as before this feature existed, so uploads
+  // from paths that don't send hints keep working unchanged.
+  const slug = buildHintedSlug(form, file);
   const suffix = crypto.randomUUID().slice(0, 8);
   const key = `uploads/${slug}-${suffix}.${ext}`;
 

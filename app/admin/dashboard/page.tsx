@@ -1305,12 +1305,18 @@ function HomepageDisplaySettings({ token }: { token: string }) {
     setField('popular_product_ids', JSON.stringify(next));
   };
 
-  const uploadBannerImage = async (file: File) => {
+  // Same nameHint pattern as ResourceManager.tsx/BundleManager.tsx — the
+  // upload route prefers this over the file's own name when building the
+  // storage key/URL. The custom banner has no ingredients-like second
+  // field (its "Banner price text" isn't description content), so this
+  // only ever sends a nameHint, never a descriptionHint.
+  const uploadBannerImage = async (file: File, nameHint?: string) => {
     setUploading(true);
     setUploadError('');
     try {
       const body = new FormData();
       body.append('file', file, file.name || 'upload.jpg');
+      if (nameHint) body.append('nameHint', nameHint);
       const res = await fetch('/api/admin/upload', {
         method: 'POST', body,
       });
@@ -1401,7 +1407,7 @@ function HomepageDisplaySettings({ token }: { token: string }) {
                   disabled={uploading}
                   onChange={(e: ChangeEvent<HTMLInputElement>) => {
                     const f = e.target.files && e.target.files[0];
-                    if (f) uploadBannerImage(f);
+                    if (f) uploadBannerImage(f, values.featured_banner_title || '');
                     e.target.value = '';
                   }}
                 />
