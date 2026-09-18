@@ -25,9 +25,10 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0"
   },
-  "overrides": {
+"overrides": {
     "@stripe/react-stripe-js": {
-      "react": "$react"
+      "react": "$react",
+      "react-dom": "$react-dom"
     }
   }
 }
