@@ -2,6 +2,7 @@
 
 import { StoreProvider, type StoreProviderInitialData } from '@/context/StoreContext';
 import Header from '@/components/Header';
+import Breadcrumbs, { type BreadcrumbItem } from '@/components/Breadcrumbs';
 import MenuSection from '@/components/MenuSection';
 import Footer from '@/components/Footer';
 import ProductPage from '@/components/ProductPage';
@@ -15,6 +16,7 @@ export default function MenuPageClient({
   onlyCategory = null,
   initialData = null,
   introText = null,
+  breadcrumbItems,
 }: {
   onlyCategory?: string | null;
   initialData?: StoreProviderInitialData | null;
@@ -26,11 +28,16 @@ export default function MenuPageClient({
   // page.tsx) — the full /menu page has no single-category "answer" to
   // give, so it stays null there.
   introText?: string | null;
+  // SEO gap-fill, Part A — same idea: only passed by the single-category
+  // page (Home > Category), never by the full /menu listing, which has no
+  // specific category to show a trail for.
+  breadcrumbItems?: BreadcrumbItem[];
 }) {
   return (
     <StoreProvider initialData={initialData}>
       <div id="top" />
       <Header />
+      <Breadcrumbs items={breadcrumbItems} />
       {introText && (
         <p
           style={{

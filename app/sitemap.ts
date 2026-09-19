@@ -51,6 +51,19 @@ export default async function sitemap() {
   const staticEntries = [
     ...entry('', { lastModified: now, changeFrequency: 'daily', priority: 1 }),
     ...entry('/menu', { lastModified: now, changeFrequency: 'daily', priority: 0.9 }),
+    // Audit-fixes brief, Part 3 — these five real, indexable pages
+    // (app/(site)/[locale]/{faq,about,contact,delivery,pickup}) existed
+    // and were reachable via the header/footer nav, but were never listed
+    // here, so a search engine had no explicit signal to crawl them at
+    // all beyond stumbling onto internal links. Priorities/frequencies
+    // follow this file's own existing convention: informational pages
+    // that rarely change sit alongside /privacy and /terms below, not up
+    // with the daily-changing menu.
+    ...entry('/faq', { lastModified: now, changeFrequency: 'monthly', priority: 0.5 }),
+    ...entry('/about', { lastModified: now, changeFrequency: 'monthly', priority: 0.4 }),
+    ...entry('/contact', { lastModified: now, changeFrequency: 'monthly', priority: 0.4 }),
+    ...entry('/delivery', { lastModified: now, changeFrequency: 'monthly', priority: 0.4 }),
+    ...entry('/pickup', { lastModified: now, changeFrequency: 'monthly', priority: 0.4 }),
     ...entry('/privacy', { lastModified: now, changeFrequency: 'yearly', priority: 0.2 }),
     ...entry('/terms', { lastModified: now, changeFrequency: 'yearly', priority: 0.2 }),
     ...entry('/track', { lastModified: now, changeFrequency: 'monthly', priority: 0.3 }),

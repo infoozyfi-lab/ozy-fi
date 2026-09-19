@@ -2,6 +2,8 @@
 
 import { useEffect, useState, type CSSProperties, type FormEvent, type ChangeEvent, type FocusEvent } from 'react';
 import type { BundleRow, BundleSlotDef } from '@/lib/types';
+import { slugify } from '@/lib/slugify';
+import ConfirmDialog from './ConfirmDialog';
 
 const box: CSSProperties = {
   background: 'var(--bg-card)', padding: '24px', borderRadius: '12px',
@@ -55,10 +57,6 @@ function emptyBundle(): BundleFormState {
   return { id: '', title: '', title_fi: '', description: '', description_fi: '', image: '', price: '', active: true, sort_order: 0, slots: [] };
 }
 
-function slugify(text: unknown): string {
-  return String(text).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-}
-
 function emptySlot(kind: 'fixed' | 'choice'): BundleSlotDef {
   return kind === 'fixed'
     ? { kind: 'fixed', label: '', productId: '', qty: 1 }
@@ -83,6 +81,20 @@ export default function BundleManager({
   const [form, setForm] = useState<BundleFormState>(emptyBundle());
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // Audit-fixes brief, Part 6.7 — the bundle waiting on a Delete
+  // confirmation via ConfirmDialog, or null when it's closed.
+  const [pendingDelete, setPendingDelete] = useState<BundleRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // ID auto-slug — mirrors components/admin/ResourceManager.tsx's
+  // findSlugSourceKey/handleTextFieldChange pattern (see that file's
+  // comments for the full rationale), adapted for this component's one
+  // name-like field, `title`. `idTouched` tracks whether the admin has
+  // typed into `id` themselves during the current "New" session — once
+  // true, live auto-fill stops for the rest of that session even if they
+  // keep editing the title. Reset to false every time a fresh "New" form
+  // opens (see startCreate).
+  const [idTouched, setIdTouched] = useState(false);
 
   // Phase 5b: no more Authorization header — the httpOnly admin cookie
   // travels automatically on every same-origin fetch(). Kept as its own
@@ -104,6 +116,7 @@ export default function BundleManager({
   const startCreate = () => {
     setForm(emptyBundle());
     setEditingId('new');
+    setIdTouched(false);
   };
 
   const startEdit = (row: BundleRow) => {
@@ -131,6 +144,27 @@ export default function BundleManager({
   };
 
   const setField = <K extends keyof BundleFormState>(key: K, value: BundleFormState[K]) => setForm((f) => ({ ...f, [key]: value }));
+
+  // Live auto-fill: typing in Title fills `id` with a kebab-case slug of
+  // it (via the shared lib/slugify.ts helper — the same one
+  // ResourceManager.tsx and the image-upload route use), as long as the
+  // admin hasn't typed into `id` themselves yet this session. Editing an
+  // existing bundle never calls this — the ID input is disabled whenever
+  // editingId !== 'new' (see the form JSX below), so its onChange is never
+  // wired to this at all in that state.
+  const handleTitleChange = (value: string) => {
+    setField('title', value);
+    if (editingId === 'new' && !idTouched) {
+      setField('id', slugify(value));
+    }
+  };
+
+  // The moment the admin edits `id` by hand during a "New" session, stop
+  // auto-filling it from Title for the rest of that session.
+  const handleIdChange = (value: string) => {
+    setField('id', value);
+    if (editingId === 'new') setIdTouched(true);
+  };
 
   const addSlot = (kind: 'fixed' | 'choice') => setForm((f) => ({ ...f, slots: [...f.slots, emptySlot(kind)] }));
   const removeSlot = (idx: number) => setForm((f) => ({ ...f, slots: f.slots.filter((_, i) => i !== idx) }));
@@ -182,6 +216,12 @@ export default function BundleManager({
     setError('');
     try {
       const body: Record<string, unknown> = {
+        // Defensive fallback only — with the live auto-fill above, `id`
+        // should already be populated by the time a title-having form is
+        // submitted. This only fires in an edge case (e.g. `id` somehow
+        // still empty at submit time), so it keeps its own timestamp
+        // suffix for collision-safety rather than matching the plain
+        // live-typed slug exactly.
         id: form.id || `${slugify(form.title)}-${Date.now().toString(36).slice(-4)}`,
         title: form.title,
         title_fi: form.title_fi || null,
@@ -214,15 +254,29 @@ export default function BundleManager({
     }
   };
 
-  const remove = async (row: BundleRow) => {
-    if (!window.confirm(`Delete bundle "${row.title}"? This cannot be undone.`)) return;
+  // Audit-fixes brief, Part 6.7 — window.confirm() replaced with
+  // ConfirmDialog (rendered at the bottom of this component); remove()
+  // just opens it now, confirmDelete runs the actual DELETE once the
+  // admin confirms in that dialog.
+  const remove = (row: BundleRow) => {
+    setPendingDelete(row);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const row = pendingDelete;
+    setDeleting(true);
     try {
       const res = await fetch(`/api/admin/bundles/${encodeURIComponent(row.id)}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Delete failed.');
       load();
       if (onChanged) onChanged();
+      setPendingDelete(null);
     } catch (err: any) {
       setError(err.message || 'Delete failed.');
+      setPendingDelete(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -255,9 +309,9 @@ export default function BundleManager({
             {editingId !== 'new' ? (
               <label>ID<input style={{ ...inputStyle, background: 'var(--bg)', color: 'var(--muted)' }} value={form.id} disabled /></label>
             ) : (
-              <label>ID (slug, optional — auto from title)<input style={inputStyle} value={form.id} onChange={(e: ChangeEvent<HTMLInputElement>) => setField('id', e.target.value)} placeholder="e.g. pizza-lemonade-combo" /></label>
+              <label>ID (slug, auto-filled from title as you type — edit if you want a different one)<input style={inputStyle} value={form.id} onChange={(e: ChangeEvent<HTMLInputElement>) => handleIdChange(e.target.value)} placeholder="e.g. pizza-lemonade-combo" /></label>
             )}
-            <label>Title (English)<input style={inputStyle} required value={form.title} onChange={(e: ChangeEvent<HTMLInputElement>) => setField('title', e.target.value)} placeholder="3 Pizza + 1.5L Lemonade" /></label>
+            <label>Title (English)<input style={inputStyle} required value={form.title} onChange={(e: ChangeEvent<HTMLInputElement>) => handleTitleChange(e.target.value)} placeholder="3 Pizza + 1.5L Lemonade" /></label>
             <label>Title (Finnish, optional)<input style={inputStyle} value={form.title_fi} onChange={(e: ChangeEvent<HTMLInputElement>) => setField('title_fi', e.target.value)} /></label>
             <label>Price (€, flat combo price)<input style={inputStyle} type="number" step="0.1" required value={form.price} onChange={(e: ChangeEvent<HTMLInputElement>) => setField('price', e.target.value)} /></label>
             <label>Sort order<input style={inputStyle} type="number" value={form.sort_order} onChange={(e: ChangeEvent<HTMLInputElement>) => setField('sort_order', e.target.value)} /></label>
@@ -269,7 +323,7 @@ export default function BundleManager({
             <label style={{ gridColumn: '1 / -1' }}>
               Image
               <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
-                {form.image && <img src={form.image} alt="" style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--line)' }} />}
+                {form.image && <img src={form.image} alt={form.title.trim() ? `${form.title.trim()} preview` : 'Bundle image preview'} style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--line)' }} />}
                 <input style={{ ...inputStyle, flex: 1, minWidth: 160 }} value={form.image} onChange={(e: ChangeEvent<HTMLInputElement>) => setField('image', e.target.value)} placeholder="Upload below, or paste an image URL" />
               </div>
               <input type="file" accept="image/*" style={{ marginTop: 8, color: 'var(--cream)' }} disabled={uploading} onChange={(e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files && e.target.files[0]; if (f) uploadImage(f, form.title.trim(), form.description.trim()); e.target.value = ''; }} />
@@ -385,6 +439,15 @@ export default function BundleManager({
           </table>
         </div>
       )}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete this bundle?"
+        message={pendingDelete ? `Delete bundle "${pendingDelete.title}"? This cannot be undone.` : ''}
+        confirmLabel="Delete"
+        busy={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

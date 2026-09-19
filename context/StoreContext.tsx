@@ -80,7 +80,15 @@ interface StoreContextValue {
     couponCode?: string,
     paymentMethod?: 'cod' | 'card'
   ) => Promise<
-    | { requiresPayment: true; clientSecret: string; finalize: () => void }
+    // orderNum/amount (audit-fixes brief, Part 1) — the order number and
+    // the server's own authoritative total at the moment this order/
+    // PaymentIntent were created, handed back alongside clientSecret so
+    // CheckoutModal can (a) show a payment amount that can never drift
+    // from what Stripe will actually charge even if the customer edits
+    // their cart in another tab/panel while this payment is pending, and
+    // (b) cancel this exact order (POST /api/orders/[orderNum]/cancel) if
+    // the customer backs out of paying instead of completing it.
+    | { requiresPayment: true; clientSecret: string; finalize: () => void; orderNum: string; amount: number }
     | { requiresPayment: false }
   >;
   setConfirmedOrder: Dispatch<SetStateAction<ConfirmedOrder | null>>;
@@ -104,6 +112,17 @@ interface StoreContextValue {
   storeClosed: boolean;
   trackingConfig: TrackingConfig;
   openingHours: OpeningHours;
+  // Audit-fixes brief, Part 6.4 — real admin_settings.email/phone/address
+  // (the same three keys lib/site-settings.ts's getPublicSettings reads
+  // for /contact, /about, /pickup), so components/Footer.tsx and
+  // components/Visit.tsx can stop hardcoding placeholder contact details
+  // and instead show whatever the business has actually configured — same
+  // "real data, empty string until it's loaded/configured" contract as
+  // openingHours above. Read straight off /api/menu's own raw `settings`
+  // blob (see the loadMenu effect below) rather than through
+  // normalizeMenuBlob, since these three are plain locale-independent
+  // strings with nothing for that function to localize.
+  contactInfo: { email: string; phone: string; address: string };
   drinks: Addon[];
   dipCups: Addon[];
   snacks: Addon[];
@@ -297,6 +316,13 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
   // free-text shape — components/Visit.js falls back to its own
   // placeholder rows in either case rather than rendering nothing.
   const [openingHours, setOpeningHours] = useState<OpeningHours>(null);
+  // Audit-fixes brief, Part 6.4 — see this field's own comment on
+  // StoreContextValue above. Empty strings (not null/undefined) so
+  // Footer.tsx/Visit.tsx can treat "not loaded yet" and "not configured in
+  // Admin → Settings" the same way, matching how every other optional
+  // admin_settings-backed string is already handled in this codebase
+  // (e.g. lib/site-settings.ts's PublicSettings fields).
+  const [contactInfo, setContactInfo] = useState<{ email: string; phone: string; address: string }>({ email: '', phone: '', address: '' });
   const [drinks, setDrinks] = useState<Addon[]>([]);
   const [dipCups, setDipCups] = useState<Addon[]>([]);
   const [snacks, setSnacks] = useState<Addon[]>([]);
@@ -367,6 +393,17 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         setStoreClosed(blob.storeClosed);
         setTrackingConfig(blob.trackingConfig);
         setOpeningHours(blob.openingHours);
+        // Audit-fixes brief, Part 6.4 — read straight off `data.settings`
+        // (the raw, pre-normalizeMenuBlob response) rather than `blob`:
+        // normalizeMenuBlob's return shape never carried these three
+        // through (it only extracts the specific settings keys each of
+        // its own existing callers needs), and there's nothing locale-
+        // specific about a phone number or address to localize anyway.
+        setContactInfo({
+          email: data.settings?.email || '',
+          phone: data.settings?.phone || '',
+          address: data.settings?.address || '',
+        });
         setFeatured(blob.featured);
         setPopularProductIds(blob.popularProductIds);
         setFirstOrderDiscount(blob.firstOrderDiscount);
@@ -845,6 +882,13 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         requiresPayment: true as const,
         clientSecret: data.clientSecret,
         finalize: () => finalizeOrder(customer, data, 'card'),
+        orderNum: data.orderNum,
+        // Server-authoritative (post price-verification, post-discount)
+        // total for THIS order — falls back to the client's own cartTotal
+        // only if the response is somehow missing `total` (shouldn't
+        // happen; POST /api/orders always returns it), same defensive
+        // pattern finalizeOrder's own `finalTotal` above already uses.
+        amount: typeof data.total === 'number' ? data.total : cartTotal,
       };
     }
 
@@ -1030,6 +1074,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     storeClosed,
     trackingConfig,
     openingHours,
+    contactInfo,
     drinks,
     dipCups,
     snacks,

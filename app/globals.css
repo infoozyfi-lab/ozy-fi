@@ -319,6 +319,48 @@ h2{ font-family:'Anton', sans-serif; font-size: clamp(2rem, 4vw, 3rem); color: v
 }
 .menu-note{ margin-top: 24px; color: var(--muted); font-size: 0.88rem; }
 
+/* Audit-fixes brief, Part 5 — desktop grid for the menu/product listing.
+   Every .menu-item (components/MenuSection.tsx) and .menu-category
+   (also reused as-is by components/Bundles.tsx — see that file) rendered
+   as a full-width row at every viewport width before this, all the way
+   up to a wide desktop screen — with 67 real items across 13 categories,
+   that forced one long single-column scroll regardless of how much
+   spare horizontal space was available. Below this file's one existing
+   breakpoint (860px, mobile) nothing here changes at all; these two new
+   min-width breakpoints only ever WIDEN the layout into 2 then 3 columns
+   as the viewport grows, reusing the same image-forward card look
+   .popular-card/.featured-card already establish elsewhere on this page
+   (image on top, info below) via .menu-item's own existing elements —
+   flipped into that order with flex-direction: column-reverse rather
+   than reordering components/MenuSection.tsx's markup itself, so no
+   change was needed there (or in components/Bundles.tsx) at all. */
+@media (min-width: 900px){
+  .menu-category{
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    align-items: start;
+    gap: 20px 24px;
+  }
+  .menu-category h3.cat-title,
+  .menu-category > p.cat-sub{
+    grid-column: 1 / -1;
+  }
+  .menu-item{
+    flex-direction: column-reverse;
+    align-items: stretch;
+    justify-content: flex-start;
+    margin: 0;
+  }
+  .menu-item-thumb{
+    width: 100%;
+    height: 180px;
+  }
+  .menu-item .desc{ max-width: none; }
+}
+@media (min-width: 1280px){
+  .menu-category{ grid-template-columns: repeat(3, 1fr); }
+}
+
 /* ---------- VISIT ---------- */
 .visit{ background: var(--bg-alt); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .visit-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 56px; }
@@ -798,7 +840,13 @@ footer{ padding: 56px 0 32px; }
 #checkoutForm label{ display:block; font-size: 0.86rem; color: var(--muted); margin-bottom: 16px; }
 #checkoutForm input{
   display:block; width:100%; margin-top: 6px; background: var(--bg-card); border: 1px solid var(--line); color: var(--cream);
-  padding: 11px 12px; border-radius: 5px; font-size: 0.95rem; transition: border-color 0.15s ease;
+  /* Audit-fixes brief, Part 6.1 — iOS Safari auto-zooms the whole page on
+     focusing any input styled under 16px; this was 0.95rem (~15.2px),
+     just under that threshold. 1rem == 16px at this project's default
+     root font size (no rem-scaling media query touches html{font-size}
+     anywhere in this file), so this is a genuine fix, not just a
+     larger-looking number. */
+  padding: 11px 12px; border-radius: 5px; font-size: 1rem; transition: border-color 0.15s ease;
 }
 #checkoutForm input:focus{ border-color: var(--ember); outline:none; }
 #checkoutForm label.has-error input{ border-color: var(--danger); }
@@ -839,6 +887,12 @@ footer{ padding: 56px 0 32px; }
 .pay-option-text b{ display:block; }
 .pay-option-text span{ color: var(--muted); font-size: 0.82rem; }
 .pay-option input{ accent-color: var(--ember); margin-left:auto; }
+/* Audit-fixes brief, Part 6.3 — trust-signal microcopy rendered by
+   components/CardPaymentStep.tsx, right above Stripe's own PaymentElement. */
+.secure-payment-notice{
+  display:flex; align-items:center; gap: 6px; color: var(--muted); font-size: 0.78rem;
+  margin-bottom: 10px;
+}
 .checkout-summary{ border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 14px 0; margin-bottom: 18px; max-height: 160px; overflow-y:auto; }
 .checkout-summary .cs-row{ display:flex; justify-content:space-between; font-size: 0.88rem; color: var(--muted); padding: 4px 0; }
 .checkout-summary .cs-total{ display:flex; justify-content:space-between; font-weight:700; color: var(--cream); padding-top: 10px; margin-top: 6px; border-top: 1px dashed var(--line); }
@@ -853,8 +907,20 @@ footer{ padding: 56px 0 32px; }
 .cs-details{ color: var(--muted); font-size: 0.8rem; word-break: break-word; }
 .cs-qty-row{ display:flex; align-items:center; gap: 14px; margin-top: 4px; flex-wrap:wrap; }
 .cs-qty{ display:flex; align-items:center; gap: 10px; background: var(--bg-card); border:1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
-.cs-qty button{ width: 22px; height: 22px; border-radius:50%; border:1px solid var(--line); background: var(--bg); color: var(--cream); cursor:pointer; font-size: 0.9rem; }
-.cs-remove{ background:none; border:none; color: var(--muted); text-decoration:underline; font-size: 0.8rem; cursor:pointer; padding:0; }
+/* Audit-fixes brief, Part 6.2 — these buttons were 22×22px, well under
+   the ~44×44px guideline for a reliable touch target; +/- taps here are
+   a normal part of adjusting cart quantities on a phone, so a mis-tap is
+   common at the old size. The circular hit-area still reads as one small
+   round button visually (same font-size/border/background as before —
+   only the box itself grew), it's just easier to actually hit now. */
+.cs-qty button{ width: 40px; height: 40px; border-radius:50%; border:1px solid var(--line); background: var(--bg); color: var(--cream); cursor:pointer; font-size: 0.9rem; }
+/* Audit-fixes brief, Part 6.2 — .cs-remove had no padding at all, so its
+   actual tap target was exactly the rendered text's tiny bounding box.
+   Padding pushes the target size up without changing the text's own
+   visual size/underline styling; the (smaller) negative margin claws
+   back most, not all, of that so this row doesn't visibly shift or grow,
+   while still leaving a clear gap to the adjacent .cs-qty control. */
+.cs-remove{ background:none; border:none; color: var(--muted); text-decoration:underline; font-size: 0.8rem; cursor:pointer; padding: 10px; margin: -6px; }
 .cs-price{ font-family:'Anton', sans-serif; color: var(--ember-dark); white-space:nowrap; flex-shrink:0; }
 
 /* ---------- DRINK / EXTRAS TILES (used in checkout upsell rows) ---------- */
@@ -956,7 +1022,18 @@ footer{ padding: 56px 0 32px; }
 
 /* ---------- ORDER BAR (kotipizza-style persistent "View order" bar) ---------- */
 .order-bar{
-  position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 310;
+  position: fixed; left: 16px; right: 16px; z-index: 310;
+  /* Audit-fixes brief, Part 6.10 — on an iPhone with a home indicator (or
+     any device that reserves a bottom safe area), a plain `bottom: 16px`
+     sits the bar right where the OS's own swipe-up gesture area is,
+     partly under/behind the home indicator. The plain 16px stays first as
+     a fallback for browsers with no env() support at all (they'll ignore
+     the second, invalid-to-them declaration and keep this one); the
+     second line adds the device's safe-area inset on top of the same
+     16px breathing room for browsers that do support it. env()'s own
+     0px fallback covers devices that support env() but report no inset. */
+  bottom: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   display:flex; align-items:center; gap: 14px;
   background: var(--ember); color: var(--text-on-accent); border: none;
   border-radius: 999px; padding: 14px 20px;
@@ -965,7 +1042,10 @@ footer{ padding: 56px 0 32px; }
   transition: bottom 0.2s ease, transform 0.15s ease;
 }
 .order-bar:active{ transform: scale(0.98); }
-.order-bar.on-product-page{ bottom: 92px; }
+.order-bar.on-product-page{
+  bottom: 92px;
+  bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+}
 .order-bar-count{
   background: var(--text-on-accent); color: var(--ember); width: 26px; height: 26px; border-radius: 50%;
   display:flex; align-items:center; justify-content:center; font-size: 0.85rem; flex-shrink:0;
@@ -975,6 +1055,35 @@ footer{ padding: 56px 0 32px; }
 
 /* ---------- LEGAL / TRACK ORDER PAGES ---------- */
 .legal-page, .track-page{ padding: 48px 0 90px; }
+
+/* Audit-fixes brief, Part 3 — components/AboutPageClient.tsx and
+   PickupPageClient.tsx already render a .placeholder-block/
+   .placeholder-eyebrow around their not-yet-written copy (see those
+   files), but no rule for either class ever existed here, so it rendered
+   as indistinguishable plain paragraph text — a visitor (or the business
+   owner previewing the live site) had no way to tell "our story" and
+   "ordering for pickup" were literally unfinished draft copy rather than
+   the real thing. Dashed border + muted background + a small uppercase
+   label make that obvious at a glance; nothing here changes on any page
+   that doesn't use these classes.
+*/
+.placeholder-block{
+  border: 1px dashed var(--line);
+  background: var(--bg-alt);
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin: 12px 0 24px;
+}
+.placeholder-block p{ margin: 0; color: var(--muted); }
+.placeholder-eyebrow{
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ember-dark, var(--ember));
+  margin-bottom: 8px;
+}
 .track-page{ max-width: 640px; }
 .track-page h1{ font-family:'Anton', sans-serif; font-size: clamp(2rem, 5vw, 2.8rem); margin: 0 0 10px; }
 .track-page > p.desc{ color: var(--muted); margin: 0 0 28px; }
@@ -986,7 +1095,9 @@ footer{ padding: 56px 0 32px; }
 .track-form label{ display:block; font-size: 0.86rem; color: var(--muted); }
 .track-form input{
   display:block; width:100%; margin-top: 6px; background: var(--bg-card); border: 1px solid var(--line); color: var(--cream);
-  padding: 11px 12px; border-radius: 5px; font-size: 0.95rem; transition: border-color 0.15s ease;
+  /* Audit-fixes brief, Part 6.1 — see #checkoutForm input's identical
+     comment above; same under-16px iOS auto-zoom trigger, same fix. */
+  padding: 11px 12px; border-radius: 5px; font-size: 1rem; transition: border-color 0.15s ease;
 }
 .track-form input:focus{ border-color: var(--ember); outline:none; }
 

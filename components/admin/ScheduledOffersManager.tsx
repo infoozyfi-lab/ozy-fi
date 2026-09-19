@@ -14,6 +14,7 @@
 import { useEffect, useState, type CSSProperties, type FormEvent, type ChangeEvent } from 'react';
 import type { RawScheduledOffer } from '@/lib/types';
 import { DAY_KEYS, type DayKey } from '@/lib/scheduledOffers';
+import ConfirmDialog from './ConfirmDialog';
 
 const box: CSSProperties = {
   background: 'var(--bg-card)', padding: '24px', borderRadius: '12px',
@@ -69,6 +70,10 @@ export default function ScheduledOffersManager({ onChanged }: { onChanged?: () =
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<OfferFormState>(emptyOffer());
   const [saving, setSaving] = useState(false);
+  // Audit-fixes brief, Part 6.7 — the offer waiting on a Delete
+  // confirmation via ConfirmDialog, or null when it's closed.
+  const [pendingDelete, setPendingDelete] = useState<RawScheduledOffer | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const jsonHeaders = { 'Content-Type': 'application/json' };
 
@@ -178,15 +183,27 @@ export default function ScheduledOffersManager({ onChanged }: { onChanged?: () =
     }
   };
 
-  const remove = async (row: RawScheduledOffer) => {
-    if (!window.confirm(`Delete scheduled offer "${row.label}"? This cannot be undone.`)) return;
+  // Audit-fixes brief, Part 6.7 — window.confirm() replaced with
+  // ConfirmDialog (rendered at the bottom of this component).
+  const remove = (row: RawScheduledOffer) => {
+    setPendingDelete(row);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const row = pendingDelete;
+    setDeleting(true);
     try {
       const res = await fetch(`/api/admin/scheduled_offers/${encodeURIComponent(row.id)}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Delete failed.');
       load();
       if (onChanged) onChanged();
+      setPendingDelete(null);
     } catch (err: any) {
       setError(err.message || 'Delete failed.');
+      setPendingDelete(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -331,6 +348,15 @@ export default function ScheduledOffersManager({ onChanged }: { onChanged?: () =
           </table>
         </div>
       )}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete this scheduled offer?"
+        message={pendingDelete ? `Delete scheduled offer "${pendingDelete.label}"? This cannot be undone.` : ''}
+        confirmLabel="Delete"
+        busy={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

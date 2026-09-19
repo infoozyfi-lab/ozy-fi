@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ChangeEvent } from 'react';
 import { formatCurrency } from '@/components/admin/charts/colors';
 import PaymentStatusPill from '@/components/admin/charts/PaymentStatusPill';
+import ConfirmDialog from '@/components/admin/ConfirmDialog';
 import type { OrderRow, OrderItemRow, OrderStatus } from '@/lib/types';
 
 interface KanbanColumn {
@@ -532,6 +533,9 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
   const [etaOrder, setEtaOrder] = useState<OrderRow | null>(null); // order currently being accepted (ETA prompt open)
   const [driverOrder, setDriverOrder] = useState<OrderRow | null>(null); // order currently being sent out (driver prompt open)
   const [refundOrder, setRefundOrder] = useState<OrderRow | null>(null); // Part C — order currently being refunded (refund prompt open)
+  // Audit-fixes brief, Part 6.7 — order currently awaiting a Cancel
+  // confirmation via ConfirmDialog (replaces window.confirm() below).
+  const [pendingCancel, setPendingCancel] = useState<OrderRow | null>(null);
   const [refundSubmitting, setRefundSubmitting] = useState(false);
   const [refundError, setRefundError] = useState('');
   const [soundOn, setSoundOn] = useState(true);
@@ -683,8 +687,19 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
     }
   };
 
-  const cancelOrder = async (order: OrderRow) => {
-    if (!window.confirm(`Cancel order ${order.order_num}?`)) return;
+  // Audit-fixes brief, Part 6.7 — window.confirm() replaced with
+  // ConfirmDialog (rendered below, alongside this file's other prompt
+  // modals). cancelOrder just opens it now — both call sites below
+  // (the Kanban card's own Cancel button, and OrderDetailModal's onCancel)
+  // go through this same function, so confirmCancelOrder is the one place
+  // that actually does the PATCH, whichever button opened the dialog.
+  const cancelOrder = (order: OrderRow) => {
+    setPendingCancel(order);
+  };
+
+  const confirmCancelOrder = async () => {
+    if (!pendingCancel) return;
+    const order = pendingCancel;
     setMovingId(order.id);
     try {
       await fetch(`/api/admin/orders/${order.id}`, {
@@ -695,6 +710,13 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
       setOrders((list) => list.map((o) => (o.id === order.id ? { ...o, status: 'cancelled' } : o)));
     } finally {
       setMovingId(null);
+      setPendingCancel(null);
+      // Closing the detail modal here (rather than in OrderDetailModal's
+      // own onCancel) means it stays open, underneath the confirmation
+      // dialog, until the admin actually confirms — canceling out of the
+      // dialog leaves the detail modal open and untouched, same as
+      // dismissing any other prompt in this file.
+      setViewingOrder(null);
     }
   };
 
@@ -954,9 +976,13 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
             setViewingOrder(null);
             handleAdvanceClick(order, next);
           }}
-          onCancel={async (order) => {
-            await cancelOrder(order);
-            setViewingOrder(null);
+          onCancel={(order) => {
+            // Audit-fixes brief, Part 6.7 — cancelOrder just opens the
+            // confirmation dialog now; confirmCancelOrder (run only once
+            // the admin confirms) is what actually closes this detail
+            // modal, so a "Cancel" tap here doesn't dismiss the detail
+            // view before the admin has actually confirmed anything.
+            cancelOrder(order);
           }}
           onRefund={(order) => {
             setRefundError('');
@@ -975,6 +1001,17 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
           onConfirm={(amount) => submitRefund(refundOrder, amount)}
         />
       )}
+
+      <ConfirmDialog
+        open={pendingCancel !== null}
+        title="Cancel this order?"
+        message={pendingCancel ? `Cancel order ${pendingCancel.order_num}? This cannot be undone.` : ''}
+        confirmLabel="Cancel order"
+        cancelLabel="Keep order"
+        busy={movingId !== null && movingId === pendingCancel?.id}
+        onConfirm={confirmCancelOrder}
+        onCancel={() => setPendingCancel(null)}
+      />
     </div>
   );
 }

@@ -11,12 +11,20 @@ import type { ReactNode } from 'react';
 const fi = {
   common: {
     loading: 'Ladataan…',
+    // SEO-täydennys, osa C — ks. vastaava kommentti en.js:ssä.
+    placeholderLabel: 'Paikkamerkki — tarvitsee oikeaa sisältöä',
+  },
+
+  // SEO gap-fill, Part A — see the matching comment in en.js.
+  breadcrumb: {
+    home: 'Etusivu',
   },
 
   header: {
     menu: 'Ruokalista',
-    offers: 'Tarjoukset',
-    giftCards: 'Lahjakortit',
+    // Audit-fixes-korjaukset, osa 6.5 — ks. en.tsx:n vastaava kommentti.
+    ourStory: 'Tarinamme',
+    findUs: 'Löydä meidät',
     trackOrder: 'Seuraa tilausta',
     cartAriaLabel: 'Ostoskori',
     openMenuAriaLabel: 'Avaa valikko',
@@ -133,6 +141,8 @@ const fi = {
     openingHoursHeading: 'Aukioloajat',
     contactHeading: 'Yhteystiedot',
     closed: 'Suljettu',
+    // SEO gap-fill, Part C — ks. vastaava kommentti en.js:ssä.
+    notSet: '[Ei vielä asetettu — lisää Admin → Asetukset-kohdassa]',
     days: {
       mon: 'Maanantai', tue: 'Tiistai', wed: 'Keskiviikko', thu: 'Torstai',
       fri: 'Perjantai', sat: 'Lauantai', sun: 'Sunnuntai',
@@ -249,6 +259,15 @@ const fi = {
     cardDesc: 'Kortti, Google Pay tai Apple Pay',
     cardGenericError: 'Maksua ei voitu suorittaa. Tarkista korttitietosi ja yritä uudelleen.',
     cardUnavailableError: 'Korttimaksu ei ole juuri nyt käytettävissä. Valitse maksu noudettaessa tai yritä hetken kuluttua uudelleen.',
+    // Audit-fixes-korjaukset, osa 1 — kun korttimaksun PaymentIntent on
+    // luotu, taaksepäin siirtyminen lukitaan (ks. CheckoutModal.tsx), jotta
+    // tilaus/osoite ei voi enää hiljaa poiketa siitä mitä näytetään. Tämä on
+    // ainoa selkeä tapa perua se tila.
+    paymentLockedNotice: 'Tilauksesi on lukittu maksun ajaksi. Jos haluat muuttaa jotain, peruuta ja aloita alusta.',
+    cancelPaymentAction: 'Peruuta ja aloita alusta',
+    cancellingPayment: 'Perutaan…',
+    // Audit-fixes-korjaukset, osa 6.3.
+    securePaymentNotice: 'Turvallinen maksu',
     continue: 'Jatka',
     continueWithTotal: (total: string) => `Jatka — ${total}`,
     placeOrder: (total: string) => `Tilaa — ${total}`,
@@ -406,6 +425,45 @@ const fi = {
     s7Body: 'Kysyttävää näistä ehdoista? Lähetä sähköpostia osoitteeseen hello@ozy.fi.',
   },
 
+  // SEO-täydennys, osa C — ks. vastaava kommentti en.js:ssä. Nämä
+  // suomenkieliset merkkijonot ovat matalamman luottamuksen käännöksiä
+  // (ei natiivipuhujan tarkistamia) — merkitty tämän toimituksen
+  // raporttiin tämän projektin oman käytännön mukaisesti (ks. tämän
+  // tiedoston alun kommentti).
+  about: {
+    metaTitle: 'Meistä — ozy.fi',
+    title: 'Meistä',
+    storyHeading: 'Tarinamme',
+    storyPlaceholder: 'Paikkamerkki — lisää tähän ozy.fi:n oikea tarina: miten kaikki alkoi, mikä tekee meistä erilaisen, ja mitä muuta haluatte kertoa asiakkaille.',
+    findUsHeading: 'Meidät löydät',
+  },
+
+  contact: {
+    metaTitle: 'Ota yhteyttä — ozy.fi',
+    title: 'Ota yhteyttä',
+    intro: 'Kysyttävää tilauksesta, toimituksesta tai muusta? Näin tavoitat meidät.',
+  },
+
+  delivery: {
+    metaTitle: 'Kotiinkuljetus — ozy.fi',
+    title: 'Kotiinkuljetus',
+    intro: 'Tilaatko kotiinkuljetuksena? Tässä mitä voit odottaa.',
+    feeLabel: 'Toimitusmaksu',
+    minOrderLabel: 'Tilauksen vähimmäissumma',
+    areaHeading: 'Toimitusalue',
+    areaConfiguredIntro: 'Toimitamme tällä hetkellä näihin postinumeroihin (lyhyt merkintä kuten "00" kattaa kaikki sillä alkavat postinumerot):',
+    areaUnset: 'Toimitusaluetta ei ole tällä hetkellä rajattu — syötä osoitteesi kassalla, niin vahvistamme sen siellä.',
+  },
+
+  pickup: {
+    metaTitle: 'Nouto — ozy.fi',
+    title: 'Nouto',
+    intro: 'Haluatko noutaa tilauksesi itse? Tässä mistä ja milloin.',
+    locationHeading: 'Noutopiste',
+    hoursHeading: 'Noutoajat',
+    orderingPlaceholder: 'Paikkamerkki — vahvista, miten asiakkaan tulisi tällä hetkellä tehdä noutotilaus. Kassa kerää tällä hetkellä vain toimitusosoitteen, eikä noutovaihtoehtoa vielä ole, joten tämä tarvitsee yrittäjän vahvistuksen ennen kuin sivu voi kertoa asiakkaille, miten nouto todella tilataan.',
+  },
+
   error: {
     heading: 'Jokin meni pieleen',
     body: 'Sivun lataamisessa tapahtui virhe. Yritä uudelleen — jos ongelma jatkuu, palaa etusivulle.',
@@ -431,8 +489,13 @@ const fi = {
         a: 'Kyllä, kotiinkuljetuksella on minimitilaussumma. Se näkyy ostoskorissasi, samoin kuin kuinka paljon sinun tarvitsee vielä lisätä sen täyttämiseksi.',
       },
       {
+        // Audit-fixes-korjaukset, osa 2 — ks. en.tsx:n vastaava kommentti:
+        // vastaus väitti korttimaksun olevan vielä tulossa, vaikka se on jo
+        // käytössä. Pidetään yhdenmukaisena components/CheckoutModal.tsx:n
+        // maksutapavalinnan kanssa ('cod' ja 'card', jälkimmäinen kuvattu
+        // siellä "Kortti, Google Pay tai Apple Pay").
         q: 'Miten voin maksaa?',
-        a: 'Käteisellä kuljettajalle toimituksen yhteydessä. Verkkomaksu kortilla on tulossa pian.',
+        a: 'Voit maksaa kortilla, Google Paylla tai Apple Paylla verkossa kassalla, tai valita käteismaksun ja maksaa kuljettajalle tilauksen saapuessa.',
       },
       {
         q: 'Kuinka kauan toimitus kestää?',

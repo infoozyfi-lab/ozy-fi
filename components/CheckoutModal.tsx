@@ -5,7 +5,7 @@ import { useStore } from '@/context/StoreContext';
 import { useTranslations } from '@/lib/i18n';
 import { computeDiscountAmount, describeDiscountValue } from '@/lib/pricing';
 import type { Addon, CartLine, Customer } from '@/lib/types';
-import CardPaymentStep from './CardPaymentStep';
+import CardPaymentStep, { type CardPaymentHandle } from './CardPaymentStep';
 
 const EMPTY: Customer = { name: '', address: '', postalCode: '', email: '', phone: '', notes: '' };
 
@@ -119,8 +119,22 @@ export default function CheckoutModal() {
   // picker, and `finalize()` (closing the checkout / clearing the cart /
   // showing the confirmation screen) only runs once Stripe actually
   // confirms the charge, not when the order row was created.
+  //
+  // Audit-fixes brief, Part 1 — `orderNum`/`amount` added alongside the
+  // original `clientSecret`/`finalize`: `amount` is the server's own
+  // authoritative total at order-creation time (never recomputed from the
+  // live cart afterwards — see payAmountLabel below), and `orderNum` is
+  // what handleCancelPayment calls POST /api/orders/[orderNum]/cancel
+  // with if the customer backs out instead of paying.
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'card'>('cod');
-  const [cardPayment, setCardPayment] = useState<{ clientSecret: string; finalize: () => void } | null>(null);
+  const [cardPayment, setCardPayment] = useState<{ clientSecret: string; finalize: () => void; orderNum: string; amount: number } | null>(null);
+  // Reported by CardPaymentStep via onStateChange — see that component's
+  // header comment (Part 4). Drives the sticky-footer Pay button's
+  // enabled/loading state now that the button itself lives in this file
+  // rather than inside CardPaymentStep.
+  const [cardPaymentState, setCardPaymentState] = useState<{ ready: boolean; submitting: boolean; error: string }>({ ready: false, submitting: false, error: '' });
+  const cardPaymentRef = useRef<CardPaymentHandle>(null);
+  const [cancellingPayment, setCancellingPayment] = useState(false);
 
   // Feature 2 — first-order welcome discount. `null` = not checked yet
   // (or the phone field isn't a valid number to check), `true`/`false` =
@@ -205,6 +219,7 @@ export default function CheckoutModal() {
     setFirstOrderEligible(null);
     checkedPhoneRef.current = '';
     setCardPayment(null);
+    setCardPaymentState({ ready: false, submitting: false, error: '' });
     setPaymentMethod('cod');
   };
 
@@ -286,7 +301,12 @@ export default function CheckoutModal() {
         // Order row created, still unpaid — switch this step to show
         // CardPaymentStep instead of resetting; finalize() runs from
         // handleCardSuccess below, once Stripe actually confirms payment.
-        setCardPayment({ clientSecret: result.clientSecret, finalize: result.finalize });
+        setCardPayment({
+          clientSecret: result.clientSecret,
+          finalize: result.finalize,
+          orderNum: result.orderNum,
+          amount: result.amount,
+        });
         return;
       }
       setStep(1);
@@ -305,6 +325,7 @@ export default function CheckoutModal() {
   const handleCardSuccess = () => {
     cardPayment?.finalize();
     setCardPayment(null);
+    setCardPaymentState({ ready: false, submitting: false, error: '' });
     setStep(1);
     setCustomer(EMPTY);
     resetCoupon();
@@ -313,14 +334,71 @@ export default function CheckoutModal() {
     setPaymentMethod('cod');
   };
 
-  // Same total the footer "Place order" button already shows — reused as
-  // CardPaymentStep's displayed amount so the two never disagree.
-  const payAmountLabel = `${(couponStatus === 'applied' ? couponFinalTotal! : cartTotal).toFixed(2)} €`;
+  // Audit-fixes brief, Part 1 — the explicit way out of a locked-in
+  // pending card payment (see the pp-back button and cardPayment-branch
+  // JSX below, both of which now refuse to just quietly step backward
+  // while a PaymentIntent is open). Cancels the still-open PaymentIntent
+  // and marks the order row 'cancelled' server-side (best-effort — see
+  // that route's own comment for why a failure here still safely unblocks
+  // the customer: submitOrder() always creates a brand-new order the next
+  // time it runs, so an uncancelled leftover is a harmless, visibly-unpaid
+  // row, never a double charge), then resets local state back to a clean
+  // step 1 so the customer can freely edit the cart/address and try again.
+  const handleCancelPayment = async () => {
+    if (!cardPayment || cancellingPayment) return;
+    setCancellingPayment(true);
+    try {
+      await fetch(`/api/orders/${encodeURIComponent(cardPayment.orderNum)}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: customer.phone }),
+      });
+    } catch {
+      // Best-effort — see this function's own comment above.
+    } finally {
+      setCancellingPayment(false);
+      setCardPayment(null);
+      setCardPaymentState({ ready: false, submitting: false, error: '' });
+      setOrderError('');
+      setStep(1);
+    }
+  };
+
+  // Audit-fixes brief, Part 1 — while a card payment is pending, this is
+  // the server's own authoritative amount from the moment the order/
+  // PaymentIntent were created (cardPayment.amount), NEVER the live
+  // cartTotal/couponFinalTotal below. Those two can still change under the
+  // customer's feet even with back-navigation disabled in this modal — the
+  // phone/browser back gesture is handled one level up, in
+  // StoreContext.tsx's popstate listener, by simply hiding this whole
+  // modal (not unmounting it, and not touching this component's own
+  // `cardPayment` state), so the cart drawer underneath stays editable the
+  // entire time a payment is pending. Freezing the displayed amount here
+  // means that even in that case, what the customer sees they're about to
+  // pay can never drift from what Stripe actually charges.
+  const payAmountLabel = cardPayment
+    ? `${cardPayment.amount.toFixed(2)} €`
+    : `${(couponStatus === 'applied' ? couponFinalTotal! : cartTotal).toFixed(2)} €`;
 
   return (
     <div className={`checkout-page${isCheckoutOpen ? ' open' : ''}`}>
       <div className="pp-topbar">
-        <button className="pp-back" type="button" aria-label={step > 1 ? t.checkout.backAriaLabel : t.checkout.closeAriaLabel} onClick={() => (step > 1 ? setStep(step - 1) : close())}>←</button>
+        {/* Audit-fixes brief, Part 1 — disabled outright (not just relabeled)
+            once a card PaymentIntent is pending: the explicit "Cancel and
+            start over" button rendered alongside CardPaymentStep below is
+            the only way out of that state now, so a customer can never
+            silently step back to the address form and change it while this
+            same already-created order/PaymentIntent is still what
+            eventually gets charged. */}
+        <button
+          className="pp-back"
+          type="button"
+          aria-label={step > 1 ? t.checkout.backAriaLabel : t.checkout.closeAriaLabel}
+          onClick={() => (step > 1 ? setStep(step - 1) : close())}
+          disabled={Boolean(cardPayment)}
+          aria-disabled={Boolean(cardPayment)}
+          style={cardPayment ? { opacity: 0.35, cursor: 'not-allowed' } : undefined}
+        >←</button>
         <span className="pp-topbar-title">{t.checkout.title}</span>
         <span style={{ width: 28 }} />
       </div>
@@ -472,12 +550,28 @@ export default function CheckoutModal() {
                 // here: switching either would no longer match the order
                 // that's already been created server-side.
                 <div style={{ marginTop: 16 }}>
+                  <p className="desc" style={{ marginBottom: 16 }}>{t.checkout.paymentLockedNotice}</p>
                   <CardPaymentStep
+                    ref={cardPaymentRef}
                     clientSecret={cardPayment.clientSecret}
-                    amountLabel={payAmountLabel}
                     onSuccess={handleCardSuccess}
+                    onStateChange={setCardPaymentState}
                     t={t}
                   />
+                  {/* Audit-fixes brief, Part 1 — the one explicit way to
+                      back out of a pending card payment; see
+                      handleCancelPayment's own comment. */}
+                  <button
+                    type="button"
+                    onClick={handleCancelPayment}
+                    disabled={cancellingPayment}
+                    style={{
+                      marginTop: 16, background: 'none', border: 'none', textDecoration: 'underline',
+                      cursor: cancellingPayment ? 'default' : 'pointer', fontSize: 13, color: 'var(--muted)', padding: 0,
+                    }}
+                  >
+                    {cancellingPayment ? t.checkout.cancellingPayment : t.checkout.cancelPaymentAction}
+                  </button>
                 </div>
               ) : (
                 <>
@@ -524,8 +618,23 @@ export default function CheckoutModal() {
 
                   <div className="payment-method">
                     <p>{t.checkout.paymentMethodHeading}</p>
+                    {/* Audit-fixes brief, Part 6.3 — 💵/💳 replaced with plain
+                        inline SVGs (no icon library added): an emoji glyph
+                        renders very differently across platforms (a literal
+                        yellow banknote vs. a plain dollar-bill outline vs. a
+                        generic symbol depending on OS/browser emoji font),
+                        so "recognizable" wasn't guaranteed the way a
+                        consistent vector icon is. .pay-icon's own existing
+                        circle background + `color` (var(--muted), inverted
+                        to var(--text-on-accent) when selected) already
+                        apply automatically here via currentColor. */}
                     <label className={`pay-option${paymentMethod === 'cod' ? ' selected' : ''}`}>
-                      <span className="pay-icon">💵</span>
+                      <span className="pay-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <rect x="2" y="6" width="20" height="12" rx="2" stroke="currentColor" strokeWidth="2" />
+                          <circle cx="12" cy="12" r="2.5" stroke="currentColor" strokeWidth="2" />
+                        </svg>
+                      </span>
                       <span className="pay-option-text">
                         <b>{t.checkout.cod}</b>
                         <span>{t.checkout.codDesc}</span>
@@ -533,7 +642,12 @@ export default function CheckoutModal() {
                       <input type="radio" name="payment" value="cod" checked={paymentMethod === 'cod'} onChange={() => setPaymentMethod('cod')} />
                     </label>
                     <label className={`pay-option${paymentMethod === 'card' ? ' selected' : ''}`}>
-                      <span className="pay-icon">💳</span>
+                      <span className="pay-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="2" />
+                          <path d="M2 10h20" stroke="currentColor" strokeWidth="2" />
+                        </svg>
+                      </span>
                       <span className="pay-option-text">
                         <b>{t.checkout.card}</b>
                         <span>{t.checkout.cardDesc}</span>
@@ -572,6 +686,30 @@ export default function CheckoutModal() {
             className={`btn-primary${submitting ? ' is-loading' : ''}`}
             style={{ flex: 1 }}
             disabled={submitting}
+          >
+            {t.checkout.placeOrder(payAmountLabel)}
+          </button>
+        </div>
+      )}
+
+      {/* Audit-fixes brief, Part 4 — this footer now stays mounted once a
+          card payment is pending too (previously gated off entirely by
+          `!cardPayment`), and is the ONLY "Pay" button rendered anywhere
+          while a card payment is in progress — CardPaymentStep itself no
+          longer renders one (see that component's header comment for why:
+          its own inline button, at the bottom of the scrolling
+          PaymentElement content, could get pushed off-screen by Stripe's
+          form plus the mobile keyboard). Triggers the exact same submit
+          path CardPaymentStep used to run internally, via the imperative
+          `pay()` handle on cardPaymentRef. */}
+      {step === 3 && cardPayment && (
+        <div className="checkout-footer">
+          <button
+            type="button"
+            className={`btn-primary${cardPaymentState.submitting ? ' is-loading' : ''}`}
+            style={{ flex: 1 }}
+            disabled={!cardPaymentState.ready || cardPaymentState.submitting}
+            onClick={() => cardPaymentRef.current?.pay()}
           >
             {t.checkout.placeOrder(payAmountLabel)}
           </button>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, type FormEvent, type MouseEvent, type ChangeEvent } from 'react';
+import ConfirmDialog from './ConfirmDialog';
 
 interface TwoFaStatus {
   enabled: boolean;
@@ -34,6 +35,7 @@ export default function MyAccountModal({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [confirmingDisable, setConfirmingDisable] = useState(false);
 
   const loadStatus = () => {
     setStatusError('');
@@ -90,8 +92,11 @@ export default function MyAccountModal({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const disable2fa = async () => {
-    if (!window.confirm('Turn off two-factor authentication for your account?')) return;
+  const disable2fa = () => {
+    setConfirmingDisable(true);
+  };
+
+  const confirmDisable2fa = async () => {
     setBusy(true);
     setError('');
     setMessage('');
@@ -105,6 +110,7 @@ export default function MyAccountModal({ onClose }: { onClose: () => void }) {
       setError(err.message || 'Could not turn off 2FA.');
     } finally {
       setBusy(false);
+      setConfirmingDisable(false);
     }
   };
 
@@ -186,6 +192,17 @@ export default function MyAccountModal({ onClose }: { onClose: () => void }) {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmingDisable}
+        title="Turn off two-factor authentication?"
+        message="Turn off two-factor authentication for your account?"
+        confirmLabel="Turn off"
+        cancelLabel="Cancel"
+        busy={busy}
+        onConfirm={confirmDisable2fa}
+        onCancel={() => setConfirmingDisable(false)}
+      />
     </div>
   );
 }

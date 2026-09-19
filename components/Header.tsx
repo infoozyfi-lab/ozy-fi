@@ -91,14 +91,14 @@ export default function Header() {
           {isHome ? (
             <>
               <li><a href="#menu" onClick={scrollTo('menu')}>{t.header.menu}</a></li>
-              <li><a href="#story" onClick={scrollTo('story')}>{t.header.offers}</a></li>
-              <li><a href="#visit" onClick={scrollTo('visit')}>{t.header.giftCards}</a></li>
+              <li><a href="#story" onClick={scrollTo('story')}>{t.header.ourStory}</a></li>
+              <li><a href="#visit" onClick={scrollTo('visit')}>{t.header.findUs}</a></li>
             </>
           ) : (
             <>
               <li><Link href={lp('/menu')}>{t.header.menu}</Link></li>
-              <li><Link href={lp('/#story')}>{t.header.offers}</Link></li>
-              <li><Link href={lp('/#visit')}>{t.header.giftCards}</Link></li>
+              <li><Link href={lp('/#story')}>{t.header.ourStory}</Link></li>
+              <li><Link href={lp('/#visit')}>{t.header.findUs}</Link></li>
             </>
           )}
           <li><Link href={lp('/track')}>{t.header.trackOrder}</Link></li>
@@ -137,14 +137,14 @@ export default function Header() {
           {isHome ? (
             <>
               <a href="#menu" onClick={scrollTo('menu')}>{t.header.menu}</a>
-              <a href="#story" onClick={scrollTo('story')}>{t.header.offers}</a>
-              <a href="#visit" onClick={scrollTo('visit')}>{t.header.giftCards}</a>
+              <a href="#story" onClick={scrollTo('story')}>{t.header.ourStory}</a>
+              <a href="#visit" onClick={scrollTo('visit')}>{t.header.findUs}</a>
             </>
           ) : (
             <>
               <Link href={lp('/menu')} onClick={() => setMobileOpen(false)}>{t.header.menu}</Link>
-              <Link href={lp('/#story')} onClick={() => setMobileOpen(false)}>{t.header.offers}</Link>
-              <Link href={lp('/#visit')} onClick={() => setMobileOpen(false)}>{t.header.giftCards}</Link>
+              <Link href={lp('/#story')} onClick={() => setMobileOpen(false)}>{t.header.ourStory}</Link>
+              <Link href={lp('/#visit')} onClick={() => setMobileOpen(false)}>{t.header.findUs}</Link>
             </>
           )}
           <Link href={lp('/track')} onClick={() => setMobileOpen(false)}>{t.header.trackOrder}</Link>

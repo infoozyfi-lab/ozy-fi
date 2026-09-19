@@ -1,126 +1,13 @@
 'use client';
 
-import { useEffect, useState, type CSSProperties, type FormEvent, type ChangeEvent } from 'react';
+import { useEffect, useState, type ChangeEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import type { ResourceField } from '@/lib/types';
-
-const box: CSSProperties = {
-  background: 'var(--bg-card)',
-  padding: '24px',
-  borderRadius: '12px',
-  border: '1px solid var(--line)',
-  marginBottom: '24px',
-  color: 'var(--cream)',
-};
-
-const th: CSSProperties = { textAlign: 'left', padding: '10px', borderBottom: '2px solid var(--line)', fontSize: 13, color: 'var(--muted)' };
-const td: CSSProperties = { padding: '10px', borderBottom: '1px solid var(--line)', fontSize: 14, color: 'var(--cream)' };
-
-const inputStyle: CSSProperties = {
-  width: '100%',
-  padding: '10px',
-  marginTop: '4px',
-  boxSizing: 'border-box',
-  border: '1px solid var(--line)',
-  borderRadius: '8px',
-  fontSize: 14,
-  background: 'var(--bg-alt)',
-  color: 'var(--cream)',
-};
-
-const btn: CSSProperties = {
-  padding: '8px 14px',
-  border: '1px solid var(--line)',
-  borderRadius: '8px',
-  background: 'var(--bg-alt)',
-  color: 'var(--cream)',
-  cursor: 'pointer',
-  fontSize: 13,
-  marginRight: 8,
-};
-
-const btnPrimary: CSSProperties = { ...btn, background: 'var(--ember)', color: 'var(--text-on-accent)', border: 'none', fontWeight: 700 };
-const btnDanger: CSSProperties = { ...btn, color: 'var(--danger)', borderColor: 'var(--danger-border)' };
+import ResourceForm from './ResourceForm';
+import ConfirmDialog from './ConfirmDialog';
+import { box, th, td, inputStyle, btn, btnPrimary, btnDanger } from './adminStyles';
 
 type ResourceRow = Record<string, any>;
-type ResourceFormState = Record<string, any>;
-
-function emptyForm(fields: ResourceField[]): ResourceFormState {
-  const out: ResourceFormState = {};
-  fields.forEach((f) => {
-    if (f.type === 'checkbox') out[f.key] = f.default ?? false;
-    else out[f.key] = f.default ?? '';
-  });
-  return out;
-}
-
-function rowToForm(row: ResourceRow, fields: ResourceField[]): ResourceFormState {
-  const out: ResourceFormState = {};
-  fields.forEach((f) => {
-    const raw = row[f.key];
-    if (f.type === 'checkbox') out[f.key] = Boolean(raw);
-    else if (raw === null || raw === undefined) out[f.key] = '';
-    else out[f.key] = String(raw);
-  });
-  return out;
-}
-
-// Downscales/re-encodes an image in the browser before it ever leaves the
-// phone, so uploads are small and fast on mobile data. GIFs are left alone
-// (canvas re-encoding would kill animation).
-async function compressImage(file: File, maxDim = 1600, quality = 0.82): Promise<Blob> {
-  if (!file.type || !file.type.startsWith('image/') || file.type === 'image/gif') {
-    return file;
-  }
-  try {
-    const bitmap = await createImageBitmap(file);
-    let { width, height } = bitmap;
-    if (width > maxDim || height > maxDim) {
-      const scale = maxDim / Math.max(width, height);
-      width = Math.round(width * scale);
-      height = Math.round(height * scale);
-    }
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    canvas.getContext('2d')?.drawImage(bitmap, 0, 0, width, height);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
-    return blob || file;
-  } catch {
-    return file;
-  }
-}
-
-// Auto-SEO-filename hints — sent alongside the file to POST /api/admin/upload
-// (see buildHintedSlug in app/api/admin/upload/route.ts), which prefers this
-// text over the uploaded file's own name when building the storage key/URL.
-// No separate field for the admin to fill in: whichever "name" field this
-// resource has (products: `name`; anything else with a plain `title`
-// instead, e.g. categories) plus its `description`, if it has one, are
-// already sitting in `form` at the moment an image is picked.
-function nameHintFor(form: ResourceFormState): string {
-  if (typeof form.name === 'string' && form.name.trim()) return form.name.trim();
-  if (typeof form.title === 'string' && form.title.trim()) return form.title.trim();
-  return '';
-}
-
-function descriptionHintFor(form: ResourceFormState): string {
-  return typeof form.description === 'string' ? form.description.trim() : '';
-}
-
-function formToBody(form: ResourceFormState, fields: ResourceField[]): Record<string, unknown> {
-  const body: Record<string, unknown> = {};
-  fields.forEach((f) => {
-    const val = form[f.key];
-    if (f.type === 'checkbox') {
-      body[f.key] = val ? 1 : 0;
-    } else if (f.type === 'number') {
-      body[f.key] = val === '' ? null : Number(val);
-    } else {
-      body[f.key] = val === '' ? null : val;
-    }
-  });
-  return body;
-}
 
 interface ParentFilter {
   field: string;
@@ -132,6 +19,14 @@ interface ParentFilter {
 // phase 5b — see jsonHeaders below), so it's dropped rather than kept as
 // a no-op prop. If you're looking for auth, the httpOnly admin cookie is
 // what every fetch() below actually relies on.
+//
+// Bundle-slug-and-navigation brief, Task 2 — the actual "New"/"Edit" form
+// (field rendering, validation, image upload, ID auto-slug, save) now
+// lives in the extracted components/admin/ResourceForm.tsx, reused both
+// here (inline) and by the dedicated standalone product-edit page
+// (app/admin/products/[id]/edit/page.tsx). This component keeps owning
+// the list/table, bulk actions, duplicate, and per-row toggle/delete —
+// none of which needed to move.
 export default function ResourceManager({
   table,
   title,
@@ -147,13 +42,22 @@ export default function ResourceManager({
   onChanged?: () => void;
   parentFilter?: ParentFilter;
 }) {
+  const router = useRouter();
   const [rows, setRows] = useState<ResourceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null); // null = not editing, 'new' = creating
-  const [form, setForm] = useState<ResourceFormState>(emptyForm(fields));
-  const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState<Record<string, boolean>>({});
+  // The actual row object ResourceForm should seed its fields from when
+  // editingId is a real id — set explicitly by startEdit/duplicate rather
+  // than looked up from `rows` at render time, because duplicate() needs
+  // to open the freshly-created row for review immediately, before the
+  // list reload it triggers has actually come back.
+  const [editingRow, setEditingRow] = useState<ResourceRow | undefined>(undefined);
+  // Audit-fixes brief, Part 6.7 — replaces the old window.confirm() gate
+  // on remove() below; the row waiting on a Delete confirmation, or null
+  // when the dialog is closed.
+  const [pendingDelete, setPendingDelete] = useState<ResourceRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Bulk actions — only offered for tables with a price + active field
   // (products, addons); doesn't make sense for categories/options.
@@ -190,96 +94,59 @@ export default function ResourceManager({
   }, [table]);
 
   const startCreate = () => {
-    const empty = emptyForm(fields);
-    // Pre-fill the parent reference (e.g. group_id) when this manager
-    // was opened by drilling into a specific option group — one less
-    // field the admin has to remember to set correctly by hand, and it
-    // can't accidentally end up in the wrong group.
-    if (parentFilter) empty[parentFilter.field] = parentFilter.value;
-    setForm(empty);
+    setEditingRow(undefined);
     setEditingId('new');
   };
 
   const startEdit = (row: ResourceRow) => {
-    setForm(rowToForm(row, fields));
+    setEditingRow(row);
     setEditingId(row.id);
+  };
+
+  // Bundle-slug-and-navigation brief, Task 2 — the reported bug ("saving/
+  // navigating away drops the admin onto a different landing view, and
+  // the back button doesn't return correctly") came from editing being
+  // pure client-side state (editingId/form) with no history entry of its
+  // own — a real Next.js route gets correct back-button/navigation
+  // behavior for free, which is why products specifically now navigate
+  // to a dedicated page instead of opening the inline form. Scoped to
+  // products only for this delivery (see the report for why the other
+  // four ResourceManager tables — categories/addons/options/option_groups
+  // — keep their existing inline-edit behavior, which wasn't reported as
+  // having this problem and is simpler/lower-traffic than product
+  // editing). `router.replace` (not `push`) updates the CURRENT dashboard
+  // history entry's URL to remember "Menu tab, Products sub-tab" *before*
+  // navigating away — it doesn't add a new entry or remount this page, it
+  // just means that when the admin later leaves the edit page (Cancel,
+  // a successful save, or the literal browser/OS back button), whichever
+  // of those they use lands back on this exact tab instead of the
+  // dashboard's default tab.
+  const editRow = (row: ResourceRow) => {
+    if (table === 'products') {
+      router.replace('/admin/dashboard?tab=menu&menuTab=products');
+      router.push(`/admin/products/${encodeURIComponent(row.id)}/edit?returnTab=menu&returnMenuTab=products`);
+      return;
+    }
+    startEdit(row);
   };
 
   const cancel = () => {
     setEditingId(null);
-    setForm(emptyForm(fields));
+    setEditingRow(undefined);
   };
 
-  const setField = (key: string, value: unknown) => setForm((f) => ({ ...f, [key]: value }));
-
-  // `nameHint`/`descriptionHint` (see nameHintFor/descriptionHintFor above)
-  // travel as their own FormData fields, not as the uploaded file's name —
-  // the upload route (app/api/admin/upload/route.ts's buildHintedSlug)
-  // prefers them over the file's own (often meaningless, e.g.
-  // "IMG_4521.jpg") name when building the storage key/URL, and falls back
-  // to the file's own name when there's no hint (e.g. name field still
-  // empty on a brand-new, not-yet-named entry).
-  const uploadImage = async (key: string, file: File, nameHint?: string, descriptionHint?: string) => {
-    setUploading((u) => ({ ...u, [key]: true }));
-    setError('');
-    try {
-      const processed = await compressImage(file);
-      const body = new FormData();
-      body.append('file', processed, file.name || 'upload.jpg');
-      if (nameHint) body.append('nameHint', nameHint);
-      if (descriptionHint) body.append('descriptionHint', descriptionHint);
-      const res = await fetch('/api/admin/upload', {
-        method: 'POST',
-        body,
-      });
-      const data = (await res.json().catch(() => ({}))) as { error?: string; url?: string };
-      if (!res.ok) throw new Error(data.error || 'Upload failed.');
-      setField(key, data.url);
-    } catch (err: any) {
-      setError(err.message || 'Upload failed.');
-    } finally {
-      setUploading((u) => ({ ...u, [key]: false }));
-    }
+  // Audit-fixes brief, Part 6.7 — now just opens the confirm dialog; the
+  // actual delete moved to confirmDelete below, run only once the admin
+  // explicitly confirms in that dialog.
+  const remove = (row: ResourceRow) => {
+    setPendingDelete(row);
   };
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const row = pendingDelete;
     setError('');
-    try {
-      const body = formToBody(form, fields);
-      let res: Response;
-      if (editingId === 'new') {
-        res = await fetch(`/api/admin/${table}`, {
-          method: 'POST',
-          headers: jsonHeaders,
-          body: JSON.stringify(body),
-        });
-      } else {
-        const { id: _drop, ...rest } = body;
-        res = await fetch(`/api/admin/${table}/${encodeURIComponent(editingId as string)}`, {
-          method: 'PUT',
-          headers: jsonHeaders,
-          body: JSON.stringify(rest),
-        });
-      }
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error || 'Save failed.');
-      }
-      cancel();
-      load();
-      if (onChanged) onChanged();
-    } catch (err: any) {
-      setError(err.message || 'Save failed.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const remove = async (row: ResourceRow) => {
-    if (!window.confirm(`Delete "${row.id}"? This cannot be undone.`)) return;
-    setError('');
+    setDeleting(true);
     try {
       const res = await fetch(`/api/admin/${table}/${encodeURIComponent(row.id)}`, {
         method: 'DELETE',
@@ -287,8 +154,12 @@ export default function ResourceManager({
       if (!res.ok) throw new Error('Delete failed.');
       load();
       if (onChanged) onChanged();
+      setPendingDelete(null);
     } catch (err: any) {
       setError(err.message || 'Delete failed.');
+      setPendingDelete(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -311,6 +182,10 @@ export default function ResourceManager({
 
   // Copies every field except id/name into a new row, so starting a
   // similar product doesn't mean re-typing everything from scratch.
+  // Deliberately still opens the freshly-duplicated row in the inline
+  // form (not the dedicated product-edit page) even for products — this
+  // is a review-immediately-after-creating flow, not the "editing an
+  // established resource" flow the reported navigation bug was about.
   const duplicate = async (row: ResourceRow) => {
     setError('');
     try {
@@ -525,129 +400,19 @@ export default function ResourceManager({
       )}
 
       {editingId !== null && (
-        <form onSubmit={submit} style={{ marginBottom: 24, padding: 16, background: 'var(--bg-alt)', borderRadius: 10, border: '1px solid var(--line)' }}>
+        <>
           <h3 style={{ marginTop: 0 }}>{editingId === 'new' ? 'New' : `Edit "${editingId}"`}</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
-            {fields.map((f) => {
-              if (f.key === 'id' && editingId !== 'new') {
-                return (
-                  <label key={f.key}>
-                    ID
-                    <input style={{ ...inputStyle, background: 'var(--bg)', color: 'var(--muted)' }} value={form.id} disabled />
-                  </label>
-                );
-              }
-              if (f.type === 'select') {
-                return (
-                  <label key={f.key}>
-                    {f.label}
-                    <select
-                      style={inputStyle}
-                      value={form[f.key]}
-                      required={f.required}
-                      onChange={(e: ChangeEvent<HTMLSelectElement>) => setField(f.key, e.target.value)}
-                    >
-                      <option value="">Select…</option>
-                      {f.options.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
-                  </label>
-                );
-              }
-              if (f.type === 'checkbox') {
-                return (
-                  <label key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 22 }}>
-                    <input
-                      type="checkbox"
-                      checked={form[f.key]}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setField(f.key, e.target.checked)}
-                    />
-                    {f.label}
-                  </label>
-                );
-              }
-              if (f.type === 'image') {
-                return (
-                  <label key={f.key} style={{ gridColumn: '1 / -1' }}>
-                    {f.label}
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
-                      {form[f.key] ? (
-                        <img
-                          src={form[f.key]}
-                          alt=""
-                          style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--line)', flexShrink: 0 }}
-                        />
-                      ) : null}
-                      <input
-                        style={{ ...inputStyle, flex: 1, minWidth: 160 }}
-                        type="text"
-                        placeholder="Upload below, or paste an image URL"
-                        value={form[f.key]}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => setField(f.key, e.target.value)}
-                      />
-                    </div>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      style={{ marginTop: 8, color: 'var(--cream)' }}
-                      disabled={!!uploading[f.key]}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                        const file = e.target.files && e.target.files[0];
-                        if (file) {
-                          uploadImage(f.key, file, nameHintFor(form), descriptionHintFor(form));
-                        }
-                        e.target.value = '';
-                      }}
-                    />
-                    {uploading[f.key] && (
-                      <p style={{ fontSize: 12, color: 'var(--muted)', margin: '4px 0 0' }}>Uploading…</p>
-                    )}
-                  </label>
-                );
-              }
-              if (f.type === 'textarea') {
-                return (
-                  <label key={f.key} style={{ gridColumn: '1 / -1' }}>
-                    {f.label}
-                    {f.hint && (
-                      <span style={{ display: 'block', fontSize: 12, color: 'var(--muted)', fontWeight: 400, marginTop: 2 }}>
-                        {f.hint}
-                      </span>
-                    )}
-                    <textarea
-                      style={{ ...inputStyle, minHeight: 70 }}
-                      value={form[f.key]}
-                      onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setField(f.key, e.target.value)}
-                    />
-                  </label>
-                );
-              }
-              // Only text/number fields reach here — every other `type`
-              // returns its own JSX above.
-              return (
-                <label key={f.key}>
-                  {f.label}
-                  <input
-                    style={inputStyle}
-                    type={f.type === 'number' ? 'number' : 'text'}
-                    step={f.type === 'number' ? (f.step || 'any') : 'any'}
-                    required={f.required}
-                    value={form[f.key]}
-                    placeholder={f.placeholder || ''}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setField(f.key, e.target.value)}
-                  />
-                </label>
-              );
-            })}
-          </div>
-          <div style={{ marginTop: 16 }}>
-            <button type="submit" style={btnPrimary} disabled={saving}>
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-            <button type="button" style={btn} onClick={cancel}>Cancel</button>
-          </div>
-        </form>
+          <ResourceForm
+            key={editingId}
+            table={table}
+            fields={fields}
+            mode={editingId === 'new' ? 'new' : 'edit'}
+            initialRow={editingId === 'new' ? undefined : editingRow}
+            parentFilter={parentFilter}
+            onSaved={() => { cancel(); load(); if (onChanged) onChanged(); }}
+            onCancel={cancel}
+          />
+        </>
       )}
 
       {loading ? (
@@ -692,7 +457,7 @@ export default function ResourceManager({
                     </td>
                   ))}
                   <td style={td}>
-                    <button type="button" style={btn} onClick={() => startEdit(row)}>Edit</button>
+                    <button type="button" style={btn} onClick={() => editRow(row)}>Edit</button>
                     <button type="button" style={btn} onClick={() => duplicate(row)}>Duplicate</button>
                     <button type="button" style={btnDanger} onClick={() => remove(row)}>Delete</button>
                   </td>
@@ -702,6 +467,15 @@ export default function ResourceManager({
           </table>
         </div>
       )}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete this?"
+        message={pendingDelete ? `Delete "${pendingDelete.id}"? This cannot be undone.` : ''}
+        confirmLabel="Delete"
+        busy={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

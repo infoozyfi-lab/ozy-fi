@@ -186,6 +186,15 @@ h2{ font-family:'Anton', sans-serif; font-size: clamp(2rem, 4vw, 3rem); color: v
 }
 .menu-note{ margin-top: 24px; color: var(--muted); font-size: 0.88rem; }
 
+/* ---------- BREADCRUMBS (SEO gap-fill, Part A — see components/Breadcrumbs.tsx) ---------- */
+.breadcrumbs{ padding: 14px 0 0; }
+.breadcrumbs ol{ list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; align-items:center; gap: 6px; font-size: 0.82rem; }
+.breadcrumbs li{ display:flex; align-items:center; gap: 6px; }
+.breadcrumbs a{ color: var(--muted); text-decoration:none; }
+.breadcrumbs a:hover{ color: var(--cream); text-decoration: underline; }
+.breadcrumbs [aria-current="page"]{ color: var(--cream); font-weight:600; }
+.breadcrumbs-sep{ color: var(--muted); opacity: 0.6; }
+
 /* ---------- VISIT ---------- */
 .visit{ background: var(--bg-alt); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .visit-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 56px; }
@@ -203,6 +212,19 @@ h2{ font-family:'Anton', sans-serif; font-size: clamp(2rem, 4vw, 3rem); color: v
   position:absolute; left:52%; top:46%; width:16px; height:16px; border-radius: 50% 50% 50% 0;
   background: var(--ember); transform: rotate(-45deg); box-shadow: 0 0 0 6px rgba(255,106,61,0.15);
 }
+
+/* ---------- PLACEHOLDER BLOCK (SEO gap-fill, Part C — clearly-marked
+   sections on /about and /pickup waiting on the business owner's real
+   content; see components/AboutPageClient.tsx / PickupPageClient.tsx) ---------- */
+.placeholder-block{
+  border: 1px dashed var(--line); border-radius: var(--radius); padding: 18px 20px; margin: 0 0 24px;
+  background: var(--bg-card);
+}
+.placeholder-eyebrow{
+  display:block; color: var(--gold); font-size: 0.78rem; font-weight:700; text-transform: uppercase;
+  letter-spacing: 0.04em; margin: 0 0 8px;
+}
+.placeholder-block p{ color: var(--muted); margin: 0; font-style: italic; }
 
 /* ---------- CTA STRIP ---------- */
 .cta-strip{ background: linear-gradient(120deg, var(--maroon), #4A150C); text-align:center; padding: 72px 24px; }

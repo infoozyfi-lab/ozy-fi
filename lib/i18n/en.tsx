@@ -9,12 +9,32 @@ import type { ReactNode } from 'react';
 const en = {
   common: {
     loading: 'Loading…',
+    // SEO gap-fill, Part C — eyebrow label on the clearly-marked
+    // placeholder blocks in AboutPageClient.tsx/PickupPageClient.tsx.
+    placeholderLabel: 'Placeholder — needs real content',
+  },
+
+  // SEO gap-fill, Part A — visible breadcrumb trail + matching
+  // BreadcrumbList JSON-LD on the category and product pages (see
+  // components/Breadcrumbs.tsx). `home` is the trail's first crumb;
+  // category/product labels themselves already come from the menu data
+  // (category.title/title_fi, product.name/name_fi), not from here.
+  breadcrumb: {
+    home: 'Home',
   },
 
   header: {
     menu: 'Menu',
-    offers: 'Offers',
-    giftCards: 'Gift cards',
+    // Audit-fixes brief, Part 6.5 — these two nav links (components/
+    // Header.tsx) go to #story and #visit, but no "Offers" or "Gift
+    // cards" content/feature exists anywhere on this site — traced, not
+    // assumed: no coupon/offers landing section, no gift-card purchase
+    // flow anywhere in app/ or components/. Renamed to describe what
+    // #story/#visit actually are, matching the wording
+    // components/Footer.tsx already correctly uses for these same two
+    // anchors (t.footer.ourStory/findUs) rather than inventing new copy.
+    ourStory: 'Our story',
+    findUs: 'Find us',
     trackOrder: 'Track order',
     cartAriaLabel: 'Cart',
     openMenuAriaLabel: 'Open menu',
@@ -135,6 +155,13 @@ const en = {
     openingHoursHeading: 'Opening hours',
     contactHeading: 'Contact',
     closed: 'Closed',
+    // SEO gap-fill, Part C — shared "this hasn't been configured yet"
+    // placeholder for the new /about, /contact, /delivery and /pickup
+    // pages (see components/PublicSettingsInfo.tsx and lib/site-settings.ts),
+    // used wherever a genuinely real value (address, phone, email, delivery
+    // fee, minimum order) is missing from admin_settings rather than
+    // showing blank or fabricated text.
+    notSet: '[Not set yet — add it in Admin → Settings]',
     days: {
       mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday',
       fri: 'Friday', sat: 'Saturday', sun: 'Sunday',
@@ -251,6 +278,16 @@ const en = {
     cardDesc: 'Card, Google Pay or Apple Pay',
     cardGenericError: 'Payment could not be completed. Please check your card details and try again.',
     cardUnavailableError: 'Card payment is temporarily unavailable. Please choose Cash on delivery, or try again shortly.',
+    // Audit-fixes brief, Part 1 — once a card PaymentIntent has been
+    // created, back navigation is locked (see CheckoutModal.tsx) so the
+    // order/address it's tied to can't silently drift from what's shown.
+    // This is the one explicit way out of that state.
+    paymentLockedNotice: 'Your order is locked in while you finish paying. To change anything, cancel and start over.',
+    cancelPaymentAction: 'Cancel and start over',
+    cancellingPayment: 'Cancelling…',
+    // Audit-fixes brief, Part 6.3 — small trust signal shown next to the
+    // card form itself (components/CardPaymentStep.tsx).
+    securePaymentNotice: 'Secure payment',
     continue: 'Continue',
     continueWithTotal: (total: string) => `Continue — ${total}`,
     placeOrder: (total: string) => `Place order — ${total}`,
@@ -443,6 +480,56 @@ const en = {
     s7Body: 'Questions about these terms? Email hello@ozy.fi.',
   },
 
+  // SEO gap-fill, Part C — the 4 new pages the spec's subset calls for.
+  // Structure/labels only; real address/phone/email/hours/fee/minimum-
+  // order/delivery-area values are never written here — they're read live
+  // from admin_settings at request time (lib/site-settings.ts), with
+  // `visit.notSet` shown for anything not yet configured, and the "our
+  // story"/pickup-ordering blocks below are explicit, visibly-marked
+  // placeholders rather than invented copy (see this feature's delivery
+  // report for the full list of what still needs the business owner's
+  // real content).
+  about: {
+    metaTitle: 'About — ozy.fi',
+    title: 'About ozy.fi',
+    // No separate intro string — reuses t.footer.tagline (same "Pizza,
+    // kebab and burgers, made fresh." copy already published site-wide)
+    // rather than a near-duplicate that could drift out of sync with it.
+    storyHeading: 'Our story',
+    storyPlaceholder: 'Placeholder — add ozy.fi’s real story here: how it started, what makes it different, and anything else worth sharing with customers.',
+    findUsHeading: 'Find us',
+  },
+
+  contact: {
+    metaTitle: 'Contact — ozy.fi',
+    title: 'Contact us',
+    intro: 'Questions about an order, delivery, or anything else? Here’s how to reach us.',
+  },
+
+  delivery: {
+    metaTitle: 'Delivery — ozy.fi',
+    title: 'Delivery',
+    intro: 'Ordering for delivery? Here’s what to expect.',
+    feeLabel: 'Delivery fee',
+    minOrderLabel: 'Minimum order',
+    areaHeading: 'Delivery area',
+    // Matches what app/api/orders/route.ts actually does with
+    // admin_settings.delivery_postal_codes: entries of 3 characters or
+    // fewer match by prefix (e.g. "00" covers every 00xxx code), longer
+    // entries match a full postal code exactly.
+    areaConfiguredIntro: 'We currently deliver to these postal codes (a short entry like "00" covers every code starting with it):',
+    areaUnset: 'No delivery-area restriction is currently configured — enter your address at checkout and we’ll confirm it there.',
+  },
+
+  pickup: {
+    metaTitle: 'Pickup — ozy.fi',
+    title: 'Pickup',
+    intro: 'Prefer to collect your order yourself? Here’s where and when.',
+    locationHeading: 'Pickup location',
+    hoursHeading: 'Pickup hours',
+    orderingPlaceholder: 'Placeholder — confirm exactly how a customer should place a pickup order today. Checkout currently only collects a delivery address, with no pickup option yet, so this needs the business owner’s input before this page can tell customers how to actually order for pickup.',
+  },
+
   error: {
     heading: 'Something went wrong',
     body: 'That page hit a snag. Please try again — if it keeps happening, head back to the homepage.',
@@ -468,8 +555,16 @@ const en = {
         a: 'Yes, a minimum order amount applies for delivery. It\'s shown in your cart, along with how much more you\'d need to add to reach it, if anything.',
       },
       {
+        // Audit-fixes brief, Part 2 — this answer (and its FAQPage JSON-LD
+        // rendering, app/(site)/[locale]/faq/page.tsx) previously said card
+        // payment was "coming soon", even though it's been live for a
+        // while. Kept in sync with the actual payment-method picker in
+        // components/CheckoutModal.tsx (exactly two options: 'cod' and
+        // 'card', the latter described there as "Card, Google Pay or Apple
+        // Pay") rather than assuming — if that picker ever changes, update
+        // this answer to match rather than the other way around.
         q: 'How can I pay?',
-        a: 'Cash on delivery — you pay the driver when your order arrives. Online card payment is coming soon.',
+        a: 'You can pay by card, Google Pay, or Apple Pay online when you check out, or choose cash on delivery and pay the driver when your order arrives.',
       },
       {
         q: 'How long does delivery take?',

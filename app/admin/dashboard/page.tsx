@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ChangeEvent, type MouseEvent } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ChangeEvent, type MouseEvent } from 'react';
+import { useSearchParams } from 'next/navigation';
 import ResourceManager from '@/components/admin/ResourceManager';
 import BundleManager from '@/components/admin/BundleManager';
 import ScheduledOffersManager from '@/components/admin/ScheduledOffersManager';
 import OrderKanban, { isRefundEligible, refundRemaining } from '@/components/admin/OrderKanban';
 import MyAccountModal from '@/components/admin/MyAccountModal';
+import ConfirmDialog from '@/components/admin/ConfirmDialog';
 import StatTile from '@/components/admin/charts/StatTile';
 import AreaTrendChart from '@/components/admin/charts/AreaTrendChart';
 import BarChart from '@/components/admin/charts/BarChart';
@@ -29,6 +31,7 @@ import type {
   CouponRow as CouponRowType,
   StaffRow as StaffRowType,
 } from '@/lib/types';
+import { getProductFields } from '@/lib/admin-resource-fields';
 
 const ORDER_STATUSES: OrderStatus[] = ['received', 'preparing', 'on_the_way', 'delivered', 'cancelled'];
 const STATUS_LABELS: Record<OrderStatus, string> = {
@@ -996,6 +999,14 @@ interface SettingsField {
   label: string;
   number?: boolean;
   textarea?: boolean;
+  // Overrides the default '0.1' step for a `number` field — every
+  // pre-existing field here is a euro amount, where 0.1 is the right
+  // granularity, but map coordinates (Part 7) need much finer precision
+  // than that. Without this, a browser's native number-input step
+  // validation would flag e.g. "60.192059" as invalid and silently block
+  // the Save button (a real <button type="submit"> in a plain <form>
+  // with no noValidate) rather than saving it.
+  step?: string;
 }
 
 const SETTINGS_FIELDS: SettingsField[] = [
@@ -1005,6 +1016,13 @@ const SETTINGS_FIELDS: SettingsField[] = [
   { key: 'address', label: 'Address' },
   { key: 'minimum_order', label: 'Minimum order (€)', number: true },
   { key: 'delivery_fee', label: 'Delivery fee (€)', number: true },
+  // Audit-fixes brief, Part 7 — optional map coordinates, used only to
+  // add a `geo` block to the Restaurant structured data (see
+  // app/(site)/[locale]/layout.tsx's getRestaurantSchema). Both blank by
+  // default; leaving either one empty simply omits `geo` entirely rather
+  // than guessing a location.
+  { key: 'geo_lat', label: 'Map latitude (optional, for search engines)', number: true, step: 'any' },
+  { key: 'geo_lng', label: 'Map longitude (optional, for search engines)', number: true, step: 'any' },
 ];
 
 // Phase 7.7 — per-day opening hours, replacing the old single free-text
@@ -1205,7 +1223,7 @@ function RestaurantInfoSettings({ token }: { token: string }) {
                 <input
                   style={inputStyle}
                   type={f.number ? 'number' : 'text'}
-                  step={f.number ? '0.1' : undefined}
+                  step={f.number ? (f.step || '0.1') : undefined}
                   value={values[f.key] || ''}
                   onChange={(e: ChangeEvent<HTMLInputElement>) => setField(f.key, e.target.value)}
                 />
@@ -2492,7 +2510,7 @@ function OptionsManager({
 }
 
 
-function MenuTabs({ token }: { token: string }) {
+function MenuTabs({ token, initialTab }: { token: string; initialTab?: string | null }) {
   const [categories, setCategories] = useState<RawCategory[]>([]);
   const [optionGroups, setOptionGroups] = useState<RawOptionGroup[]>([]);
   const [products, setProducts] = useState<RawProduct[]>([]);
@@ -2506,7 +2524,13 @@ function MenuTabs({ token }: { token: string }) {
 
   useEffect(loadRefs, [token, refreshKey]);
   const bump = () => setRefreshKey((k) => k + 1);
-  const [tab, setTab] = useState<string | null>(null); // null = show the landing page of big option cards
+  // Bundle-slug-and-navigation brief, Task 2 — `initialTab` (from the
+  // dashboard's own `?menuTab=` query param) lands the admin back on
+  // e.g. "products" after returning from the dedicated product-edit page,
+  // instead of always resetting to the landing page of big option cards.
+  // Only affects the very first render; `null`/absent behaves exactly as
+  // before this feature existed.
+  const [tab, setTab] = useState<string | null>(initialTab ?? null);
 
   // Phase: bilingual site — every `_fi` field below is optional; the
   // storefront falls back to the English/default field next to it when
@@ -2548,29 +2572,10 @@ function MenuTabs({ token }: { token: string }) {
     { key: 'sort_order', label: 'Sort order', type: 'number', default: 0 },
   ];
 
-  const productFields: ResourceField[] = [
-    { key: 'id', label: 'ID (slug)', type: 'text', required: true },
-    { key: 'category_id', label: 'Category', type: 'select', required: true, options: categories.map((c) => ({ value: c.id, label: c.title })) },
-    { key: 'name', label: 'Name (English)', type: 'text', required: true },
-    { key: 'name_fi', label: 'Name (Finnish, optional)', type: 'text' },
-    { key: 'description', label: 'Description (English)', type: 'textarea' },
-    { key: 'description_fi', label: 'Description (Finnish, optional)', type: 'textarea' },
-    {
-      key: 'meta_description', label: 'Meta description (English, optional)', type: 'textarea',
-      hint: 'Shown in Google search results — aim for under ~160 characters. Leave blank to use the description above.',
-    },
-    {
-      key: 'meta_description_fi', label: 'Meta description (Finnish, optional)', type: 'textarea',
-      hint: 'Shown in Google search results — aim for under ~160 characters. Leave blank to use the description above.',
-    },
-    { key: 'price', label: 'Price (€)', type: 'number', step: '0.1', required: true },
-    { key: 'offer_price', label: 'Offer price (€, optional)', type: 'number', step: '0.1' },
-    { key: 'image', label: 'Image', type: 'image' },
-    { key: 'tag', label: 'Tag (optional, e.g. Spicy)', type: 'text' },
-    { key: 'has_toppings', label: 'Customizable (pizza-style toppings)', type: 'checkbox' },
-    { key: 'sort_order', label: 'Sort order', type: 'number', default: 0 },
-    { key: 'active', label: 'Active (visible on site)', type: 'checkbox', default: true },
-  ];
+  // Bundle-slug-and-navigation brief, Task 2 — moved to lib/admin-resource-fields.ts
+  // so app/admin/products/[id]/edit/page.tsx's dedicated edit form can build
+  // the exact same field list rather than a separately hand-typed copy.
+  const productFields: ResourceField[] = getProductFields(categories);
 
   const addonFields: ResourceField[] = [
     { key: 'id', label: 'ID (slug)', type: 'text', required: true },
@@ -2750,6 +2755,7 @@ interface StaffPatchBody {
 function StaffRow({ member, onChanged }: { member: StaffRowType; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [confirmingDisable2fa, setConfirmingDisable2fa] = useState(false);
 
   const patch = async (body: StaffPatchBody) => {
     setBusy(true);
@@ -2791,18 +2797,27 @@ function StaffRow({ member, onChanged }: { member: StaffRowType; onChanged: () =
             type="button"
             style={{ ...btn, fontSize: 12, padding: '5px 10px' }}
             disabled={busy}
-            onClick={() => {
-              // Phase 7.9 lockout recovery — see this feature's summary
-              // for why this exists: without it, a staff member who
-              // loses their authenticator device has no way back in.
-              if (window.confirm(`Force-disable 2FA on ${member.name}'s account? They'll be able to log in with just their password again.`)) {
-                patch({ disable2fa: true });
-              }
-            }}
+            onClick={() => setConfirmingDisable2fa(true)}
           >
             🔒 On — force off
           </button>
         ) : '—'}
+        <ConfirmDialog
+          open={confirmingDisable2fa}
+          title="Force-disable 2FA?"
+          message={`Force-disable 2FA on ${member.name}'s account? They'll be able to log in with just their password again.`}
+          confirmLabel="Force off"
+          cancelLabel="Cancel"
+          busy={busy}
+          onConfirm={() => {
+            // Phase 7.9 lockout recovery — see this feature's summary
+            // for why this exists: without it, a staff member who
+            // loses their authenticator device has no way back in.
+            patch({ disable2fa: true });
+            setConfirmingDisable2fa(false);
+          }}
+          onCancel={() => setConfirmingDisable2fa(false)}
+        />
       </td>
       <td style={td}>
         <button
@@ -3135,7 +3150,23 @@ const ROLE_TABS: Record<StaffRole, string[]> = {
   owner: ['overview', 'orders', 'menu', 'rewards', 'coupons', 'homepage', 'customers', 'customer_source', 'reports', 'tracking', 'settings', 'staff', 'activity'],
 };
 
+// Bundle-slug-and-navigation brief, Task 2 — the dedicated product-edit
+// route (app/admin/products/[id]/edit/page.tsx) needs to send the admin
+// back to the exact tab/sub-tab they came from, and `useSearchParams()`
+// requires a Suspense boundary around whatever component calls it (a
+// Next.js App Router rule for any hook that reads the URL's query string) —
+// so the actual dashboard implementation moved to `AdminDashboardView`
+// below, and this is now just that thin wrapper.
 export default function AdminDashboard() {
+  return (
+    <Suspense fallback={null}>
+      <AdminDashboardView />
+    </Suspense>
+  );
+}
+
+function AdminDashboardView() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState<StaffRole | null>(null);
@@ -3180,7 +3211,19 @@ export default function AdminDashboard() {
           // Kitchen never sees the Overview/Dashboard tab — land them
           // straight on the one tab they do have (Orders) instead of a
           // tab list that would render empty for a beat.
-          setTab((ROLE_TABS[data.role as StaffRole] || []).includes('overview') ? 'overview' : (ROLE_TABS[data.role as StaffRole] || ['orders'])[0]);
+          const roleTabs = ROLE_TABS[data.role as StaffRole] || [];
+          const fallbackTab = roleTabs.includes('overview') ? 'overview' : (roleTabs[0] || 'orders');
+          // Bundle-slug-and-navigation brief, Task 2 — a `?tab=` query
+          // param (set by app/admin/products/[id]/edit/page.tsx's Cancel/
+          // Save-success navigation, and by the Edit button's
+          // router.replace before leaving for that page) means "land back
+          // on this specific tab" rather than this role's usual default.
+          // Ignored (falls through to the normal default) unless it names
+          // a real tab this role can actually see — a stale/bookmarked/
+          // hand-edited URL can't put someone on a tab their role doesn't
+          // have access to.
+          const requestedTab = searchParams.get('tab');
+          setTab(requestedTab && roleTabs.includes(requestedTab) ? requestedTab : fallbackTab);
           setReady(true);
         } else {
           window.location.href = '/admin';
@@ -3244,6 +3287,25 @@ export default function AdminDashboard() {
 
   const ROLE_LABEL: Record<StaffRole, string> = { kitchen: 'Kitchen', manager: 'Manager', owner: 'Owner' };
 
+  // Audit-fixes brief, Part 6.8 — the flat 13-tab strip (more, for an
+  // Owner, than any other role sees) was one long wrapped row with no way
+  // to scan it — "Coupons" and "Customer Source" sat side by side with no
+  // hint they belong to different parts of the app. Grouping is purely
+  // visual/organizational: it only changes how TOP_TABS is laid out below,
+  // never which tab is selected or what renders for it, so tab state and
+  // routing (tab === t.id, setTab, badges) are untouched. A group renders
+  // only if at least one of its tabs survives the existing role filter, so
+  // e.g. Kitchen (Orders only) still sees a single unlabeled row rather
+  // than a wall of empty group headers.
+  const TAB_GROUPS: { label: string; ids: string[] }[] = [
+    { label: 'Overview', ids: ['overview'] },
+    { label: 'Operations', ids: ['orders', 'menu', 'homepage'] },
+    { label: 'Marketing', ids: ['rewards', 'coupons'] },
+    { label: 'Customers', ids: ['customers', 'customer_source'] },
+    { label: 'Insights', ids: ['reports', 'tracking'] },
+    { label: 'Admin', ids: ['settings', 'staff', 'activity'] },
+  ];
+
   return (
     <main style={{ minHeight: '100vh', background: 'var(--bg)', padding: '30px', color: 'var(--cream)', fontFamily: "'Work Sans', sans-serif" }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
@@ -3263,34 +3325,58 @@ export default function AdminDashboard() {
 
         {showMyAccount && <MyAccountModal onClose={() => setShowMyAccount(false)} />}
 
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-          {TOP_TABS.map((t) => (
-            <button key={t.id} type="button" style={tabBtn(tab === t.id)} onClick={() => setTab(t.id)}>
-              {t.label}
-              {!!t.badge && (
-                <span
+        <div style={{ marginBottom: 20 }}>
+          {TAB_GROUPS.map((group) => {
+            const groupTabs = group.ids
+              .map((id) => TOP_TABS.find((t) => t.id === id))
+              .filter((t): t is (typeof TOP_TABS)[number] => Boolean(t));
+            if (!groupTabs.length) return null;
+            return (
+              <div key={group.label} style={{ marginBottom: 10 }}>
+                <div
                   style={{
-                    marginLeft: 8,
-                    background: 'var(--ember)',
-                    color: 'var(--text-on-accent)',
-                    borderRadius: 999,
-                    padding: '1px 7px',
-                    fontSize: 11.5,
-                    fontWeight: 800,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    color: 'var(--muted)',
+                    marginBottom: 6,
                   }}
                 >
-                  {t.badge}
-                </span>
-              )}
-            </button>
-          ))}
+                  {group.label}
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {groupTabs.map((t) => (
+                    <button key={t.id} type="button" style={tabBtn(tab === t.id)} onClick={() => setTab(t.id)}>
+                      {t.label}
+                      {!!t.badge && (
+                        <span
+                          style={{
+                            marginLeft: 8,
+                            background: 'var(--ember)',
+                            color: 'var(--text-on-accent)',
+                            borderRadius: 999,
+                            padding: '1px 7px',
+                            fontSize: 11.5,
+                            fontWeight: 800,
+                          }}
+                        >
+                          {t.badge}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {tab === 'overview' && (
           <OverviewTab token={token} analytics={analytics} analyticsLoading={analyticsLoading} reloadAnalytics={reloadAnalytics} />
         )}
         {tab === 'orders' && <OrdersTab token={token} />}
-        {tab === 'menu' && <MenuTabs token={token} />}
+        {tab === 'menu' && <MenuTabs token={token} initialTab={searchParams.get('menuTab')} />}
         {tab === 'rewards' && <RewardsTab token={token} />}
         {tab === 'coupons' && <CouponsTab token={token} />}
         {tab === 'homepage' && <HomepageDisplaySettings token={token} />}

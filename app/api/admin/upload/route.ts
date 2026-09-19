@@ -1,6 +1,7 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { json } from '@/lib/api-helpers';
 import { requireRole } from '@/lib/adminAuth';
+import { slugify } from '@/lib/slugify';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,12 +39,12 @@ function slugifyFilename(name: string, stripExtension = true): string {
   // original file, so there's no reason to carry a second one into the slug.
   const withoutExt = stripExtension ? name.replace(/\.[^./\\]+$/, '') : name;
 
-  let slug = withoutExt
-    .toLowerCase()
-    .replace(/[\s_]+/g, '-') // spaces/underscores -> hyphens
-    .replace(/[^a-z0-9-]/g, '') // strip anything not alphanumeric-or-hyphen
-    .replace(/-+/g, '-') // collapse repeated hyphens
-    .replace(/^-+|-+$/g, ''); // trim leading/trailing hyphens
+  // Core kebab-case normalization now lives in lib/slugify.ts, shared with
+  // components/admin/ResourceManager.tsx's live ID-from-name auto-slug
+  // feature — see that file's comment for why. Everything below this line
+  // (length cap, empty-result fallback) is specific to building an upload
+  // storage key and stays here.
+  let slug = slugify(withoutExt);
 
   if (slug.length > MAX_SLUG_LENGTH) {
     const cut = slug.slice(0, MAX_SLUG_LENGTH);

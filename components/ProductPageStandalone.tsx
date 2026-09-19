@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { StoreProvider, useStore, type StoreProviderInitialData } from '@/context/StoreContext';
 import Header from '@/components/Header';
+import Breadcrumbs, { type BreadcrumbItem } from '@/components/Breadcrumbs';
 import Footer from '@/components/Footer';
 import ProductPage from '@/components/ProductPage';
 import DrinkUpsellModal from '@/components/DrinkUpsellModal';
@@ -62,15 +63,22 @@ export default function ProductPageStandalone({
   productId,
   productHint,
   initialData,
+  breadcrumbItems,
 }: {
   productId: string;
   productHint?: RawProduct | null;
   initialData?: StoreProviderInitialData | null;
+  // SEO gap-fill, Part A — Home > Category > Product, built server-side
+  // (app/(site)/[locale]/product/[id]/page.tsx) from the same product +
+  // category data used for generateMetadata, so the trail is always
+  // consistent with the actual page.
+  breadcrumbItems?: BreadcrumbItem[];
 }) {
   return (
     <StoreProvider initialData={initialData}>
       <div id="top" />
       <Header />
+      <Breadcrumbs items={breadcrumbItems} />
       <AutoOpenProduct productId={productId} productHint={productHint} />
       <Footer />
 

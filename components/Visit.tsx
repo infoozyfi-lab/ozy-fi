@@ -13,7 +13,14 @@ function formatHoursRows(openingHours: OpeningHours, t: any) {
 }
 
 export default function Visit() {
-  const { openingHours } = useStore();
+  // Audit-fixes brief, Part 6.4 — contactInfo (email/phone/address) now
+  // comes from context/StoreContext.tsx the same way openingHours already
+  // did (both ultimately sourced from admin_settings via /api/menu — see
+  // that field's own comment on StoreContextValue). The address line used
+  // to be a literal "Esimerkkikatu 12, 00100 Helsinki, Finland" — an
+  // obviously fake placeholder address hardcoded straight into this
+  // component, never read from anywhere real at all.
+  const { openingHours, contactInfo } = useStore();
   const t = useTranslations();
   const rows = formatHoursRows(openingHours, t);
 
@@ -22,13 +29,21 @@ export default function Visit() {
       <div className="wrap visit-grid">
         <div className="visit-block">
           <h3>{t.visit.addressHeading}</h3>
-          <p>Esimerkkikatu 12<br />00100 Helsinki, Finland</p>
+          <p>{contactInfo.address || t.visit.notSet}</p>
           <h3>{t.visit.openingHoursHeading}</h3>
           {rows.map((r: { label: string; value: string }) => (
             <div className="hours-row" key={r.label}><span>{r.label}</span><span>{r.value}</span></div>
           ))}
           <h3 style={{ marginTop: 24 }}>{t.visit.contactHeading}</h3>
-          <p>hello@ozy.fi · 040 000 0000</p>
+          <p>
+            {contactInfo.email ? <a href={`mailto:${contactInfo.email}`}>{contactInfo.email}</a> : t.visit.notSet}
+            {contactInfo.phone && (
+              <>
+                {' · '}
+                <a href={`tel:${contactInfo.phone.replace(/\s+/g, '')}`}>{contactInfo.phone}</a>
+              </>
+            )}
+          </p>
         </div>
         <div className="map-box"><div className="map-pin"></div></div>
       </div>

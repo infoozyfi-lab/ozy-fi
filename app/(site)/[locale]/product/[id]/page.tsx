@@ -1,12 +1,19 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { notFound } from 'next/navigation';
 import ProductPageStandalone from '@/components/ProductPageStandalone';
+import { buildBreadcrumbSchema, type BreadcrumbItem } from '@/components/Breadcrumbs';
 import { loadMenuData } from '@/lib/menu-data';
-import { resolveText, hreflangAlternates } from '@/lib/i18n/locales';
+import { resolveText, hreflangAlternates, getDictionary } from '@/lib/i18n/locales';
 import type { StoreProviderInitialData } from '@/context/StoreContext';
 import type { RawProduct } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
+
+// Matches every other JSON-LD block in this codebase (productSchema
+// below, menuSchema in the category page) — all hardcode this same origin
+// rather than deriving it, so this keeps that one existing convention
+// instead of adding a second way to build the same URL.
+const SITE_ORIGIN = 'https://ozy.fi';
 
 async function getProduct(id: string): Promise<RawProduct | null> {
   const { env } = await getCloudflareContext({ async: true });
@@ -15,6 +22,25 @@ async function getProduct(id: string): Promise<RawProduct | null> {
   // Promise<RawProduct | null> return type without a separate cast.
   const row = await env.DB.prepare('SELECT * FROM products WHERE id = ? AND active = 1').bind(id).first<RawProduct>();
   return row || null;
+}
+
+// SEO gap-fill, Part A — a small, single-purpose lookup just for the
+// breadcrumb's middle crumb (the product's category name), separate from
+// the heavier loadMenuData() call below. Wrapped in try/catch like that
+// call, for the same reason: this is non-essential ornamentation for the
+// page (Home > Product still renders correctly without it), not something
+// a real failure here should ever turn into a 500 or a false 404 for.
+async function getCategoryTitle(categoryId: string): Promise<{ title: string; title_fi: string | null } | null> {
+  try {
+    const { env } = await getCloudflareContext({ async: true });
+    const row = await env.DB.prepare('SELECT title, title_fi FROM categories WHERE id = ?')
+      .bind(categoryId)
+      .first<{ title: string; title_fi: string | null }>();
+    return row || null;
+  } catch (err) {
+    console.error(`[product breadcrumb] failed to load category "${categoryId}":`, err);
+    return null;
+  }
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string; id: string }> }) {
@@ -85,6 +111,24 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const name = resolveText(product.name, product.name_fi, locale);
   const description = resolveText(product.description, product.description_fi, locale);
 
+  // SEO gap-fill, Part A — Home > Category > Product. Same exact-match
+  // principle as the category page: this one array feeds both the
+  // visible trail (ProductPageStandalone -> Breadcrumbs) and the JSON-LD
+  // below. The category crumb is only included when the category lookup
+  // above actually found something — a category-lookup failure degrades
+  // to Home > Product rather than showing a broken/unlabeled crumb, on
+  // both the visible trail and the structured data together (so they
+  // still match each other even in that fallback case).
+  const t = getDictionary(locale);
+  const category = await getCategoryTitle(product.category_id);
+  const categoryTitle = category ? resolveText(category.title, category.title_fi, locale) : null;
+  const breadcrumbItems: BreadcrumbItem[] = [
+    { label: t.breadcrumb.home, href: `/${locale}` },
+    ...(categoryTitle ? [{ label: categoryTitle, href: `/${locale}/menu/${product.category_id}` }] : []),
+    { label: name, href: `/${locale}/product/${id}` },
+  ];
+  const breadcrumbSchema = buildBreadcrumbSchema(breadcrumbItems, SITE_ORIGIN);
+
   const productSchema = {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -105,7 +149,14 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     <>
       {/* eslint-disable-next-line react/no-danger */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }} />
-      <ProductPageStandalone productId={id} productHint={{ ...product, name, description }} initialData={initialData} />
+      {/* eslint-disable-next-line react/no-danger */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <ProductPageStandalone
+        productId={id}
+        productHint={{ ...product, name, description }}
+        initialData={initialData}
+        breadcrumbItems={breadcrumbItems}
+      />
     </>
   );
 }

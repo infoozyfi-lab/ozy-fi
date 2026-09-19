@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState, type ChangeEvent, type FormEvent, type MouseEvent } from 'react';
+import { useStore } from '@/context/StoreContext';
 import { useTranslations, useLocalePath } from '@/lib/i18n';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 
@@ -96,6 +97,9 @@ function ReferralForm() {
 export default function Footer() {
   const t = useTranslations();
   const lp = useLocalePath();
+  // Audit-fixes brief, Part 6.4 — see context/StoreContext.tsx's
+  // contactInfo comment; components/Visit.tsx has the matching fix.
+  const { contactInfo } = useStore();
 
   const scrollTop = (e: MouseEvent) => {
     e.preventDefault();
@@ -122,6 +126,15 @@ export default function Footer() {
             <a href="#menu" onClick={scrollTo('menu')}>{t.header.menu}</a>
             <a href="#story" onClick={scrollTo('story')}>{t.footer.ourStory}</a>
             <a href="#visit" onClick={scrollTo('visit')}>{t.footer.findUs}</a>
+            {/* SEO gap-fill, Part C — internal links to the four new pages, so
+                they're discoverable/crawlable from every page rather than
+                only reachable by typing the URL directly. Reusing each
+                page's own <h1> string (t.about.title etc.) as the link text
+                rather than adding separate footer-only labels. */}
+            <Link href={lp('/about')}>{t.about.title}</Link>
+            <Link href={lp('/delivery')}>{t.delivery.title}</Link>
+            <Link href={lp('/pickup')}>{t.pickup.title}</Link>
+            <Link href={lp('/contact')}>{t.contact.title}</Link>
             <Link href={lp('/track')}>{t.header.trackOrder}</Link>
             <Link href={lp('/faq')}>{t.footer.faq}</Link>
             <Link href={lp('/privacy')}>{t.footer.privacyPolicy}</Link>
@@ -129,8 +142,18 @@ export default function Footer() {
           </div>
           <div>
             <h4>{t.footer.contactHeading}</h4>
-            <a href="mailto:hello@ozy.fi">hello@ozy.fi</a>
-            <a href="tel:0400000000">040 000 0000</a>
+            {/* Audit-fixes brief, Part 6.4 — real admin_settings.email/
+                phone (via contactInfo above) instead of a hardcoded
+                hello@ozy.fi / 040 000 0000 that had no connection to
+                whatever the business actually configured in Admin →
+                Settings. Simply omitted here (rather than a "not set yet"
+                placeholder string) if a value genuinely isn't configured
+                — this footer renders on every single page, so a bracketed
+                admin-instruction placeholder that's fine on the dedicated
+                /contact page would look like a site-wide error message on
+                every other page it appeared on instead. */}
+            {contactInfo.email && <a href={`mailto:${contactInfo.email}`}>{contactInfo.email}</a>}
+            {contactInfo.phone && <a href={`tel:${contactInfo.phone.replace(/\s+/g, '')}`}>{contactInfo.phone}</a>}
           </div>
           <div>
             <h4>{t.footer.referralColumnHeading}</h4>

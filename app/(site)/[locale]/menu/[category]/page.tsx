@@ -1,10 +1,16 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { notFound } from 'next/navigation';
 import MenuPageClient from '@/components/MenuPageClient';
+import { buildBreadcrumbSchema, type BreadcrumbItem } from '@/components/Breadcrumbs';
 import { loadMenuData } from '@/lib/menu-data';
-import { resolveText, hreflangAlternates } from '@/lib/i18n/locales';
+import { resolveText, hreflangAlternates, getDictionary } from '@/lib/i18n/locales';
 import type { StoreProviderInitialData } from '@/context/StoreContext';
 import type { RawCategory } from '@/lib/types';
+
+// Every JSON-LD block already in this codebase hardcodes this same origin
+// (productSchema in the product page, this file's own menuSchema below) —
+// matching that rather than introducing a second convention.
+const SITE_ORIGIN = 'https://ozy.fi';
 
 export const dynamic = 'force-dynamic';
 
@@ -112,13 +118,25 @@ export default async function CategoryMenuPage({ params }: { params: Promise<{ l
     url: `https://ozy.fi/${locale}/menu/${categorySlug}`,
   } : null;
 
+  // SEO gap-fill, Part A — Home > Category. This exact array feeds both
+  // the visible trail (MenuPageClient -> Breadcrumbs) and the JSON-LD
+  // below, so they can never describe two different things.
+  const t = getDictionary(locale);
+  const breadcrumbItems: BreadcrumbItem[] = [
+    { label: t.breadcrumb.home, href: `/${locale}` },
+    { label: title, href: `/${locale}/menu/${categorySlug}` },
+  ];
+  const breadcrumbSchema = buildBreadcrumbSchema(breadcrumbItems, SITE_ORIGIN);
+
   return (
     <>
       {menuSchema && (
         // eslint-disable-next-line react/no-danger
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(menuSchema) }} />
       )}
-      <MenuPageClient onlyCategory={categorySlug} initialData={initialData} introText={introText} />
+      {/* eslint-disable-next-line react/no-danger */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <MenuPageClient onlyCategory={categorySlug} initialData={initialData} introText={introText} breadcrumbItems={breadcrumbItems} />
     </>
   );
 }
