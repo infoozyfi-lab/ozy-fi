@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useStore } from '@/context/StoreContext';
 import { useTranslations, useLocalePath } from '@/lib/i18n';
-import type { FillingCategory, FillingItem, OptionItem } from '@/lib/types';
+import type { FillingCategory, FillingItem, OptionItem, Product, Bundle } from '@/lib/types';
 
 // Keyed by the ENGLISH topping label from the database — since Finnish
 // toppings now resolve to their translated `label_fi` text (see
@@ -236,6 +236,89 @@ function ProductDetails({ t }: { t: any }) {
   );
 }
 
+// Round-2 fixes brief, Part 3 — zero internal linking existed between
+// products/categories/bundles anywhere on the site (see
+// FULL-SITE-AUDIT-ROUND2-REPORT.md). Rendered on BOTH this component's
+// usages — the standalone, crawlable /product/[id] page
+// (ProductPageStandalone.tsx just renders this same component; see that
+// file's header) and the in-app modal opened from a menu tile — so this
+// one addition covers the brief's "and, if reasonable, ProductPage.tsx"
+// clause for free, without a second implementation.
+//
+// "Related" = same category OR sharing this product's own tag (e.g. two
+// different "Spicy"-tagged items in different categories) — real
+// `category_id`/`tag` data already on every Product, nothing invented.
+// Links are real <Link>s to /product/[id], the exact same convention
+// components/MenuSection.tsx's own product tiles already use, so this is
+// a genuinely crawlable internal link, not just a client-side state swap.
+function RelatedProducts({
+  activeProduct,
+  products,
+  bundles,
+  openBundle,
+  t,
+  lp,
+}: {
+  activeProduct: Product;
+  products: Product[];
+  bundles: Bundle[];
+  openBundle: (bundle: Bundle) => void;
+  t: any;
+  lp: (path: string) => string;
+}) {
+  const related = products
+    .filter((p) => p.id !== activeProduct.id && p.price != null)
+    .filter((p) => p.category_id === activeProduct.category_id || (Boolean(activeProduct.tag) && p.tag === activeProduct.tag))
+    // Same-category matches first (the strongest, most obviously relevant
+    // signal), then tag-only matches — rather than an arbitrary DB order.
+    .sort((a, b) => {
+      const aSameCat = a.category_id === activeProduct.category_id ? 0 : 1;
+      const bSameCat = b.category_id === activeProduct.category_id ? 0 : 1;
+      return aSameCat - bSameCat;
+    })
+    .slice(0, 6);
+
+  // A bundle "contains" a product via one of its own fixed slots — a
+  // choice slot only names categories, not a specific product, so it
+  // isn't a genuine "this exact product is in this bundle" claim.
+  const bundle = bundles.find((b) => b.slots.some((slot) => slot.kind === 'fixed' && slot.productId === activeProduct.id));
+
+  if (related.length === 0 && !bundle) return null;
+
+  return (
+    <div className="pp-section">
+      {bundle && (
+        <div className="pp-related-bundle">
+          <span className="pp-label" style={{ margin: 0 }}>{t.productPage.partOfBundleLabel}</span>
+          {/* No dedicated bundle URL exists in this codebase (bundles open
+              as a modal from wherever they're featured — see
+              components/Bundles.tsx/FeaturedCard.tsx for the same
+              pattern) — this is the same one-click affordance those use,
+              not a real crawlable link, disclosed as such in this
+              feature's delivery report. */}
+          <button type="button" className="pp-related-bundle-btn" onClick={() => openBundle(bundle)}>
+            {t.productPage.viewBundle(bundle.title)}
+          </button>
+        </div>
+      )}
+      {related.length > 0 && (
+        <>
+          <p className="pp-heading">{t.productPage.relatedHeading}</p>
+          <div className="pp-related-list">
+            {related.map((p) => (
+              <Link key={p.id} href={lp(`/product/${p.id}`)} className="pp-related-item">
+                <img src={p.image ?? undefined} alt={p.name} />
+                <span className="pp-related-name">{p.name}</span>
+                <span className="pp-related-price">{(p.price ?? 0).toFixed(2)} €</span>
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function ProductPage() {
   const {
     activeProduct, selection, unitPrice, lineTotal,
@@ -245,6 +328,8 @@ export default function ProductPage() {
     baseOptions: BASE_OPTIONS, sauceOptions: SAUCE_OPTIONS, cheeseOptions: CHEESE_OPTIONS,
     fillingCategories: FILLING_CATEGORIES, allFillings: ALL_FILLINGS,
     sauceStripeOptions: SAUCE_STRIPE_OPTIONS, dipOptions: DIP_OPTIONS,
+    // Round-2 fixes brief, Part 3 — for RelatedProducts below.
+    products: ALL_PRODUCTS, bundles: ALL_BUNDLES, openBundle,
   } = useStore();
   const t = useTranslations();
   const lp = useLocalePath();
@@ -365,6 +450,19 @@ export default function ProductPage() {
               <ProductDetails t={t} />
             </>
           )}
+
+          {/* Round-2 fixes brief, Part 3 — outside the toppingsEnabled
+              block above so a non-customizable item (e.g. a drink or
+              snack sold as its own /product/[id] page) still gets related
+              links/bundle surfacing, not just customizable food items. */}
+          <RelatedProducts
+            activeProduct={activeProduct}
+            products={ALL_PRODUCTS}
+            bundles={ALL_BUNDLES}
+            openBundle={openBundle}
+            t={t}
+            lp={lp}
+          />
         </div>
       </div>
 

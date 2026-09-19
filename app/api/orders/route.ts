@@ -7,7 +7,17 @@ import { normalizeMenuBlob } from '@/lib/menu-i18n';
 import { verifyCartLine, computeDiscountAmount, readDiscountSetting } from '@/lib/pricing';
 import { findBestActiveScheduledOffer } from '@/lib/scheduledOffers';
 import { getStripe } from '@/lib/stripe';
-import type { DiscountSource, DiscountValue } from '@/lib/types';
+import type { DiscountSource, DiscountValue, OrderType } from '@/lib/types';
+
+// Round-2 fixes brief, Part 5 — a pickup order's `orders.address` column
+// (still TEXT NOT NULL — see worker/migrations/015_pickup_fulfillment.sql
+// for why it wasn't made nullable) stores this sentinel string instead of
+// a real address. Exported so nothing else in this codebase needs to
+// re-invent or guess this exact string if it ever needs to recognize a
+// pickup order's address value specifically (nothing currently does —
+// every downstream display keys off the `order_type` column instead —
+// but this keeps the one authoritative copy in one place).
+import { PICKUP_ADDRESS_SENTINEL } from '@/lib/order-constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,6 +65,17 @@ interface CreateOrderBody {
   // silently falling back, since this value decides whether a real
   // charge gets created.
   paymentMethod?: 'cod' | 'card';
+  // Round-2 fixes brief, Part 5 — a sibling to paymentMethod, same
+  // trust level as everything else on this body: the CLIENT's claim about
+  // which fulfillment type this is decides which validation/fee rules
+  // below apply, but never anything about price on its own — every actual
+  // amount is still independently recomputed from admin_settings and the
+  // verified cart, same as before this field existed. Anything other than
+  // the literal string 'pickup' is treated as 'delivery' (the pre-existing
+  // default/only-ever-possible value), never silently rejected — an old
+  // client build that doesn't send this field at all must keep placing
+  // ordinary delivery orders exactly as it always has.
+  orderType?: string;
 }
 
 export async function POST(request: Request) {
@@ -82,13 +103,27 @@ export async function POST(request: Request) {
 
   const { customer, items } = body;
 
+  // Round-2 fixes brief, Part 5 — the only two real values; anything else
+  // the client sends (or omits) is treated as 'delivery', see this field's
+  // own comment on CreateOrderBody above.
+  const orderType: OrderType = body.orderType === 'pickup' ? 'pickup' : 'delivery';
+
   // Email removed from this check — it's optional at checkout now (not
   // legally required in Finland for a cash-on-delivery order). Phone
   // remains required and is the primary contact/tracking method either
   // way. Postal code is required (used for the delivery-zone check
   // below) — restored here after being found missing during the price-
   // verification work; see CheckoutModal.tsx for the matching form field.
-  if (!customer.name || !customer.address || !customer.postalCode || !customer.phone) {
+  //
+  // Round-2 fixes brief, Part 5 — address/postal code are only required
+  // for a delivery order: a pickup customer is coming to collect it
+  // themselves, so there's nothing to deliver to and nothing to zone-check
+  // below either. Name/phone stay required either way — the restaurant
+  // still needs to know who's collecting the order and how to reach them.
+  if (!customer.name || !customer.phone) {
+    return json({ error: 'Missing customer details' }, 400);
+  }
+  if (orderType === 'delivery' && (!customer.address || !customer.postalCode)) {
     return json({ error: 'Missing customer details' }, 400);
   }
 
@@ -105,16 +140,21 @@ export async function POST(request: Request) {
   // list all ~90 of them individually. Reads straight from rawMenu's
   // settings blob (already fetched above for pricing) rather than a
   // separate query.
-  const allowedZones = String(rawMenu.settings?.delivery_postal_codes || '')
-    .split(',')
-    .map((z) => z.trim())
-    .filter(Boolean);
-  const customerPostal = String(customer.postalCode).trim();
-  const zoneOk = allowedZones.length === 0 || allowedZones.some((zone) =>
-    zone.length <= 3 ? customerPostal.startsWith(zone) : customerPostal === zone
-  );
-  if (!zoneOk) {
-    return json({ error: "Sorry, we don't currently deliver to that postal code." }, 400);
+  //
+  // Round-2 fixes brief, Part 5 — skipped entirely for a pickup order:
+  // there's no delivery zone to check when nothing is being delivered.
+  if (orderType === 'delivery') {
+    const allowedZones = String(rawMenu.settings?.delivery_postal_codes || '')
+      .split(',')
+      .map((z) => z.trim())
+      .filter(Boolean);
+    const customerPostal = String(customer.postalCode).trim();
+    const zoneOk = allowedZones.length === 0 || allowedZones.some((zone) =>
+      zone.length <= 3 ? customerPostal.startsWith(zone) : customerPostal === zone
+    );
+    if (!zoneOk) {
+      return json({ error: "Sorry, we don't currently deliver to that postal code." }, 400);
+    }
   }
 
   // --- Growth features: this phone's order history (Feature 2 + 3) ---
@@ -219,6 +259,25 @@ export async function POST(request: Request) {
     recomputedTotal += lineTotal;
   }
   recomputedTotal = Math.round(recomputedTotal * 100) / 100;
+
+  // Round-2 fixes brief, Part 1 — admin_settings.minimum_order was
+  // previously read only by DeliveryPageClient.tsx's own info page and
+  // the admin Settings form; nothing ever actually enforced it here, so
+  // an order below the configured minimum went through anyway. Compared
+  // against the verified PRE-discount, pre-fee item subtotal — a coupon
+  // shouldn't be usable to duck under a minimum meant to keep small
+  // delivery runs worthwhile, and the delivery fee itself is a separate
+  // cost, not part of what the minimum is measuring. Delivery only (Part
+  // 5's coordination point): a pickup order costs the business nothing to
+  // fulfill in delivery terms, so there's no minimum to protect.
+  if (orderType === 'delivery') {
+    const minimumOrder = Number(rawMenu.settings?.minimum_order);
+    if (Number.isFinite(minimumOrder) && minimumOrder > 0 && recomputedTotal < minimumOrder) {
+      return json({
+        error: `A minimum order of ${minimumOrder.toFixed(2)} € applies for delivery. Please add ${(minimumOrder - recomputedTotal).toFixed(2)} € more to your cart, or switch to pickup.`,
+      }, 400);
+    }
+  }
 
   // --- Stamp card / loyalty (Feature 3, redesigned) — cheapest eligible
   // cart line ---
@@ -372,6 +431,25 @@ export async function POST(request: Request) {
     }
   }
 
+  // Round-2 fixes brief, Part 1 — the delivery fee is added AFTER every
+  // discount above (coupon, welcome, scheduled offer, stamp card) has
+  // already been resolved into `finalTotal`: it's not part of the order
+  // subtotal a discount applies to, it's the separate cost of delivering
+  // it, so a 10%-off coupon never accidentally discounts the fee too.
+  // Delivery only (Part 5's coordination point) — a pickup order has
+  // nothing to add here. This IS the amount Stripe will charge for a
+  // card order (finalTotal feeds paymentIntents.create below) and what
+  // gets written to orders.total, so the client-shown preview in
+  // CheckoutModal.tsx can never drift from what's actually charged.
+  let deliveryFee = 0;
+  if (orderType === 'delivery') {
+    const rawFee = Number(rawMenu.settings?.delivery_fee);
+    deliveryFee = Number.isFinite(rawFee) && rawFee > 0 ? rawFee : 0;
+    if (deliveryFee > 0) {
+      finalTotal = Math.round((finalTotal + deliveryFee) * 100) / 100;
+    }
+  }
+
   // --- Stamp card / loyalty — pending-reward bookkeeping decision ---
   // Decided here (after the coupon-vs-automatic-discounts branch above
   // has fully run, so discountSource/stampCardWonViaExistingPending are
@@ -449,6 +527,14 @@ export async function POST(request: Request) {
   // same as no email, no extra empty-string checks needed there.
   const email = (customer.email || '').trim();
 
+  // Round-2 fixes brief, Part 5 — a pickup order stores this sentinel
+  // string in the still-NOT-NULL `address` column instead of a real
+  // address (see PICKUP_ADDRESS_SENTINEL's own comment above and
+  // worker/migrations/015_pickup_fulfillment.sql for why the column
+  // itself wasn't made nullable). A delivery order's `customer.address`
+  // was already validated non-empty above.
+  const storedAddress = orderType === 'pickup' ? PICKUP_ADDRESS_SENTINEL : customer.address;
+
   // Card orders start life as payment_status 'pending' — the PaymentIntent
   // created below (and the row updated with its id) is what /api/webhooks/
   // stripe later matches against to flip this to 'paid' (or 'failed').
@@ -456,14 +542,14 @@ export async function POST(request: Request) {
   // before this feature — nothing to track for cash paid on delivery.
   const insertOrder = await env.DB.prepare(
     `INSERT INTO orders
-      (order_num, customer_name, address, email, phone, notes, total, status, payment_method, payment_status, coupon_code, discount_amount, marketing_consent, discount_source, triggered_wow_moment, is_reorder)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'received', ?, ?, ?, ?, ?, ?, ?, ?)`
+      (order_num, customer_name, address, email, phone, notes, total, status, payment_method, payment_status, coupon_code, discount_amount, marketing_consent, discount_source, triggered_wow_moment, is_reorder, order_type)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'received', ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
-      orderNum, customer.name, customer.address, email, customer.phone, customer.notes || '', finalTotal,
+      orderNum, customer.name, storedAddress, email, customer.phone, customer.notes || '', finalTotal,
       paymentMethod, paymentMethod === 'card' ? 'pending' : 'cod',
       appliedCouponCode, discountAmount, body.marketingConsent ? 1 : 0,
-      discountSource, triggeredWowMoment ? 1 : 0, body.isReorder ? 1 : 0
+      discountSource, triggeredWowMoment ? 1 : 0, body.isReorder ? 1 : 0, orderType
     )
     .run();
 

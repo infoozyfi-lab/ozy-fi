@@ -72,7 +72,7 @@ export default function InvoicePage() {
     columnItem: string; columnQty: string; columnUnitPrice: string; columnLineTotal: string; subtotal: string;
     discount: string; adjustment: string; total: string; paymentMethod: string; paymentStatus: string;
     vatNote: string; printButton: string; backToOrder: string; loading: string; notFound: string;
-    forbidden: string; signInRequired: string;
+    forbidden: string; signInRequired: string; pickupLabel: string;
     discountSourceLabel: Record<string, string>; paymentMethodLabel: Record<string, string>;
   };
 
@@ -232,7 +232,15 @@ export default function InvoicePage() {
           <div style={{ marginBottom: 28 }}>
             <p style={{ margin: '0 0 4px', fontSize: 12, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#8A8073' }}>{t.customer}</p>
             <p style={{ margin: 0, fontWeight: 700 }}>{data.order.customer_name}</p>
-            <p style={{ margin: '2px 0 0' }}>{data.order.address}</p>
+            {/* Round-2 fixes brief, Part 5 — data.order.address is a
+                sentinel string (never a real address) for a pickup order;
+                shown as a clear label instead so a printed/saved invoice
+                never reads as if a driver needs to find that address. */}
+            {data.order.order_type === 'pickup' ? (
+              <p style={{ margin: '2px 0 0', fontStyle: 'italic' }}>{t.pickupLabel}</p>
+            ) : (
+              <p style={{ margin: '2px 0 0' }}>{data.order.address}</p>
+            )}
             <p style={{ margin: '2px 0 0' }}>{data.order.phone}</p>
             {data.order.email && <p style={{ margin: '2px 0 0' }}>{data.order.email}</p>}
           </div>

@@ -27,6 +27,13 @@ export interface OrderConfirmationCardProps {
   dismissLabel?: ReactNode; // defaults to t.confirm.continueShopping
   discountBlock?: ReactNode;
   rewardsBlock?: ReactNode;
+  // Round-2 fixes brief, Part 5 — which fulfillment type this order used,
+  // so the cash note can say "when you collect it" instead of "when your
+  // order arrives" for a pickup order. Defaults to 'delivery' since the
+  // one caller that doesn't know order type at all (/checkout-return —
+  // see this file's header comment for why) only ever shows this note for
+  // a card-paid order anyway, where the note text doesn't depend on it.
+  orderType?: 'delivery' | 'pickup';
 }
 
 export default function OrderConfirmationCard({
@@ -38,6 +45,7 @@ export default function OrderConfirmationCard({
   dismissLabel,
   discountBlock,
   rewardsBlock,
+  orderType = 'delivery',
 }: OrderConfirmationCardProps) {
   const t = useTranslations();
   const lp = useLocalePath();
@@ -58,7 +66,9 @@ export default function OrderConfirmationCard({
         <span>
           {paymentMethod === 'card'
             ? t.confirm.cardPaidNote(`${total.toFixed(2)} €`)
-            : t.confirm.codNote(`${total.toFixed(2)} €`)}
+            : orderType === 'pickup'
+              ? t.confirm.codNotePickup(`${total.toFixed(2)} €`)
+              : t.confirm.codNote(`${total.toFixed(2)} €`)}
         </span>
       </div>
       {rewardsBlock}

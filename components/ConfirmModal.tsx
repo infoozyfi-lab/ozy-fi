@@ -114,6 +114,7 @@ export default function ConfirmModal() {
             onDismiss={closeConfirm}
             discountBlock={discountBlock}
             rewardsBlock={rewardsBlock}
+            orderType={confirmedOrder.orderType}
           />
         )}
       </div>

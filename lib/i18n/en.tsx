@@ -101,8 +101,10 @@ const en = {
     eyebrow: 'Pizza, kebab & burgers',
     titleStart: 'Start your',
     titleEm: 'order',
-    reviews: '· 320+ reviews',
     openNow: 'Open now',
+    // Round-2 fixes brief, Part 6 (item 2) — real closed state, shown
+    // instead of openNow when lib/openingHours.ts's isOpenNow says so.
+    closedNow: 'Closed now',
     etaRange: '25-35 min',
     subtitle: 'Fresh dough, made to order, always hot. Pick a category or browse the full menu — delivery or pickup at checkout.',
   },
@@ -139,6 +141,9 @@ const en = {
     loading: 'Loading menu...',
     loadError: 'Unable to load menu. Please try again.',
     note: 'Extra toppings 2.50 €: 120 g patty, bacon, cheese, pineapple, blue cheese, onion, egg · Condiments: ketchup, yogurt sauce, pickle, lemon juice, mayonnaise, American sauce, parsley, mint, chili flakes.',
+    // Round-2 fixes brief, Part 3 — heading above the cross-category link
+    // row on a /menu/[category] page (see MenuPageClient.tsx).
+    relatedCategoriesHeading: 'You might also like',
   },
 
   story: {
@@ -206,6 +211,10 @@ const en = {
     climateBody: "This item’s estimated carbon footprint is calculated from its ingredients, packaging and preparation method. Choosing plant-based fillings and cheese generally lowers the footprint of your order.",
     loadingOptions: 'Loading options…',
     itemUnavailable: "This item isn't available right now.",
+    // Round-2 fixes brief, Part 3 — internal linking on the product page.
+    relatedHeading: 'You might also like',
+    partOfBundleLabel: 'Also available in a bundle',
+    viewBundle: (bundleTitle: string) => `View the "${bundleTitle}" bundle`,
     addToOrder: (price: string) => `Add to order — ${price}`,
     addToBundle: 'Add to bundle',
     addToBundleExtra: (price: string) => `Add to bundle — +${price}`,
@@ -309,6 +318,28 @@ const en = {
     // (see CheckoutModal.tsx's bestAutoDiscount). `label` is plain
     // admin-entered text, never a hardcoded campaign name.
     scheduledOfferBanner: (label: string, amountText: string) => `🔥 ${label}: ${amountText} off — applied automatically at checkout!`,
+    // Round-2 fixes brief, Part 1 — the delivery fee line shown in the
+    // cart/checkout total once it's known to apply (orderType === 'delivery'
+    // and admin_settings.delivery_fee is configured), and the "you're
+    // under the minimum" notice the FAQ (t.faq groups.delivery) already
+    // promises would show here. amountNeeded/minimum are pre-formatted
+    // "X.XX €" strings, same convention as every other price in this file.
+    deliveryFeeRow: 'Delivery fee',
+    minOrderNotice: (amountNeeded: string, minimum: string) =>
+      `Add ${amountNeeded} more to reach the ${minimum} minimum for delivery orders.`,
+    // Round-2 fixes brief, Part 5 — the delivery/pickup choice added to
+    // step 2, styled with the same .payment-method/.pay-option markup as
+    // the existing cash/card choice in step 3.
+    orderTypeHeading: 'How would you like to get your order?',
+    orderTypeDelivery: 'Delivery',
+    orderTypeDeliveryDesc: 'Brought to your door',
+    orderTypePickup: 'Pickup',
+    orderTypePickupDesc: 'Collect it yourself from the store',
+    // Shown in step 2 once "Pickup" is selected, in place of the address/
+    // postal-code fields — real values from admin_settings (same source
+    // Visit.tsx/PickupPageClient.tsx already use), never invented.
+    pickupInfoHeading: 'Pickup location & hours',
+    pickupInfoIntro: 'Come to us at:',
   },
 
   confirm: {
@@ -328,6 +359,14 @@ const en = {
     stampCardApplied: (amount: string) => `Stamp-card reward applied: −${amount}`,
     codNote: (total: ReactNode) => (
       <>Pay <b>{total}</b> by cash on delivery when your order arrives.</>
+    ),
+    // Round-2 fixes brief, Part 5 — same slot as codNote above, shown
+    // instead of it when this order's orderType is 'pickup': the customer
+    // is coming to the store themselves, so "when your order arrives" is
+    // simply wrong for them (same delivery-specific-language issue the
+    // brief calls out on the tracking page).
+    codNotePickup: (total: ReactNode) => (
+      <>Pay <b>{total}</b> by cash when you collect your order.</>
     ),
     // Part A (order confirmation screen) — shown instead of codNote when
     // paymentMethod is 'card', so a customer who already paid by card
@@ -418,7 +457,14 @@ const en = {
     stepPreparing: 'Preparing',
     stepOnTheWay: 'On the way',
     stepDelivered: 'Delivered',
+    // Round-2 fixes brief, Part 5 — same two timeline steps, pickup-
+    // appropriate wording (see components/TrackPageClient.tsx's
+    // OrderTimeline).
+    stepReadyForPickup: 'Ready for pickup',
+    stepPickedUp: 'Picked up',
     deliveringTo: (addr: string, method: string) => `Delivering to ${addr} · ${method}`,
+    // Shown instead of deliveringTo above for a pickup order.
+    pickupAt: (method: string) => `Ready to collect at our store · ${method}`,
     codPaymentLabel: 'Cash on delivery',
     trackDifferentOrder: '← Track a different order',
     // Growth features (Feature 1 — reorder).
@@ -527,7 +573,12 @@ const en = {
     intro: 'Prefer to collect your order yourself? Here’s where and when.',
     locationHeading: 'Pickup location',
     hoursHeading: 'Pickup hours',
-    orderingPlaceholder: 'Placeholder — confirm exactly how a customer should place a pickup order today. Checkout currently only collects a delivery address, with no pickup option yet, so this needs the business owner’s input before this page can tell customers how to actually order for pickup.',
+    // Round-2 fixes brief, Part 5 — replaces the old orderingPlaceholder
+    // now that checkout actually has a pickup option (see
+    // CheckoutModal.tsx's step-2 delivery/pickup toggle). Real
+    // instructions, not another placeholder.
+    orderingHeading: 'How to order for pickup',
+    orderingInstructions: 'Order online the same way as always — add items to your cart and go to checkout. In step 2, choose "Pickup" instead of "Delivery": you won\'t need to enter a delivery address, and there\'s no delivery fee. We\'ll have your order ready at the address and hours below.',
   },
 
   error: {
@@ -618,6 +669,11 @@ const en = {
     notFound: 'Could not load this order.',
     forbidden: "You don't have access to invoices — ask a manager or the owner.",
     signInRequired: 'Please sign in to view this invoice.',
+    // Round-2 fixes brief, Part 5 — shown instead of the stored address
+    // (a sentinel string, never a real address — see
+    // app/api/orders/route.ts's PICKUP_ADDRESS_SENTINEL) when this
+    // order's order_type is 'pickup'.
+    pickupLabel: 'Pickup order — collected in person, no delivery address.',
     discountSourceLabel: {
       manual_coupon: 'Coupon code',
       referral: 'Referral reward',

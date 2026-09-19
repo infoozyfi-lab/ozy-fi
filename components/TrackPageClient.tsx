@@ -8,6 +8,7 @@ import Footer from '@/components/Footer';
 import { useTranslations, useLocale, useLocalePath } from '@/lib/i18n';
 import type {
   OrderStatus,
+  OrderType,
   OrderTrackingResult,
   OrderPhoneMatch,
   RecentOrder,
@@ -24,12 +25,19 @@ function stepIndex(status: OrderStatus, STEPS: Step[]) {
   return i === -1 ? 0 : i + 1;
 }
 
-function OrderTimeline({ status, t }: { status: OrderStatus; t: any }) {
+// Round-2 fixes brief, Part 5 — "On the way"/"Delivered" are delivery-
+// specific language that's simply wrong for a pickup order (nobody is
+// "on the way" to a customer who's coming to collect it themselves).
+// Same OrderStatus values drive both (no new statuses were introduced —
+// see this feature's delivery report for that scope decision), just
+// different labels for the two steps where the wording actually differs.
+function OrderTimeline({ status, orderType, t }: { status: OrderStatus; orderType?: OrderType; t: any }) {
+  const isPickup = orderType === 'pickup';
   const STEPS: Step[] = [
     { key: 'received', label: t.track.stepReceived },
     { key: 'preparing', label: t.track.stepPreparing },
-    { key: 'on_the_way', label: t.track.stepOnTheWay },
-    { key: 'delivered', label: t.track.stepDelivered },
+    { key: 'on_the_way', label: isPickup ? t.track.stepReadyForPickup : t.track.stepOnTheWay },
+    { key: 'delivered', label: isPickup ? t.track.stepPickedUp : t.track.stepDelivered },
   ];
 
   if (status === 'cancelled') {
@@ -233,7 +241,7 @@ function PhoneLookup({ onFound, t, locale }: { onFound: (orderNum: string, phone
 // explicitly continues — matches the brief's "lands the customer on
 // checkout with the cart already filled — not an auto-submitted order
 // (they should still review before confirming)".
-function ReorderButton({ orderNum, phone, t }: { orderNum: string; phone: string; t: any }) {
+function ReorderButton({ orderNum, phone, orderType, t }: { orderNum: string; phone: string; orderType?: OrderType; t: any }) {
   const router = useRouter();
   const lp = useLocalePath();
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
@@ -282,6 +290,18 @@ function ReorderButton({ orderNum, phone, t }: { orderNum: string; phone: string
       // ozy_open_checkout is, so the order this cart turns into can be
       // marked orders.is_reorder = 1.
       sessionStorage.setItem('ozy_is_reorder', '1');
+      // Round-2 fixes brief, Part 5 — a reordered pickup order should
+      // default back to pickup, not silently become a delivery order
+      // (the local `orderType` state CheckoutModal.tsx starts every fresh
+      // checkout with). Same one-shot sessionStorage handoff pattern as
+      // ozy_is_reorder above, consumed once by
+      // context/StoreContext.tsx's mount effect. Only written when it's
+      // actually 'pickup' — the default (delivery, or this order
+      // predating the order_type column) needs no override at all, since
+      // 'delivery' is already CheckoutModal's own starting state.
+      if (orderType === 'pickup') {
+        sessionStorage.setItem('ozy_reorder_order_type', 'pickup');
+      }
     } catch {
       // Storage unavailable — still navigate; the customer just lands on
       // an empty cart instead of a pre-filled one, same degraded
@@ -418,7 +438,7 @@ function TrackForm({ t, locale }: { t: any; locale: string }) {
             <EtaCountdown etaIso={order.estimated_ready_at} t={t} locale={locale} />
           )}
 
-          <OrderTimeline status={order.status} t={t} />
+          <OrderTimeline status={order.status} orderType={order.order_type} t={t} />
 
           <div className="track-items">
             {(order.items || []).map((item) => {
@@ -439,11 +459,18 @@ function TrackForm({ t, locale }: { t: any; locale: string }) {
             </div>
           </div>
 
+          {/* Round-2 fixes brief, Part 5 — order.address is a sentinel
+              string for a pickup order (never a real address — see
+              app/api/orders/route.ts's PICKUP_ADDRESS_SENTINEL), so this
+              shows the pickup-appropriate line instead of ever printing
+              that sentinel text to the customer. */}
           <p className="track-address">
-            {t.track.deliveringTo(order.address, order.payment_method === 'cod' ? t.track.codPaymentLabel : order.payment_method)}
+            {order.order_type === 'pickup'
+              ? t.track.pickupAt(order.payment_method === 'cod' ? t.track.codPaymentLabel : order.payment_method)
+              : t.track.deliveringTo(order.address, order.payment_method === 'cod' ? t.track.codPaymentLabel : order.payment_method)}
           </p>
 
-          <ReorderButton orderNum={order.order_num} phone={phone} t={t} />
+          <ReorderButton orderNum={order.order_num} phone={phone} orderType={order.order_type} t={t} />
 
           <button type="button" className="track-lost-link" onClick={() => setOrder(null)}>
             {t.track.trackDifferentOrder}

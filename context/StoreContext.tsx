@@ -33,6 +33,7 @@ import type {
   ScheduledOffer,
   DiscountSource,
   DiscountValue,
+  OrderType,
 } from '@/lib/types';
 
 interface StoreContextValue {
@@ -78,7 +79,13 @@ interface StoreContextValue {
   placeOrder: (
     customer: Customer,
     couponCode?: string,
-    paymentMethod?: 'cod' | 'card'
+    paymentMethod?: 'cod' | 'card',
+    // Round-2 fixes brief, Part 5 — a sibling to paymentMethod rather than
+    // a field on Customer, since it's a property of how this order is
+    // fulfilled, not of who the customer is. Defaults to 'delivery' below
+    // (same default as the order_type column) so existing callers that
+    // don't pass it keep behaving exactly as before pickup existed.
+    orderType?: OrderType
   ) => Promise<
     // orderNum/amount (audit-fixes brief, Part 1) — the order number and
     // the server's own authoritative total at the moment this order/
@@ -93,6 +100,11 @@ interface StoreContextValue {
   >;
   setConfirmedOrder: Dispatch<SetStateAction<ConfirmedOrder | null>>;
   closeConfirm: () => void;
+  // Round-2 fixes brief, Part 5 — see this field's own comment on its
+  // useState above. CheckoutModal.tsx applies this once (via its own
+  // effect) to its local orderType state when reordering a pickup order,
+  // so the reorder flow doesn't silently turn it back into delivery.
+  reorderOrderType: OrderType | null;
 
   // Menu data (from /api/menu — the database).
   menuLoading: boolean;
@@ -123,6 +135,17 @@ interface StoreContextValue {
   // normalizeMenuBlob, since these three are plain locale-independent
   // strings with nothing for that function to localize.
   contactInfo: { email: string; phone: string; address: string };
+  // Round-2 fixes brief, Part 1 — admin_settings.delivery_fee/minimum_order,
+  // parsed to plain numbers (0 when unset/non-numeric — "not configured"
+  // reads the same as "configured as free/no minimum", matching how
+  // DeliveryPageClient.tsx's own formatEuro helper already treats an
+  // empty/invalid value). Read from the exact same settings keys that
+  // page and app/api/orders/route.ts's server-side enforcement both use,
+  // so this can't drift out of sync with what checkout actually charges.
+  // Only ever used for DISPLAY here (the cart/checkout UI) — the server
+  // independently re-reads admin_settings and enforces the real fee/
+  // minimum at order-creation time, never trusting this client value.
+  deliverySettings: { fee: number; minimumOrder: number };
   drinks: Addon[];
   dipCups: Addon[];
   snacks: Addon[];
@@ -255,6 +278,14 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
   // app/api/orders/[orderNum]/reorder/route.ts: it only rebuilds and
   // returns a cart, with no awareness of what happens to it afterwards).
   const [isReorderCart, setIsReorderCart] = useState(false);
+  // Round-2 fixes brief, Part 5 — a third sibling one-shot flag, same
+  // handoff pattern as ozy_open_checkout/ozy_is_reorder above: only ever
+  // written (by TrackPageClient.tsx's ReorderButton) when the reordered
+  // order was actually 'pickup', so null here means either "not a
+  // reorder" or "was a delivery reorder" — both cases where
+  // CheckoutModal.tsx's own 'delivery' starting state already needs no
+  // override.
+  const [reorderOrderType, setReorderOrderType] = useState<OrderType | null>(null);
 
   useEffect(() => {
     try {
@@ -266,6 +297,10 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       if (sessionStorage.getItem('ozy_is_reorder') === '1') {
         sessionStorage.removeItem('ozy_is_reorder');
         setIsReorderCart(true);
+      }
+      if (sessionStorage.getItem('ozy_reorder_order_type') === 'pickup') {
+        sessionStorage.removeItem('ozy_reorder_order_type');
+        setReorderOrderType('pickup');
       }
     } catch {
       // Storage unavailable — reorder still lands the cart (see above),
@@ -323,6 +358,11 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
   // admin_settings-backed string is already handled in this codebase
   // (e.g. lib/site-settings.ts's PublicSettings fields).
   const [contactInfo, setContactInfo] = useState<{ email: string; phone: string; address: string }>({ email: '', phone: '', address: '' });
+  // Round-2 fixes brief, Part 1 — see this field's own comment on
+  // StoreContextValue above. 0/0 until the /api/menu fetch below resolves,
+  // same "real data, harmless default until loaded" contract as the rest
+  // of this file's admin_settings-backed state.
+  const [deliverySettings, setDeliverySettings] = useState<{ fee: number; minimumOrder: number }>({ fee: 0, minimumOrder: 0 });
   const [drinks, setDrinks] = useState<Addon[]>([]);
   const [dipCups, setDipCups] = useState<Addon[]>([]);
   const [snacks, setSnacks] = useState<Addon[]>([]);
@@ -404,6 +444,19 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
           phone: data.settings?.phone || '',
           address: data.settings?.address || '',
         });
+        // Round-2 fixes brief, Part 1 — same raw-string-to-number parsing
+        // as DeliveryPageClient.tsx's formatEuro (Number(...) on the raw
+        // admin_settings string, falling back to 0 when unset/non-numeric)
+        // so this page's own fee/minimum display can never show a
+        // different number than /delivery does.
+        {
+          const rawFee = Number(data.settings?.delivery_fee);
+          const rawMin = Number(data.settings?.minimum_order);
+          setDeliverySettings({
+            fee: Number.isFinite(rawFee) ? rawFee : 0,
+            minimumOrder: Number.isFinite(rawMin) ? rawMin : 0,
+          });
+        }
         setFeatured(blob.featured);
         setPopularProductIds(blob.popularProductIds);
         setFirstOrderDiscount(blob.firstOrderDiscount);
@@ -762,7 +815,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     scheduledOfferApplied?: { id: string; label: string } | null;
     loyalty?: { orderCount: number; everyNOrders: number; pendingRewardCreated: boolean };
     wowMomentRewardCode?: string | null;
-  }, paymentMethod: 'cod' | 'card' = 'cod') => {
+  }, paymentMethod: 'cod' | 'card' = 'cod', orderType: OrderType = 'delivery') => {
     // Use the server's own total (post-discount, if a coupon applied) for
     // both the purchase event and the confirmation screen — it's the
     // authoritative number, not the client's pre-validation preview.
@@ -785,14 +838,19 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       // threading it through here so ConfirmModal can show the right
       // message. Doesn't change what gets charged or how — purely display.
       paymentMethod,
+      // Round-2 fixes brief, Part 5 — same treatment as paymentMethod
+      // above: threaded through purely so ConfirmModal can show
+      // pickup-appropriate copy, never used in any price calculation.
+      orderType,
     });
     setCheckoutOpen(false);
     setCart([]);
     setIsReorderCart(false);
+    setReorderOrderType(null);
     setUrl(lp('/order-confirmed'));
   }, [cart, cartTotal, lp]);
 
-  const placeOrder = useCallback(async (customer: Customer, couponCode?: string, paymentMethod: 'cod' | 'card' = 'cod') => {
+  const placeOrder = useCallback(async (customer: Customer, couponCode?: string, paymentMethod: 'cod' | 'card' = 'cod', orderType: OrderType = 'delivery') => {
     if (storeClosed) {
       throw new Error(t.checkout.storeClosedError);
     }
@@ -801,6 +859,14 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       total: cartTotal,
       couponCode: couponCode || undefined,
       paymentMethod,
+      // Round-2 fixes brief, Part 5 — a sibling to paymentMethod, read by
+      // app/api/orders/route.ts to decide whether to require address/
+      // postal code, run the delivery-zone check, and add the Part 1
+      // delivery fee. Never used for pricing on the client — the server
+      // re-derives everything from this flag plus its own admin_settings
+      // reads, same "never trust the client" principle as every other
+      // amount in this payload.
+      orderType,
       // Whether this customer consented to marketing/analytics cookies
       // (see components/CookieBanner.js) — read fresh at order time
       // rather than trusted from anywhere else, so the server knows
@@ -881,7 +947,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       return {
         requiresPayment: true as const,
         clientSecret: data.clientSecret,
-        finalize: () => finalizeOrder(customer, data, 'card'),
+        finalize: () => finalizeOrder(customer, data, 'card', orderType),
         orderNum: data.orderNum,
         // Server-authoritative (post price-verification, post-discount)
         // total for THIS order — falls back to the client's own cartTotal
@@ -892,7 +958,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       };
     }
 
-    finalizeOrder(customer, data, paymentMethod);
+    finalizeOrder(customer, data, paymentMethod, orderType);
     return { requiresPayment: false as const };
   }, [cart, cartTotal, storeClosed, t, isReorderCart, finalizeOrder]);
 
@@ -1055,6 +1121,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     placeOrder,
     setConfirmedOrder,
     closeConfirm,
+    reorderOrderType,
 
     // Menu data (from /api/menu — the database).
     menuLoading,
@@ -1075,6 +1142,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     trackingConfig,
     openingHours,
     contactInfo,
+    deliverySettings,
     drinks,
     dipCups,
     snacks,

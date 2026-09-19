@@ -135,6 +135,13 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     name,
     description: description || undefined,
     image: product.image || undefined,
+    // Round-2 fixes brief, Part 7 — Product JSON-LD had no `category`
+    // field even though the page already resolves the category name for
+    // the breadcrumb (categoryTitle, above). Reusing that same value here
+    // rather than re-querying, and omitting the field entirely (rather
+    // than emitting an empty string) in the same fallback case where the
+    // breadcrumb itself degrades to Home > Product.
+    category: categoryTitle || undefined,
     inLanguage: locale,
     offers: {
       '@type': 'Offer',

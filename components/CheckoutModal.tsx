@@ -1,11 +1,24 @@
 'use client';
 
-import { useState, useRef, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react';
+import { useState, useRef, useEffect, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react';
 import { useStore } from '@/context/StoreContext';
 import { useTranslations } from '@/lib/i18n';
 import { computeDiscountAmount, describeDiscountValue } from '@/lib/pricing';
-import type { Addon, CartLine, Customer } from '@/lib/types';
+import type { Addon, CartLine, Customer, OpeningHours, OrderType } from '@/lib/types';
 import CardPaymentStep, { type CardPaymentHandle } from './CardPaymentStep';
+
+// Round-2 fixes brief, Part 5 — same row-shaping the store's opening hours
+// already get elsewhere (see components/Visit.tsx's own formatHoursRows,
+// which this mirrors exactly) so the pickup-info box below shows the same
+// real per-day hours instead of a second, possibly-drifting copy of that
+// logic.
+function formatHoursRows(openingHours: OpeningHours, t: any) {
+  if (!Array.isArray(openingHours)) return t.visit.fallbackRows;
+  return openingHours.map((d) => ({
+    label: t.visit.days[d.day] || d.day,
+    value: d.closed ? t.visit.closed : `${d.open} – ${d.close}`,
+  }));
+}
 
 const EMPTY: Customer = { name: '', address: '', postalCode: '', email: '', phone: '', notes: '' };
 
@@ -48,7 +61,13 @@ function StepIndicator({ step, stepLabels }: { step: number; stepLabels: string[
   );
 }
 
-function MiniSummary({ cart, cartTotal, t }: { cart: CartLine[]; cartTotal: number; t: any }) {
+// Round-2 fixes brief, Part 1 — `displayTotal` (fee-inclusive, once a
+// delivery fee applies — see CheckoutModal's own computation) replaces
+// the plain cart-item sum in both the collapsed head (so the customer
+// sees what they'll actually be asked to pay before ever reaching the
+// payment step) and, via `deliveryFee`, an extra row in the expanded
+// body, right alongside the individual line items.
+function MiniSummary({ cart, displayTotal, deliveryFee, t }: { cart: CartLine[]; displayTotal: number; deliveryFee: number; t: any }) {
   const [open, setOpen] = useState(false);
   const itemCount = cart.reduce((sum, l) => sum + l.qty, 0);
   return (
@@ -56,7 +75,7 @@ function MiniSummary({ cart, cartTotal, t }: { cart: CartLine[]; cartTotal: numb
       <button type="button" className="mini-summary-head" onClick={() => setOpen((v) => !v)}>
         <span>{t.checkout.itemsCount(itemCount)}</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <b>{cartTotal.toFixed(2)} €</b>
+          <b>{displayTotal.toFixed(2)} €</b>
           <span className={`mini-summary-chev${open ? ' up' : ''}`}>⌄</span>
         </span>
       </button>
@@ -68,6 +87,12 @@ function MiniSummary({ cart, cartTotal, t }: { cart: CartLine[]; cartTotal: numb
               <span>{l.lineTotal.toFixed(2)} €</span>
             </div>
           ))}
+          {deliveryFee > 0 && (
+            <div className="cs-row cs-fee-row">
+              <span>{t.checkout.deliveryFeeRow}</span>
+              <span>{deliveryFee.toFixed(2)} €</span>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -81,6 +106,12 @@ export default function CheckoutModal() {
     drinks, dipCups, snacks,
     firstOrderDiscount,
     activeScheduledOffer,
+    // Round-2 fixes brief, Part 1 / Part 5 — real admin_settings-backed
+    // delivery fee/minimum order, and the store's own address/hours for
+    // the pickup-info box below (same three sources Visit.tsx already
+    // reads from, see contactInfo/openingHours's own comments on
+    // StoreContextValue).
+    deliverySettings, contactInfo, openingHours, reorderOrderType,
   } = useStore();
   const t = useTranslations();
   const STEP_LABELS: string[] = [t.checkout.stepCart, t.checkout.stepDetails, t.checkout.stepPayment];
@@ -92,6 +123,20 @@ export default function CheckoutModal() {
   };
 
   const [step, setStep] = useState(1);
+  // Round-2 fixes brief, Part 5 — defaults to 'delivery', same default as
+  // the order_type column and every server-side fallback, so a customer
+  // who never touches this toggle gets exactly the behavior that always
+  // existed before pickup did.
+  const [orderType, setOrderType] = useState<OrderType>('delivery');
+  // Round-2 fixes brief, Part 5 — applies StoreContext's one-shot
+  // reorderOrderType handoff (see that field's own comment) to this
+  // modal's local state. Only ever fires for a pickup reorder (the only
+  // value that flag is ever set to) and only once per value change, so
+  // manually switching back to delivery afterward in step 2 is never
+  // overridden.
+  useEffect(() => {
+    if (reorderOrderType) setOrderType(reorderOrderType);
+  }, [reorderOrderType]);
   const [customer, setCustomer] = useState<Customer>(EMPTY);
   const [errors, setErrors] = useState<CustomerErrors>({});
   const [submitting, setSubmitting] = useState(false);
@@ -221,6 +266,7 @@ export default function CheckoutModal() {
     setCardPayment(null);
     setCardPaymentState({ ready: false, submitting: false, error: '' });
     setPaymentMethod('cod');
+    setOrderType('delivery');
   };
 
   const applyCoupon = async () => {
@@ -266,9 +312,16 @@ export default function CheckoutModal() {
   const validateDetails = () => {
     const next: CustomerErrors = {};
     if (!customer.name.trim()) next.name = t.checkout.errorName;
-    if (!customer.address.trim()) next.address = t.checkout.errorAddress;
-    if (!/^\d{5}$/.test(customer.postalCode.trim())) {
-      next.postalCode = t.checkout.errorPostalCode;
+    // Round-2 fixes brief, Part 5 — a pickup order never collects an
+    // address/postal code at all (the fields are hidden below), so there's
+    // nothing to validate for either when orderType is 'pickup'. Mirrors
+    // exactly what app/api/orders/route.ts's own conditional validation
+    // does server-side.
+    if (orderType === 'delivery') {
+      if (!customer.address.trim()) next.address = t.checkout.errorAddress;
+      if (!/^\d{5}$/.test(customer.postalCode.trim())) {
+        next.postalCode = t.checkout.errorPostalCode;
+      }
     }
     // Email is optional (not legally required for a cash-on-delivery order
     // in Finland) — an empty field passes straight through, but if the
@@ -296,7 +349,7 @@ export default function CheckoutModal() {
     setSubmitting(true);
     setOrderError('');
     try {
-      const result = await placeOrder(customer, couponStatus === 'applied' ? couponCode : undefined, paymentMethod);
+      const result = await placeOrder(customer, couponStatus === 'applied' ? couponCode : undefined, paymentMethod, orderType);
       if (result.requiresPayment) {
         // Order row created, still unpaid — switch this step to show
         // CardPaymentStep instead of resetting; finalize() runs from
@@ -315,6 +368,7 @@ export default function CheckoutModal() {
       setFirstOrderEligible(null);
       checkedPhoneRef.current = '';
       setPaymentMethod('cod');
+      setOrderType('delivery');
     } catch (err: any) {
       setOrderError(err.message || t.checkout.genericOrderError);
     } finally {
@@ -332,6 +386,7 @@ export default function CheckoutModal() {
     setFirstOrderEligible(null);
     checkedPhoneRef.current = '';
     setPaymentMethod('cod');
+    setOrderType('delivery');
   };
 
   // Audit-fixes brief, Part 1 — the explicit way out of a locked-in
@@ -376,9 +431,32 @@ export default function CheckoutModal() {
   // entire time a payment is pending. Freezing the displayed amount here
   // means that even in that case, what the customer sees they're about to
   // pay can never drift from what Stripe actually charges.
+  // Round-2 fixes brief, Part 1 — the delivery fee only ever applies to a
+  // delivery order (Part 5's coordination point with this part), is
+  // added AFTER any discount (it's not itself discountable — mirrors
+  // exactly how app/api/orders/route.ts will compute the real charge:
+  // discount off the item subtotal first, fee added on top of that), and
+  // is purely a DISPLAY preview here — the server independently re-reads
+  // admin_settings.delivery_fee and enforces the real amount, never
+  // trusting this value.
+  const deliveryFee = orderType === 'delivery' ? deliverySettings.fee : 0;
+  const preFeeTotal = couponStatus === 'applied' && couponFinalTotal !== null ? couponFinalTotal : cartTotal;
+  const displayTotal = preFeeTotal + deliveryFee;
+  // Minimum order only ever applies to delivery (a pickup customer isn't
+  // asking the restaurant to send a driver, so there's no delivery cost
+  // to protect a minimum against) — compared against the pre-discount,
+  // pre-fee item subtotal, same value app/api/orders/route.ts's real
+  // enforcement will compare against.
+  const underMinimum = orderType === 'delivery' && deliverySettings.minimumOrder > 0 && cartTotal < deliverySettings.minimumOrder;
+  const amountToMinimum = underMinimum ? deliverySettings.minimumOrder - cartTotal : 0;
+
   const payAmountLabel = cardPayment
     ? `${cardPayment.amount.toFixed(2)} €`
-    : `${(couponStatus === 'applied' ? couponFinalTotal! : cartTotal).toFixed(2)} €`;
+    : `${displayTotal.toFixed(2)} €`;
+
+  // Round-2 fixes brief, Part 5 — real store address/hours for the
+  // pickup-info box in step 2, same formatting Visit.tsx already uses.
+  const storeHoursRows = formatHoursRows(openingHours, t);
 
   return (
     <div className={`checkout-page${isCheckoutOpen ? ' open' : ''}`}>
@@ -407,6 +485,11 @@ export default function CheckoutModal() {
         <div className="wrap" style={{ paddingTop: 24, paddingBottom: 40 }}>
           <StepIndicator step={step} stepLabels={STEP_LABELS} />
 
+          {/* Round-2 fixes brief, Part 4 (item 2) — `key={step}` forces
+              React to mount a fresh element every time the step changes,
+              which is what re-triggers .checkout-step-panel's fade-in
+              animation (see app/globals.css) on every 1→2→3 transition. */}
+          <div className="checkout-step-panel" key={step}>
           {step === 1 && cart.length === 0 && (
             <div className="checkout-empty">
               <div className="checkout-empty-icon">🛒</div>
@@ -439,11 +522,28 @@ export default function CheckoutModal() {
                     <span className="cs-price">{l.lineTotal.toFixed(2)} €</span>
                   </div>
                 ))}
+                {/* Round-2 fixes brief, Part 1 — shown as soon as it's
+                    known to apply. Before the customer reaches step 2,
+                    orderType is still its 'delivery' default, so this
+                    already reflects reality for the common case; it
+                    updates instantly if they switch to pickup in step 2
+                    (deliveryFee becomes 0, this row disappears). */}
+                {deliveryFee > 0 && (
+                  <div className="cs-row cs-fee-row">
+                    <span>{t.checkout.deliveryFeeRow}</span>
+                    <span>{deliveryFee.toFixed(2)} €</span>
+                  </div>
+                )}
                 <div className="cs-total">
                   <span>{t.checkout.total}</span>
-                  <span>{cartTotal.toFixed(2)} €</span>
+                  <span>{displayTotal.toFixed(2)} €</span>
                 </div>
               </div>
+              {underMinimum && (
+                <p className="cs-min-notice">
+                  {t.checkout.minOrderNotice(`${amountToMinimum.toFixed(2)} €`, `${deliverySettings.minimumOrder.toFixed(2)} €`)}
+                </p>
+              )}
 
               <p className="pp-label" style={{ marginTop: 24 }}>{t.checkout.coldDrink}</p>
               <div className="drink-upsell-row">
@@ -482,23 +582,77 @@ export default function CheckoutModal() {
 
           {step === 2 && (
             <form id="checkoutForm" onSubmit={submitDetails} noValidate>
-              <MiniSummary cart={cart} cartTotal={cartTotal} t={t} />
+              <MiniSummary cart={cart} displayTotal={displayTotal} deliveryFee={deliveryFee} t={t} />
+
+              {/* Round-2 fixes brief, Part 5 — delivery/pickup choice.
+                  Reuses the exact .payment-method/.pay-option/.pay-icon
+                  CSS already powering the cash/card choice in step 3 (see
+                  app/globals.css) — zero new CSS needed, just new icons. */}
+              <div className="payment-method">
+                <p>{t.checkout.orderTypeHeading}</p>
+                <label className={`pay-option${orderType === 'delivery' ? ' selected' : ''}`}>
+                  <span className="pay-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M3 12h13l-3-3m3 3-3 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      <circle cx="18" cy="18" r="2" stroke="currentColor" strokeWidth="2" />
+                      <circle cx="7" cy="18" r="2" stroke="currentColor" strokeWidth="2" />
+                    </svg>
+                  </span>
+                  <span className="pay-option-text">
+                    <b>{t.checkout.orderTypeDelivery}</b>
+                    <span>{t.checkout.orderTypeDeliveryDesc}</span>
+                  </span>
+                  <input type="radio" name="orderType" value="delivery" checked={orderType === 'delivery'} onChange={() => setOrderType('delivery')} />
+                </label>
+                <label className={`pay-option${orderType === 'pickup' ? ' selected' : ''}`}>
+                  <span className="pay-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M4 10.5 12 4l8 6.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M6 10v9h12v-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M10 19v-5h4v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                  <span className="pay-option-text">
+                    <b>{t.checkout.orderTypePickup}</b>
+                    <span>{t.checkout.orderTypePickupDesc}</span>
+                  </span>
+                  <input type="radio" name="orderType" value="pickup" checked={orderType === 'pickup'} onChange={() => setOrderType('pickup')} />
+                </label>
+              </div>
+
               <p className="desc" style={{ marginBottom: 16 }}>{t.checkout.orderDetails}</p>
               <label className={errors.name ? 'has-error' : ''}>
                 {t.checkout.fullName}
                 <input type="text" value={customer.name} onChange={onField('name')} />
                 {errors.name && <span className="field-error">{errors.name}</span>}
               </label>
-              <label className={errors.address ? 'has-error' : ''}>
-                {t.checkout.deliveryAddress}
-                <input type="text" value={customer.address} onChange={onField('address')} placeholder={t.checkout.deliveryAddressPlaceholder} />
-                {errors.address && <span className="field-error">{errors.address}</span>}
-              </label>
-              <label className={errors.postalCode ? 'has-error' : ''}>
-                {t.checkout.postalCode}
-                <input type="text" inputMode="numeric" maxLength={5} value={customer.postalCode} onChange={onField('postalCode')} placeholder={t.checkout.postalCodePlaceholder} />
-                {errors.postalCode && <span className="field-error">{errors.postalCode}</span>}
-              </label>
+              {/* Round-2 fixes brief, Part 5 — a pickup order needs no
+                  address/postal code at all; hidden entirely rather than
+                  just disabled, matching how validateDetails() above skips
+                  them outright for this orderType. Replaced with a small
+                  real-data box showing where and when to actually come. */}
+              {orderType === 'delivery' ? (
+                <>
+                  <label className={errors.address ? 'has-error' : ''}>
+                    {t.checkout.deliveryAddress}
+                    <input type="text" value={customer.address} onChange={onField('address')} placeholder={t.checkout.deliveryAddressPlaceholder} />
+                    {errors.address && <span className="field-error">{errors.address}</span>}
+                  </label>
+                  <label className={errors.postalCode ? 'has-error' : ''}>
+                    {t.checkout.postalCode}
+                    <input type="text" inputMode="numeric" maxLength={5} value={customer.postalCode} onChange={onField('postalCode')} placeholder={t.checkout.postalCodePlaceholder} />
+                    {errors.postalCode && <span className="field-error">{errors.postalCode}</span>}
+                  </label>
+                </>
+              ) : (
+                <div className="checkout-store-info">
+                  <h4>{t.checkout.pickupInfoHeading}</h4>
+                  <p className="csi-address">{t.checkout.pickupInfoIntro} {contactInfo.address || t.visit.notSet}</p>
+                  {storeHoursRows.map((r: { label: string; value: string }) => (
+                    <div className="hours-row" key={r.label}><span>{r.label}</span><span>{r.value}</span></div>
+                  ))}
+                </div>
+              )}
               <label className={errors.email ? 'has-error' : ''}>
                 {t.checkout.emailOptional}
                 <input type="email" value={customer.email} onChange={onField('email')} placeholder={t.checkout.emailPlaceholder} />
@@ -521,12 +675,7 @@ export default function CheckoutModal() {
                   itself is applied and re-checked server-side regardless
                   of whether this banner ever renders. */}
               {bestAutoDiscount && (
-                <p
-                  style={{
-                    margin: '-8px 0 16px', padding: '10px 12px', borderRadius: 8,
-                    background: 'rgba(125,90,22,0.12)', color: 'var(--gold, #7D5A16)', fontSize: 13,
-                  }}
-                >
+                <p className="cs-discount-banner">
                   {bestAutoDiscount.kind === 'welcome'
                     ? t.checkout.welcomeDiscountBanner(bestAutoDiscount.amountText)
                     : t.checkout.scheduledOfferBanner(bestAutoDiscount.label, bestAutoDiscount.amountText)}
@@ -541,7 +690,7 @@ export default function CheckoutModal() {
 
           {step === 3 && (
             <form id="paymentForm" onSubmit={submitOrder}>
-              <MiniSummary cart={cart} cartTotal={cartTotal} t={t} />
+              <MiniSummary cart={cart} displayTotal={displayTotal} deliveryFee={deliveryFee} t={t} />
 
               {cardPayment ? (
                 // Order row already created (payment_status 'pending') —
@@ -576,37 +725,35 @@ export default function CheckoutModal() {
               ) : (
                 <>
                   {bestAutoDiscount && couponStatus !== 'applied' && (
-                    <p style={{ margin: '0 0 12px', padding: '10px 12px', borderRadius: 8, background: 'rgba(125,90,22,0.12)', color: 'var(--gold, #7D5A16)', fontSize: 13 }}>
+                    <p className="cs-discount-banner">
                       {bestAutoDiscount.kind === 'welcome'
                         ? t.checkout.welcomeDiscountBanner(bestAutoDiscount.amountText)
                         : t.checkout.scheduledOfferBanner(bestAutoDiscount.label, bestAutoDiscount.amountText)}
                     </p>
                   )}
 
-                  <div style={{ margin: '16px 0' }}>
+                  <div className="cs-coupon-block">
                     {couponStatus === 'applied' ? (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'rgba(46,125,50,0.12)', borderRadius: 8 }}>
+                      <div className="cs-coupon-applied">
                         <span>🏷️ {t.checkout.couponApplied(couponCode, `${couponDiscount.toFixed(2)} €`)}</span>
-                        <button type="button" onClick={resetCoupon} style={{ background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', fontSize: 13 }}>
+                        <button type="button" onClick={resetCoupon} className="cs-coupon-remove">
                           {t.checkout.couponRemove}
                         </button>
                       </div>
                     ) : (
                       <div>
-                        <div style={{ display: 'flex', gap: 8 }}>
+                        <div className="cs-coupon-input-row">
                           <input
                             type="text"
                             placeholder={t.checkout.couponPlaceholder}
                             value={couponInput}
                             onChange={(e: ChangeEvent<HTMLInputElement>) => { setCouponInput(e.target.value); if (couponStatus === 'error') setCouponStatus('idle'); }}
-                            style={{ flex: 1 }}
                           />
                           <button
                             type="button"
-                            className="btn-primary"
+                            className="btn-primary cs-coupon-apply-btn"
                             disabled={!couponInput.trim() || couponStatus === 'checking'}
                             onClick={applyCoupon}
-                            style={{ whiteSpace: 'nowrap' }}
                           >
                             {couponStatus === 'checking' ? t.checkout.couponChecking : t.checkout.couponApply}
                           </button>
@@ -661,13 +808,14 @@ export default function CheckoutModal() {
               )}
             </form>
           )}
+          </div>
         </div>
       </div>
 
       {step === 1 && cart.length > 0 && (
         <div className="checkout-footer">
           <button type="button" className="btn-primary" style={{ flex: 1 }} onClick={() => setStep(2)}>
-            {t.checkout.continueWithTotal(`${cartTotal.toFixed(2)} €`)}
+            {t.checkout.continueWithTotal(`${displayTotal.toFixed(2)} €`)}
           </button>
         </div>
       )}

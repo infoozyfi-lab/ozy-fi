@@ -7,14 +7,14 @@ import PublicSettingsInfo, { type HoursRow } from '@/components/PublicSettingsIn
 import { useTranslations } from '@/lib/i18n';
 import type { PublicSettings } from '@/lib/site-settings';
 
-// SEO gap-fill, Part C — see AboutPageClient.tsx for the shared pattern.
-// `orderingPlaceholder` below exists because this codebase's checkout
-// flow (components/CheckoutModal.tsx, app/api/orders/route.ts) only ever
-// collects a delivery address today — there's no pickup toggle or order
-// type anywhere in the schema/API, even though marketing copy elsewhere
-// on the site ("delivery or pickup at checkout") already implies one
-// exists. Flagged plainly here and in this feature's delivery report
-// rather than asserting a pickup flow that isn't actually there.
+// Round-2 fixes brief, Part 5 — this page used to show an honest
+// placeholder here (see AboutPageClient.tsx for that shared pattern)
+// because checkout only ever collected a delivery address, with no
+// pickup option anywhere in the schema/API — see
+// FULL-SITE-AUDIT-ROUND2-REPORT.md. Now that CheckoutModal.tsx has a real
+// delivery/pickup toggle (step 2) and app/api/orders/route.ts actually
+// supports pickup orders end to end, this shows real instructions
+// instead.
 export default function PickupPageClient({
   settings,
   hoursRows,
@@ -38,10 +38,8 @@ export default function PickupPageClient({
           headings={{ address: t.pickup.locationHeading, hours: t.pickup.hoursHeading }}
         />
 
-        <div className="placeholder-block">
-          <span className="placeholder-eyebrow">{t.common.placeholderLabel}</span>
-          <p>{t.pickup.orderingPlaceholder}</p>
-        </div>
+        <h2>{t.pickup.orderingHeading}</h2>
+        <p>{t.pickup.orderingInstructions}</p>
       </main>
       <Footer />
     </StoreProvider>

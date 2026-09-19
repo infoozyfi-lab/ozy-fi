@@ -203,8 +203,12 @@ h1.hero-title{ font-size: clamp(2.6rem, 5.5vw, 4.4rem); color: var(--header-text
 h1.hero-title em{ font-style: normal; color: var(--header-text); }
 .hero-sub{ color: var(--text-on-accent-muted); font-size: 1.08rem; max-width: 50ch; margin: 0 0 40px; }
 .hero-meta{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; color: var(--text-on-accent-muted); font-size:0.95rem; margin: 0 0 20px; }
-.hero-meta .stars{ color: var(--header-text); font-weight:700; }
 .hero-meta .open{ color: var(--header-text); font-weight:600; }
+/* Round-2 fixes brief, Part 6 (item 2) — the closed state (real now,
+   previously this text was hardcoded to always say "Open now"). Muted
+   rather than reusing --danger — being closed right now isn't an error
+   state, just a fact. */
+.hero-meta .open.closed{ color: var(--text-on-accent-muted); font-weight:600; }
 .hero-meta .sep{ color: var(--text-on-accent-muted); }
 .hero-cats{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 480px; margin-top: 8px; }
 /* Category icon tiles — the closest match in this codebase to the
@@ -813,6 +817,22 @@ footer{ padding: 56px 0 32px; }
 .checkout-step-line{ flex:1; height:1px; background: var(--line); margin-top: 13px; }
 .checkout-step-line.done{ background: var(--gold); }
 
+/* Round-2 fixes brief, Part 4 (item 2) — a short fade+rise on the
+   step-content wrapper, re-triggered every time `step` changes (see the
+   `key={step}` on this wrapper in CheckoutModal.tsx — React mounts a new
+   element on every step change, which restarts this animation), so
+   moving 1→2→3 now has the same sense of motion the dot/line indicator
+   above it already shows. `prefers-reduced-motion` gets the plain,
+   instant cut instead. */
+.checkout-step-panel{ animation: checkout-step-in 0.22s ease both; }
+@keyframes checkout-step-in{
+  from{ opacity: 0; transform: translateY(6px); }
+  to{ opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce){
+  .checkout-step-panel{ animation: none; }
+}
+
 /* Sticky footer (mirrors .extra-footer) shared by every checkout step */
 .checkout-footer{
   display:flex; align-items:stretch; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--line);
@@ -866,6 +886,29 @@ footer{ padding: 56px 0 32px; }
 .checkout-empty p{ margin: 6px 0 22px; }
 .checkout-empty-icon{ font-size: 2.4rem; margin-bottom: 8px; }
 
+/* Round-2 fixes brief, Part 4 (item 1) — the welcome/scheduled-offer
+   banner (steps 2 and 3) and the coupon input/applied rows (step 3)
+   previously each carried their own one-off inline `style={{...}}`
+   object in CheckoutModal.tsx — functionally fine, but it meant step 3
+   was the only step whose visual language wasn't defined here alongside
+   everything else. Same colors/spacing as the inline versions, just
+   promoted to real classes. */
+.cs-discount-banner{
+  margin: 0 0 16px; padding: 10px 12px; border-radius: 8px;
+  background: rgba(125,90,22,0.12); color: var(--gold, #7D5A16); font-size: 0.86rem;
+}
+.cs-coupon-block{ margin: 16px 0; }
+.cs-coupon-applied{
+  display:flex; justify-content:space-between; align-items:center; padding: 10px 12px;
+  background: rgba(46,125,50,0.12); border-radius: 8px; font-size: 0.9rem; color: var(--cream);
+}
+.cs-coupon-remove{
+  background:none; border:none; text-decoration:underline; cursor:pointer; font-size: 0.82rem; color: var(--muted);
+}
+.cs-coupon-input-row{ display:flex; gap: 8px; }
+.cs-coupon-input-row input{ flex:1; }
+.cs-coupon-apply-btn{ white-space:nowrap; }
+
 .payment-method{ margin: 18px 0 22px; display:flex; flex-direction:column; gap: 10px; }
 .payment-method > p{ font-size: 0.86rem; color: var(--muted); margin: 0 0 2px; text-transform:uppercase; letter-spacing: 0.03em; font-weight:600; }
 /* Unselected: quiet/neutral, same card language as the rest of the site
@@ -887,6 +930,20 @@ footer{ padding: 56px 0 32px; }
 .pay-option-text b{ display:block; }
 .pay-option-text span{ color: var(--muted); font-size: 0.82rem; }
 .pay-option input{ accent-color: var(--ember); margin-left:auto; }
+/* Round-2 fixes brief, Part 5 — the store address/hours shown in step 2
+   once "Pickup" is selected, so the customer knows where and when to
+   come. Same bordered-inset-panel language as .mini-summary above it,
+   with .hours-row reused as-is (already used by Visit.tsx/PublicSettingsInfo
+   for the exact same label/value day rows) rather than inventing a new
+   row style for what's structurally the same content. */
+.checkout-store-info{
+  border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 4px 0 20px;
+  background: var(--bg-card);
+}
+.checkout-store-info h4{ margin: 0 0 8px; font-size: 0.86rem; color: var(--muted); text-transform:uppercase; letter-spacing: 0.03em; font-weight:600; }
+.checkout-store-info .csi-address{ margin: 0 0 10px; color: var(--cream); font-weight:600; }
+.checkout-store-info .hours-row{ padding: 6px 0; font-size: 0.86rem; }
+.checkout-store-info .hours-row:last-child{ border-bottom:none; }
 /* Audit-fixes brief, Part 6.3 — trust-signal microcopy rendered by
    components/CardPaymentStep.tsx, right above Stripe's own PaymentElement. */
 .secure-payment-notice{
@@ -895,7 +952,26 @@ footer{ padding: 56px 0 32px; }
 }
 .checkout-summary{ border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 14px 0; margin-bottom: 18px; max-height: 160px; overflow-y:auto; }
 .checkout-summary .cs-row{ display:flex; justify-content:space-between; font-size: 0.88rem; color: var(--muted); padding: 4px 0; }
-.checkout-summary .cs-total{ display:flex; justify-content:space-between; font-weight:700; color: var(--cream); padding-top: 10px; margin-top: 6px; border-top: 1px dashed var(--line); }
+/* Round-2 fixes brief, Part 4 (item 4) — this is the one number a
+   customer is actually double-checking before paying, so it now reads as
+   clearly heavier than the line items above it: bumped size/weight and a
+   solid (not dashed) divider with more breathing room above it, instead
+   of looking like just one more row in the list. */
+.checkout-summary .cs-total{
+  display:flex; justify-content:space-between; align-items:baseline; font-weight:800; color: var(--cream);
+  font-size: 1.15rem; padding-top: 14px; margin-top: 10px; border-top: 2px solid var(--line);
+}
+.checkout-summary .cs-total span:last-child{ font-family: 'Anton', sans-serif; color: var(--ember-dark); }
+/* Round-2 fixes brief, Part 1 — the delivery-fee line (shown only when it
+   actually applies — see CheckoutModal.tsx) uses the same row language as
+   every other line item, and the "under the minimum" notice below it uses
+   the discount-banner's own warm/informational tone (not --danger red —
+   this isn't a mistake the customer made, just something they haven't hit
+   yet, same register as the FAQ's own wording). */
+.cs-min-notice{
+  margin: 10px 0 0; padding: 10px 12px; border-radius: 8px;
+  background: rgba(125,90,22,0.12); color: var(--gold, #7D5A16); font-size: 0.82rem;
+}
 .checkout-summary .cs-row-editable{
   display:flex; align-items:flex-start; gap: 12px; padding: 12px 0; color: var(--cream);
   border-bottom: 1px solid var(--line);
@@ -938,6 +1014,34 @@ footer{ padding: 56px 0 32px; }
 .drink-add-btn{
   width: 24px; height: 24px; border-radius:50%; background: var(--ember); color: var(--text-on-accent);
   font-size: 0.95rem; font-weight:700; display:flex; align-items:center; justify-content:center; margin-top: 2px;
+}
+
+/* Round-2 fixes brief, Part 3 — "related products" row on the product
+   page (components/ProductPage.tsx), same horizontal-scroll-tile pattern
+   as .drink-upsell-row/.drink-tile above rather than inventing a new
+   layout for what's structurally the same content (a row of tappable
+   item cards). */
+.pp-related-list{ display:flex; gap: 12px; overflow-x:auto; padding-bottom: 6px; -webkit-overflow-scrolling: touch; scrollbar-width:none; }
+.pp-related-list::-webkit-scrollbar{ display:none; }
+.pp-related-item{
+  flex: 0 0 auto; width: 120px; border: 1px solid var(--line); border-radius: 10px; padding: 10px;
+  background: var(--bg-card); text-align:center; color:inherit; text-decoration:none;
+  display:flex; flex-direction:column; align-items:center; gap: 4px; transition: border-color 0.15s ease;
+}
+.pp-related-item:hover{ border-color: var(--ember); }
+.pp-related-item img{ width: 100%; height: 72px; object-fit:cover; border-radius: 6px; margin-bottom: 4px; }
+.pp-related-item .pp-related-name{ font-size: 0.8rem; color: var(--cream); font-weight:600; line-height:1.25; min-height: 2.1em; }
+.pp-related-item .pp-related-price{ font-size: 0.78rem; color: var(--ember-dark); font-weight:700; }
+/* A product that's also part of a bundle — same visual language as the
+   discount/offer banners elsewhere (.cs-discount-banner) so it reads as
+   "here's a deal", not as an error or a warning. */
+.pp-related-bundle{
+  margin: 0 0 18px; padding: 12px 14px; border-radius: 10px;
+  background: rgba(125,90,22,0.12); display:flex; flex-direction:column; gap: 8px; align-items:flex-start;
+}
+.pp-related-bundle-btn{
+  background: var(--ember); color: var(--text-on-accent); border:none; border-radius: 8px;
+  padding: 10px 14px; font-size: 0.85rem; font-weight:700; cursor:pointer;
 }
 
 /* ---------- SHORTCUT PILLS (All drinks / Dip the edges / Snacks) ----------
@@ -1049,6 +1153,21 @@ footer{ padding: 56px 0 32px; }
 .order-bar-count{
   background: var(--text-on-accent); color: var(--ember); width: 26px; height: 26px; border-radius: 50%;
   display:flex; align-items:center; justify-content:center; font-size: 0.85rem; flex-shrink:0;
+}
+/* Round-2 fixes brief, Part 4 (item 3) — there was previously zero visual
+   feedback anywhere in the app for "something was just added to the
+   cart" beyond the count itself silently changing. OrderBar.tsx toggles
+   this class on for ~350ms whenever itemCount increases; a one-shot
+   scale pulse on the count badge is enough to draw the eye without being
+   distracting on every single add. */
+.order-bar-count.pulse{ animation: order-bar-count-pulse 0.35s ease; }
+@keyframes order-bar-count-pulse{
+  0%{ transform: scale(1); }
+  40%{ transform: scale(1.35); }
+  100%{ transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce){
+  .order-bar-count.pulse{ animation: none; }
 }
 .order-bar-label{ flex:1; text-align:left; }
 .order-bar-total{ font-family:'Anton', sans-serif; font-size: 1.05rem; }

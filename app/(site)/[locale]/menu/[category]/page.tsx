@@ -47,6 +47,40 @@ async function getCategory(slug: string): Promise<RawCategory | null> {
   return row || null;
 }
 
+// Round-2 fixes brief, Part 3 — "Add cross-links between related
+// categories where it genuinely makes sense... don't force links that
+// don't make sense." Rather than hardcoding a specific pair (the brief's
+// own example, vegaani -> voner, doesn't actually hold against this
+// project's real seed data — voner's own products aren't tagged Vegan at
+// all), this computes real overlap: other categories that have at least
+// one ACTIVE product sharing a real `tag` value (Vegan/Vegetarian/Spicy/
+// Signature, etc. — whatever's actually set) with an active product in
+// THIS category. Ordered by how much they actually overlap, capped to 3
+// so this never turns into a wall of links. Genuinely empty (most
+// categories, which use tags sparingly) simply renders nothing — no
+// fallback/invented relationship.
+interface RelatedCategoryRow {
+  id: string;
+  title: string;
+  title_fi: string | null;
+  overlap: number;
+}
+
+async function getRelatedCategories(categorySlug: string): Promise<RelatedCategoryRow[]> {
+  const { env } = await getCloudflareContext({ async: true });
+  const { results } = await env.DB.prepare(
+    `SELECT c.id AS id, c.title AS title, c.title_fi AS title_fi, COUNT(*) AS overlap
+     FROM products p
+     JOIN products p2 ON p2.tag = p.tag AND p2.category_id != p.category_id AND p2.active = 1
+     JOIN categories c ON c.id = p2.category_id
+     WHERE p.category_id = ? AND p.tag IS NOT NULL AND p.active = 1
+     GROUP BY c.id
+     ORDER BY overlap DESC
+     LIMIT 3`
+  ).bind(categorySlug).all<RelatedCategoryRow>();
+  return results || [];
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ locale: string; category: string }> }) {
   const { locale, category: categorySlug } = await params;
   const category = await getCategory(categorySlug);
@@ -101,6 +135,19 @@ export default async function CategoryMenuPage({ params }: { params: Promise<{ l
     console.error(`[/${locale}/menu/${categorySlug}] failed to load SSR menu data:`, err);
   }
 
+  // Round-2 fixes brief, Part 3 — non-critical (purely an SEO/discovery
+  // enhancement, nothing the page depends on to function), so a query
+  // failure here degrades to "no related categories shown" rather than
+  // taking down the whole page — same defensive pattern as initialData
+  // above.
+  let relatedCategories: { id: string; title: string }[] = [];
+  try {
+    const rows = await getRelatedCategories(categorySlug);
+    relatedCategories = rows.map((r) => ({ id: r.id, title: resolveText(r.title, r.title_fi, locale) }));
+  } catch (err) {
+    console.error(`[/${locale}/menu/${categorySlug}] failed to load related categories:`, err);
+  }
+
   const seoCopy = CATEGORY_SEO_COPY[categorySlug];
   const introText = seoCopy ? (locale === 'fi' ? seoCopy.fi : seoCopy.en) : null;
 
@@ -136,7 +183,14 @@ export default async function CategoryMenuPage({ params }: { params: Promise<{ l
       )}
       {/* eslint-disable-next-line react/no-danger */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
-      <MenuPageClient onlyCategory={categorySlug} initialData={initialData} introText={introText} breadcrumbItems={breadcrumbItems} />
+      <MenuPageClient
+        onlyCategory={categorySlug}
+        initialData={initialData}
+        introText={introText}
+        breadcrumbItems={breadcrumbItems}
+        categoryTitle={title}
+        relatedCategories={relatedCategories}
+      />
     </>
   );
 }

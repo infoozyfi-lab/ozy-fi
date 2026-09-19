@@ -20,7 +20,30 @@ import { useTranslations, useLocalePath } from '@/lib/i18n';
 // unavailable).
 const FALLBACK_SCROLLSPY_OFFSET = 132;
 
-export default function MenuSection({ onlyCategory = null }: { onlyCategory?: string | null }) {
+export default function MenuSection({
+  onlyCategory = null,
+  // Round-2 fixes brief, Part 2 — this component's own "Full menu"
+  // heading was previously always an <h2>, identically on the homepage,
+  // the plain /menu page, and every /menu/[category] page, and no page in
+  // that set had an <h1> at all. Callers now say what they need:
+  // - Homepage (components/HomePageClient.tsx) doesn't pass either prop —
+  //   unchanged <h2>, exactly as before this brief.
+  // - The plain /menu page (via MenuPageClient.tsx) passes headingTag="h1"
+  //   — "Full menu" genuinely is this page's own heading.
+  // - A /menu/[category] page passes hideHeading — MenuPageClient.tsx
+  //   renders a real, category-specific <h1> of its own instead (from the
+  //   category's actual title, not this generic text), so keeping this
+  //   generic "Full menu" heading here too would be a redundant H1
+  //   immediately followed by a near-identical, misleading H2 (this
+  //   isn't "the full menu", it's one category of it).
+  hideHeading = false,
+  headingTag = 'h2',
+}: {
+  onlyCategory?: string | null;
+  hideHeading?: boolean;
+  headingTag?: 'h1' | 'h2';
+}) {
+  const HeadingTag = headingTag;
   const {
     categories,
     products: items,
@@ -187,7 +210,7 @@ export default function MenuSection({ onlyCategory = null }: { onlyCategory?: st
         <div className="wrap">
           <div className="section-head">
             <p className="eyebrow">{t.menuSection.eyebrow}</p>
-            <h2>{t.menuSection.heading}</h2>
+            {!hideHeading && <HeadingTag>{t.menuSection.heading}</HeadingTag>}
             <p>{t.menuSection.loading}</p>
           </div>
         </div>
@@ -201,7 +224,7 @@ export default function MenuSection({ onlyCategory = null }: { onlyCategory?: st
         <div className="wrap">
           <div className="section-head">
             <p className="eyebrow">{t.menuSection.eyebrow}</p>
-            <h2>{t.menuSection.heading}</h2>
+            {!hideHeading && <HeadingTag>{t.menuSection.heading}</HeadingTag>}
             <p>{error}</p>
           </div>
         </div>
@@ -216,7 +239,7 @@ export default function MenuSection({ onlyCategory = null }: { onlyCategory?: st
         <div className="section-head">
           <p className="eyebrow">{t.menuSection.eyebrow}</p>
 
-          <h2>{t.menuSection.heading}</h2>
+          {!hideHeading && <HeadingTag>{t.menuSection.heading}</HeadingTag>}
 
           <p>
             {t.menuSection.description}

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent, type ChangeEvent
 import { formatCurrency } from '@/components/admin/charts/colors';
 import PaymentStatusPill from '@/components/admin/charts/PaymentStatusPill';
 import ConfirmDialog from '@/components/admin/ConfirmDialog';
-import type { OrderRow, OrderItemRow, OrderStatus } from '@/lib/types';
+import type { OrderRow, OrderItemRow, OrderStatus, OrderType } from '@/lib/types';
 
 interface KanbanColumn {
   status: OrderStatus;
@@ -19,6 +19,25 @@ const COLUMNS: KanbanColumn[] = [
   { status: 'on_the_way', title: 'Out for delivery', next: 'delivered', nextLabel: 'Mark delivered →' },
   { status: 'delivered', title: 'Delivered', next: null, nextLabel: null },
 ];
+
+// Round-2 fixes brief, Part 5 — the shared COLUMNS array's static
+// nextLabel ("Send out →", "Mark delivered →") assumes every order is a
+// delivery. Rather than restructuring COLUMNS/OrderStatus for pickup (out
+// of this part's explicit scope — see the brief's own wording: "add a
+// clear, distinct badge/treatment... so staff immediately know not to
+// dispatch a driver"), this just swaps in pickup-appropriate button text
+// for the two transitions where the delivery-specific wording would
+// actively mislead kitchen staff. Every other column's label (e.g. "Start
+// preparing →") already reads fine for either type. Module-level (not a
+// component-local function) so both OrderDetailModal and the main
+// component's own compact-card grid can share it.
+function nextLabelFor(order: { order_type?: OrderType }, col: KanbanColumn): string | null {
+  if (order.order_type === 'pickup') {
+    if (col.status === 'preparing') return 'Mark ready for pickup →';
+    if (col.status === 'on_the_way') return 'Mark picked up →';
+  }
+  return col.nextLabel;
+}
 
 const POLL_MS = 15000;
 
@@ -81,6 +100,11 @@ interface OrderDetail {
   notes?: string | null;
   driver_name?: string | null;
   items: OrderItemRow[];
+  // Round-2 fixes brief, Part 5 — same optional-for-pre-migration-rows
+  // reasoning as OrderRow.order_type. Absent/undefined is treated as
+  // 'delivery' everywhere this is read below, same as that column's own
+  // DB-level default.
+  order_type?: OrderType;
 }
 
 function OrderDetailModal({
@@ -167,7 +191,20 @@ function OrderDetailModal({
               <p style={{ margin: '0 0 4px', color: 'var(--muted)', fontSize: 12 }}>CUSTOMER</p>
               <p style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{detail.customer_name}</p>
               <p style={{ margin: '6px 0 0', fontSize: 16 }}>📞 {detail.phone}</p>
-              <p style={{ margin: '4px 0 0', fontSize: 15, color: 'var(--cream)' }}>📍 {detail.address}</p>
+              {/* Round-2 fixes brief, Part 5 — detail.address is a
+                  sentinel string for a pickup order (never a real
+                  address — see app/api/orders/route.ts's
+                  PICKUP_ADDRESS_SENTINEL), so it's replaced entirely with
+                  a clear, differently-colored/iconed badge rather than
+                  ever printing that sentinel text to staff. This is the
+                  primary identifying detail on the card, same as the
+                  brief's own wording ("so staff immediately know not to
+                  dispatch a driver"). */}
+              {detail.order_type === 'pickup' ? (
+                <p style={{ margin: '4px 0 0', fontSize: 15, fontWeight: 700, color: 'var(--gold)' }}>🏪 Pickup — no delivery</p>
+              ) : (
+                <p style={{ margin: '4px 0 0', fontSize: 15, color: 'var(--cream)' }}>📍 {detail.address}</p>
+              )}
               <p style={{ margin: '10px 0 0', fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
                 Payment: {detail.payment_method} <PaymentStatusPill status={detail.payment_status} />
               </p>
@@ -225,7 +262,7 @@ function OrderDetailModal({
                     borderRadius: 10, padding: '14px', fontSize: 15, fontWeight: 700, cursor: 'pointer',
                   }}
                 >
-                  {movingId === order.id ? 'Updating…' : col.nextLabel}
+                  {movingId === order.id ? 'Updating…' : nextLabelFor(order, col)}
                 </button>
               )}
               {order.status !== 'delivered' && order.status !== 'cancelled' && (
@@ -680,7 +717,15 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
   const handleAdvanceClick = (order: OrderRow, nextStatus: OrderStatus) => {
     if (order.status === 'received' && nextStatus === 'preparing') {
       setEtaOrder(order);
-    } else if (order.status === 'preparing' && nextStatus === 'on_the_way') {
+    } else if (order.status === 'preparing' && nextStatus === 'on_the_way' && order.order_type !== 'pickup') {
+      // Round-2 fixes brief, Part 5 — "who's delivering this" makes no
+      // sense for a pickup order (nobody is), so it skips straight to
+      // `advance` below instead of opening DriverPromptModal. Deliberately
+      // NOT restructuring the shared OrderStatus pipeline/COLUMNS array
+      // itself for this — see this file's own delivery-report note — a
+      // pickup order still moves through the same received → preparing →
+      // on_the_way → delivered stages, just under pickup-aware button
+      // labels (nextLabelFor below) and without this one prompt.
       setDriverOrder(order);
     } else {
       advance(order, nextStatus);
@@ -852,6 +897,18 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
                             <PaymentStatusPill status={order.payment_status} />
                           </div>
 
+                          {/* Round-2 fixes brief, Part 5 — the primary,
+                              always-visible signal that this order needs
+                              no driver at all. Distinct icon/color from
+                              the driver_name line below (which only ever
+                              applies to a delivery order once one's been
+                              assigned) so the two can never be confused
+                              at a glance. */}
+                          {order.order_type === 'pickup' && (
+                            <div style={{ fontSize: large ? 14 : 11.5, color: 'var(--gold)', fontWeight: 700, marginBottom: large ? 8 : 4 }}>
+                              🏪 Pickup — no delivery
+                            </div>
+                          )}
                           {order.driver_name && (
                             <div style={{ fontSize: large ? 14 : 11.5, color: 'var(--muted)', marginBottom: large ? 8 : 4 }}>
                               🛵 {order.driver_name}
@@ -869,7 +926,7 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
                                   borderRadius: 6, padding: large ? '14px 10px' : '7px 8px', fontSize: large ? 16 : 12, fontWeight: 700, cursor: 'pointer',
                                 }}
                               >
-                                {movingId === order.id ? '…' : col.nextLabel}
+                                {movingId === order.id ? '…' : nextLabelFor(order, col)}
                               </button>
                             )}
                             {col.status !== 'delivered' && (

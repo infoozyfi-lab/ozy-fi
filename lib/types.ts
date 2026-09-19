@@ -508,6 +508,12 @@ export interface ConfirmedOrder {
   // paymentMethod placeOrder was called with — never re-derived or
   // guessed here.
   paymentMethod: 'cod' | 'card';
+  // Round-2 fixes brief, Part 5 — which fulfillment type this order was
+  // actually placed as, so ConfirmModal.tsx can show pickup-appropriate
+  // copy (e.g. "pay by cash when you collect it" instead of "...when your
+  // order arrives"). Defaults to 'delivery' at every call site that
+  // predates this field for the same reason as OrderRow.order_type above.
+  orderType?: OrderType;
 }
 
 export interface OpenProductOptions {
@@ -567,6 +573,13 @@ declare global {
 
 export type OrderStatus = 'received' | 'preparing' | 'on_the_way' | 'delivered' | 'cancelled';
 
+// Round-2 fixes brief, Part 5 (worker/migrations/015_pickup_fulfillment.sql)
+// — a customer either has this delivered, or comes to collect it
+// themselves. Every order placed before this brief is 'delivery' (the
+// column default), since that was the only option that ever actually
+// existed at checkout despite marketing copy long promising both.
+export type OrderType = 'delivery' | 'pickup';
+
 export interface OrderTrackingItem {
   id: number;
   order_id?: number;
@@ -603,6 +616,11 @@ export interface OrderTrackingResult {
   marketing_consent?: number;
   created_at: string;
   items: OrderTrackingItem[];
+  // Round-2 fixes brief, Part 5 — same optional-for-pre-migration-rows
+  // reasoning as OrderRow.order_type above; TrackPageClient.tsx treats an
+  // absent value as 'delivery', same as that column's own DB-level
+  // default.
+  order_type?: OrderType;
 }
 
 // app/api/orders/by-phone/route.js's small projection.
@@ -765,6 +783,13 @@ export interface OrderRow {
   discount_source?: DiscountSource | null;
   triggered_wow_moment?: number;
   is_reorder?: number;
+  // Round-2 fixes brief, Part 5 — optional for the same reason as
+  // discount_source above (a handful of call sites project only a subset
+  // of `orders` columns). Absent on a row read before migration 015 ran
+  // is not expected in practice (the column backfills a default for every
+  // existing row), but treated as "delivery" wherever it matters, same as
+  // the column's own default.
+  order_type?: OrderType;
   created_at: string;
 }
 

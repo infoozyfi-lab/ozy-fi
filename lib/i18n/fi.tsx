@@ -87,8 +87,8 @@ const fi = {
     eyebrow: 'Pizzaa, kebabia ja hampurilaisia',
     titleStart: 'Aloita',
     titleEm: 'tilauksesi',
-    reviews: '· yli 320 arvostelua',
     openNow: 'Avoinna nyt',
+    closedNow: 'Suljettu nyt',
     etaRange: '25–35 min',
     subtitle: 'Tuoretta taikinaa, valmistettu tilauksesta, aina kuumana. Valitse kategoria tai selaa koko ruokalistaa — kotiinkuljetus tai nouto valitaan kassalla.',
   },
@@ -125,6 +125,7 @@ const fi = {
     loading: 'Ladataan ruokalistaa…',
     loadError: 'Ruokalistaa ei voitu ladata. Yritä uudelleen.',
     note: 'Lisätäytteet 2,50 €: 120 g pihvi, pekoni, juusto, ananas, sinihomejuusto, sipuli, kananmuna · Kastikkeet: ketsuppi, jogurttikastike, suolakurkku, sitruunamehu, majoneesi, amerikanmajoneesi, persilja, minttu, chilihiutaleet.',
+    relatedCategoriesHeading: 'Saatat pitää myös näistä',
   },
 
   story: {
@@ -187,6 +188,9 @@ const fi = {
     climateBody: 'Tämän tuotteen arvioitu hiilijalanjälki lasketaan sen raaka-aineiden, pakkauksen ja valmistustavan perusteella. Kasvipohjaisten täytteiden ja juuston valitseminen yleensä pienentää tilauksesi jalanjälkeä.',
     loadingOptions: 'Ladataan vaihtoehtoja…',
     itemUnavailable: 'Tämä tuote ei ole juuri nyt saatavilla.',
+    relatedHeading: 'Saatat pitää myös näistä',
+    partOfBundleLabel: 'Saatavana myös yhdistelmätarjouksessa',
+    viewBundle: (bundleTitle: string) => `Katso "${bundleTitle}" -yhdistelmätarjous`,
     addToOrder: (price: string) => `Lisää tilaukseen — ${price}`,
     addToBundle: 'Lisää pakettiin',
     addToBundleExtra: (price: string) => `Lisää pakettiin — +${price}`,
@@ -282,6 +286,18 @@ const fi = {
     // amountText: ks. header.scheduledOfferBanner:n kommentti.
     welcomeDiscountBanner: (amountText: string) => `🎉 Ensimmäinen tilaus? Saat ${amountText} alennuksen — lisätään automaattisesti kassalla!`,
     scheduledOfferBanner: (label: string, amountText: string) => `🔥 ${label}: ${amountText} alennus — lisätään automaattisesti kassalla!`,
+    // Round-2 fixes brief, Part 1 / Part 5 — ks. en.tsx:n vastaavat
+    // kommentit.
+    deliveryFeeRow: 'Toimitusmaksu',
+    minOrderNotice: (amountNeeded: string, minimum: string) =>
+      `Lisää tilaukseen ${amountNeeded} saavuttaaksesi kotiinkuljetuksen ${minimum} vähimmäissumman.`,
+    orderTypeHeading: 'Miten haluat saada tilauksesi?',
+    orderTypeDelivery: 'Kotiinkuljetus',
+    orderTypeDeliveryDesc: 'Toimitetaan ovellesi',
+    orderTypePickup: 'Nouto',
+    orderTypePickupDesc: 'Nouda tilaus itse ravintolasta',
+    pickupInfoHeading: 'Noutopaikka ja aukioloajat',
+    pickupInfoIntro: 'Tule meille osoitteeseen:',
   },
 
   confirm: {
@@ -295,6 +311,11 @@ const fi = {
     stampCardApplied: (amount: string) => `Kanta-asiakasetu käytössä: −${amount}`,
     codNote: (total: ReactNode) => (
       <>Maksa <b>{total}</b> käteisellä, kun tilauksesi saapuu.</>
+    ),
+    // Round-2 fixes brief, Part 5 — nouto-tilauksen vastine yllä olevalle
+    // codNotelle (asiakas noutaa itse, ei kuriiri toimita).
+    codNotePickup: (total: ReactNode) => (
+      <>Maksa <b>{total}</b> käteisellä, kun noudat tilauksesi.</>
     ),
     // Part A (order confirmation screen) — shown instead of codNote when
     // paymentMethod is 'card'.
@@ -363,7 +384,10 @@ const fi = {
     stepPreparing: 'Valmistetaan',
     stepOnTheWay: 'Matkalla',
     stepDelivered: 'Toimitettu',
+    stepReadyForPickup: 'Valmis noudettavaksi',
+    stepPickedUp: 'Noudettu',
     deliveringTo: (addr: string, method: string) => `Toimitetaan osoitteeseen ${addr} · ${method}`,
+    pickupAt: (method: string) => `Valmis noudettavaksi ravintolastamme · ${method}`,
     codPaymentLabel: 'Käteinen toimituksessa',
     trackDifferentOrder: '← Seuraa toista tilausta',
     // Growth features (Feature 1 — reorder).
@@ -461,7 +485,8 @@ const fi = {
     intro: 'Haluatko noutaa tilauksesi itse? Tässä mistä ja milloin.',
     locationHeading: 'Noutopiste',
     hoursHeading: 'Noutoajat',
-    orderingPlaceholder: 'Paikkamerkki — vahvista, miten asiakkaan tulisi tällä hetkellä tehdä noutotilaus. Kassa kerää tällä hetkellä vain toimitusosoitteen, eikä noutovaihtoehtoa vielä ole, joten tämä tarvitsee yrittäjän vahvistuksen ennen kuin sivu voi kertoa asiakkaille, miten nouto todella tilataan.',
+    orderingHeading: 'Miten tilaan noudettavaksi',
+    orderingInstructions: 'Tilaa verkossa aivan kuten aina — lisää tuotteet ostoskoriin ja siirry kassalle. Valitse vaiheessa 2 "Nouto" "Kotiinkuljetuksen" sijaan: sinun ei tarvitse antaa toimitusosoitetta, eikä toimitusmaksua peritä. Tilauksesi on valmiina alla mainitussa osoitteessa ja aukioloaikoina.',
   },
 
   error: {
@@ -549,6 +574,7 @@ const fi = {
     notFound: 'Tilausta ei voitu ladata.',
     forbidden: 'Sinulla ei ole oikeutta laskuihin — pyydä esihenkilöä tai omistajaa.',
     signInRequired: 'Kirjaudu sisään nähdäksesi tämän laskun.',
+    pickupLabel: 'Noutotilaus — asiakas noutaa itse, ei toimitusosoitetta.',
     discountSourceLabel: {
       manual_coupon: 'Alennuskoodi',
       referral: 'Suosituspalkkio',

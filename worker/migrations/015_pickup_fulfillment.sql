@@ -1,0 +1,27 @@
+-- Round-2 fixes brief, Part 5 — real pickup fulfillment.
+--
+-- Run against the LIVE database with:
+--   npx wrangler d1 execute ozyfi-db --remote --file=./worker/migrations/015_pickup_fulfillment.sql
+--
+-- Adds the order-type distinction that never existed before this brief:
+-- every order until now was implicitly a delivery order (marketing copy
+-- promised "delivery or pickup", but checkout only ever collected a
+-- delivery address — see FULL-SITE-AUDIT-ROUND2-REPORT.md). Default
+-- 'delivery' on both the column and every existing row, so every order
+-- ever placed keeps behaving exactly as it always has — this is purely
+-- additive, same convention as every other migration in this project.
+--
+-- orders.address stays TEXT NOT NULL (unchanged) rather than being made
+-- nullable. SQLite/D1 can't drop a NOT NULL constraint with a plain ALTER
+-- TABLE — it requires rebuilding the whole table (create a new one with
+-- the desired schema, copy every row across, drop the old one, rename),
+-- which is real risk for a table this central (orders is referenced by
+-- order_items via a foreign key, read by the webhook, the admin panel,
+-- /track, analytics, and more) for very little benefit. Instead, a pickup
+-- order stores a clear, unambiguous sentinel string in `address` — see
+-- app/api/orders/route.ts for exactly what it writes — that every
+-- existing display of `orders.address` (admin Kanban, invoice, /track)
+-- reads as plain text either way, so nothing downstream breaks even
+-- where this brief didn't specifically update that surface to check
+-- order_type first.
+ALTER TABLE orders ADD COLUMN order_type TEXT NOT NULL DEFAULT 'delivery';

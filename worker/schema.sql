@@ -103,6 +103,14 @@ CREATE TABLE orders (
   order_num          TEXT NOT NULL UNIQUE,
   customer_name      TEXT NOT NULL,
   address            TEXT NOT NULL,
+  -- Round-2 fixes brief, Part 5 (worker/migrations/015_pickup_fulfillment.sql)
+  -- — 'delivery' | 'pickup'. `address` stays required either way; a pickup
+  -- order stores a clear sentinel string there instead of a real address
+  -- (see that migration's comment for why the column itself isn't made
+  -- nullable). Defaults to 'delivery' so every pre-existing order (all of
+  -- which were, in effect, delivery orders before this brief) keeps
+  -- reading exactly as it always has.
+  order_type         TEXT NOT NULL DEFAULT 'delivery',
   -- Optional since the "email removal" change (Phase 7 remainder) — an
   -- empty string means the customer skipped it, not NULL (see
   -- app/api/orders/route.js for why: no migration needed this way).

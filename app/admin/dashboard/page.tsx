@@ -18,6 +18,7 @@ import PaymentStatusPill from '@/components/admin/charts/PaymentStatusPill';
 import { CATEGORICAL, BRAND, GOLD, formatCurrency, formatCompactCurrency, formatNumber, percentChange } from '@/components/admin/charts/colors';
 import type {
   OrderStatus,
+  OrderType,
   OrderRow,
   OrderItemRow,
   StaffRole,
@@ -385,6 +386,10 @@ interface OrderDetailData {
   notes?: string | null;
   driver_name?: string | null;
   items: OrderItemRow[];
+  // Round-2 fixes brief, Part 5 — same optional-for-pre-migration-rows
+  // reasoning as OrderRow.order_type; treated as 'delivery' wherever it
+  // matters below, same as that column's own DB-level default.
+  order_type?: OrderType;
 }
 
 function OrderDetailRow({
@@ -460,7 +465,18 @@ function OrderDetailRow({
               <p style={{ margin: 0 }}>{detail.customer_name}</p>
               <p style={{ margin: 0 }}>{detail.phone}</p>
               <p style={{ margin: 0, color: detail.email ? undefined : 'var(--muted)' }}>{detail.email || 'No email provided'}</p>
-              <p style={{ margin: 0 }}>{detail.address}</p>
+              {/* Round-2 fixes brief, Part 5 — same treatment as
+                  OrderKanban.tsx's own detail popup: detail.address is a
+                  sentinel string (never a real address) for a pickup
+                  order, so it's shown as a clear label instead. This is
+                  a second real admin surface showing the same
+                  underlying data, so it gets the same fix even though
+                  the brief's own text names OrderKanban.tsx specifically. */}
+              {detail.order_type === 'pickup' ? (
+                <p style={{ margin: 0, fontWeight: 700, color: 'var(--gold)' }}>🏪 Pickup — no delivery</p>
+              ) : (
+                <p style={{ margin: 0 }}>{detail.address}</p>
+              )}
             </div>
             <div>
               <p style={{ margin: '0 0 4px', color: 'var(--muted)', fontSize: 13 }}>Order info</p>

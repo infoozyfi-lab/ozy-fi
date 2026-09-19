@@ -1,9 +1,17 @@
 'use client';
 
 import { useTranslations } from '@/lib/i18n';
+import { useStore } from '@/context/StoreContext';
+import { isOpenNow } from '@/lib/openingHours';
 
 export default function Hero() {
   const t = useTranslations();
+  // Round-2 fixes brief, Part 6 (item 2) — real open/closed state, not a
+  // hardcoded "Open now". See lib/openingHours.ts for what this actually
+  // checks (the manual store_closed override plus today's real
+  // configured hours).
+  const { storeClosed, openingHours } = useStore();
+  const openNow = isOpenNow(openingHours, storeClosed);
 
   const QUICK_CATEGORIES = [
     { id: 'pizzat', label: t.categories.pizza, icon: '🍕' },
@@ -23,10 +31,11 @@ export default function Hero() {
           {t.hero.titleStart} <em>{t.hero.titleEm}</em>
         </h1>
         <p className="hero-meta">
-          <span className="stars">★ 4.8</span>
-          <span>{t.hero.reviews}</span>
-          <span className="sep">|</span>
-          <span className="open">● {t.hero.openNow}</span>
+          {/* Round-2 fixes brief, Part 6 (item 1) — "★ 4.8 · 320+ reviews"
+              was hardcoded with no backing data anywhere (no reviews
+              table, no AggregateRating structured data) — removed rather
+              than inventing a review system to "back" it. */}
+          <span className={`open${openNow ? '' : ' closed'}`}>● {openNow ? t.hero.openNow : t.hero.closedNow}</span>
           <span className="sep">|</span>
           <span>{t.hero.etaRange}</span>
         </p>
