@@ -113,6 +113,9 @@ interface StoreContextValue {
 
   // Menu data (from /api/menu — the database).
   menuLoading: boolean;
+  // Size-selector-not-showing bug report — see this field's own useState
+  // comment below for why it's a separate signal from menuLoading above.
+  menuFullyLoaded: boolean;
   menuError: string;
   categories: Category[];
   products: Product[];
@@ -349,6 +352,25 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
   // seeded (toppings, drinks, option groups) and to catch any changes
   // since the page was rendered.
   const [menuLoading, setMenuLoading] = useState(!initialData);
+  // Size-selector-not-showing bug report — a SEPARATE flag from
+  // `menuLoading` above, deliberately: `menuLoading` starts `false`
+  // whenever a Server Component already seeded `initialData` (so pages
+  // like the menu grid don't flash a loading skeleton they don't need —
+  // `initialData` only ever carries `{ categories, products }`, and
+  // normalizeCategories()/normalizeProducts() are already enough for
+  // that grid). But `initialData`'s `products` are shaped by
+  // normalizeProducts() (lib/menu-i18n.ts), which never attaches
+  // `sizeOptions` at all — only the FULL normalizeMenuBlob() output from
+  // this effect's own `/api/menu` fetch below does. A consumer that needs
+  // a product's real per-product data (size tiers, but the same is true
+  // of base/sauce/cheese/dip) needs to wait for THIS flag, not
+  // `menuLoading` — see components/ProductPageStandalone.tsx's
+  // AutoOpenProduct, the confirmed real consumer of this gap. Always
+  // starts `false` (regardless of `initialData`) and only ever becomes
+  // `true` once, right below, after this effect's fetch settles (success
+  // or failure — same "don't hang forever" contract `menuLoading` itself
+  // already has).
+  const [menuFullyLoaded, setMenuFullyLoaded] = useState(false);
   const [menuError, setMenuError] = useState('');
   // initialData holds raw D1 rows (same shape loadMenuData()/`/api/menu`
   // return) — normalize + localize it here, to `locale`, so the very
@@ -496,6 +518,10 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         setMenuError(t.menuSection.loadError);
       } finally {
         setMenuLoading(false);
+        // Size-selector-not-showing bug report — see menuFullyLoaded's own
+        // comment above. Set in `finally`, same as menuLoading, so a fetch
+        // failure doesn't leave a consumer waiting on this forever either.
+        setMenuFullyLoaded(true);
       }
     }
 
@@ -1199,6 +1225,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
 
     // Menu data (from /api/menu — the database).
     menuLoading,
+    menuFullyLoaded,
     menuError,
     categories,
     products,

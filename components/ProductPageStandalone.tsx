@@ -35,16 +35,41 @@ function ProductSkeleton({ productHint, t }: { productHint?: RawProduct | null; 
 }
 
 function AutoOpenProduct({ productId, productHint }: { productId: string; productHint?: RawProduct | null }) {
-  const { products, menuLoading, openProduct, activeProduct } = useStore();
+  // Size-selector-not-showing bug report — confirmed root cause (traced
+  // and reproduced with real code execution, see
+  // worker/test-data/size-not-showing-verify.js): this effect used to gate
+  // on `menuLoading`, which is `false` from the very first render whenever
+  // the Server Component already seeded `initialData` — true for every
+  // standalone /product/[id] visit. That made this effect call
+  // openProduct() immediately, using `products` as seeded by
+  // normalizeProducts() (lib/menu-i18n.ts's lighter SSR-seed function,
+  // which never attaches `sizeOptions` at all — only the full
+  // normalizeMenuBlob() output from this store's own `/api/menu` fetch
+  // does). Once that premature call set `activeProduct`, THIS SAME
+  // effect's own guard (`... || activeProduct`) permanently skipped every
+  // later run — so when the real fetch resolved moments later with the
+  // product's actual size tiers, nothing ever re-opened the product to
+  // pick them up. `selection.sizeOptions` stayed pinned to the single
+  // FALLBACK_OPTION entry for the rest of that page load, which is
+  // exactly why ProductPage.tsx's `hasRealSizeTiers` check (and every
+  // rendering style before it) never showed a size selector at all.
+  //
+  // `menuFullyLoaded` (context/StoreContext.tsx) is the fix: unlike
+  // `menuLoading`, it always starts `false` and only becomes `true` once
+  // the REAL `/api/menu` fetch has actually settled — so this effect (and
+  // the loading-skeleton render below) now correctly wait for the
+  // complete, per-product data before ever calling openProduct(), instead
+  // of mistaking "SSR seeded a partial product list" for "ready."
+  const { products, menuFullyLoaded, openProduct, activeProduct } = useStore();
   const t = useTranslations();
 
   useEffect(() => {
-    if (menuLoading || activeProduct) return;
+    if (!menuFullyLoaded || activeProduct) return;
     const product = products.find((p) => p.id === productId);
     if (product) openProduct(product, null, { skipUrlPush: true });
-  }, [menuLoading, products, activeProduct, productId, openProduct]);
+  }, [menuFullyLoaded, products, activeProduct, productId, openProduct]);
 
-  if (menuLoading) {
+  if (!menuFullyLoaded) {
     return <ProductSkeleton productHint={productHint} t={t} />;
   }
 
