@@ -85,6 +85,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ co
     }
   }
 
+  // Priority-fixes brief (roadmap gap analysis), Part 4 — same
+  // if-present pattern as min_order_amount/usage_limit above.
+  if ('max_discount_amount' in body) {
+    if (body.max_discount_amount === null || body.max_discount_amount === '') {
+      sets.push('max_discount_amount = NULL');
+    } else {
+      const v = Number(body.max_discount_amount);
+      if (!Number.isFinite(v) || v <= 0) return json({ error: 'max_discount_amount must be a positive number.' }, 400);
+      sets.push('max_discount_amount = ?');
+      values.push(v);
+    }
+  }
+
   if (!sets.length) return json({ error: 'Nothing to update' }, 400);
 
   values.push(code);

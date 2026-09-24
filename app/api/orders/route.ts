@@ -7,7 +7,9 @@ import { normalizeMenuBlob } from '@/lib/menu-i18n';
 import { verifyCartLine, computeDiscountAmount, readDiscountSetting } from '@/lib/pricing';
 import { findBestActiveScheduledOffer } from '@/lib/scheduledOffers';
 import { getStripe } from '@/lib/stripe';
-import type { DiscountSource, DiscountValue, OrderType } from '@/lib/types';
+import { sendEmailSafe, getAdminNotificationEmail } from '@/lib/email';
+import { orderReceivedCustomerEmail, newOrderAdminEmail } from '@/lib/email-templates';
+import type { DiscountSource, DiscountValue, OrderType, Locale } from '@/lib/types';
 
 // Round-2 fixes brief, Part 5 — a pickup order's `orders.address` column
 // (still TEXT NOT NULL — see worker/migrations/015_pickup_fulfillment.sql
@@ -76,6 +78,16 @@ interface CreateOrderBody {
   // client build that doesn't send this field at all must keep placing
   // ordinary delivery orders exactly as it always has.
   orderType?: string;
+  // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 1 — which
+  // locale the customer was ordering in (context/StoreContext.tsx's
+  // placeOrder sends its own `locale`, from next-intl's useLocale()),
+  // captured here and persisted (worker/migrations/020_order_locale.sql)
+  // so every later email-sending trigger point can read it back. Anything
+  // other than the literal string 'fi' falls back to 'en' — same
+  // "unrecognized/missing client value never breaks the request" pattern
+  // as orderType above, and a safe default for an old client build that
+  // predates this field.
+  locale?: string;
 }
 
 export async function POST(request: Request) {
@@ -128,6 +140,10 @@ export async function POST(request: Request) {
   }
 
   const paymentMethod: 'cod' | 'card' = body.paymentMethod === 'card' ? 'card' : 'cod';
+
+  // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 1 — see
+  // CreateOrderBody.locale's own comment above.
+  const orderLocale: Locale = body.locale === 'fi' ? 'fi' : 'en';
 
   // Delivery zone check — only enforced if the admin has actually listed
   // any postal codes/prefixes in Settings. Leaving that field blank (the
@@ -542,14 +558,14 @@ export async function POST(request: Request) {
   // before this feature — nothing to track for cash paid on delivery.
   const insertOrder = await env.DB.prepare(
     `INSERT INTO orders
-      (order_num, customer_name, address, email, phone, notes, total, status, payment_method, payment_status, coupon_code, discount_amount, marketing_consent, discount_source, triggered_wow_moment, is_reorder, order_type)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'received', ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      (order_num, customer_name, address, email, phone, notes, total, status, payment_method, payment_status, coupon_code, discount_amount, marketing_consent, discount_source, triggered_wow_moment, is_reorder, order_type, locale)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'received', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       orderNum, customer.name, storedAddress, email, customer.phone, customer.notes || '', finalTotal,
       paymentMethod, paymentMethod === 'card' ? 'pending' : 'cod',
       appliedCouponCode, discountAmount, body.marketingConsent ? 1 : 0,
-      discountSource, triggeredWowMoment ? 1 : 0, body.isReorder ? 1 : 0, orderType
+      discountSource, triggeredWowMoment ? 1 : 0, body.isReorder ? 1 : 0, orderType, orderLocale
     )
     .run();
 
@@ -578,6 +594,55 @@ export async function POST(request: Request) {
   if (stmts.length) {
     await env.DB.batch(stmts);
   }
+
+  // --- Email notifications (Bundle 1 Task 1) — "order received" ---
+  // Fire-and-forget, same reasoning/placement as the ad-platform tracking
+  // call further below: never lets a slow/failed email delay or fail the
+  // response the customer is waiting on for their order confirmation.
+  // Fires here (right after the order + items are safely committed, for
+  // BOTH cod and card orders — matches this task's brief exactly) rather
+  // than after the Stripe PaymentIntent block below, since "the order was
+  // successfully placed" is already true at this point regardless of
+  // whether a card payment then goes on to succeed or fail — that's the
+  // separate "payment successful"/"failed payment" trigger, handled by
+  // app/api/webhooks/stripe/route.ts once Stripe actually confirms it.
+  const emailItems = items.map((line) => ({ name: line.name, qty: Number(line.qty), lineTotal: Number(line.lineTotal) }));
+  ctx.waitUntil(
+    (async () => {
+      try {
+        await sendEmailSafe(
+          env,
+          orderReceivedCustomerEmail({
+            orderNum,
+            email,
+            total: finalTotal,
+            orderType,
+            paymentMethod,
+            locale: orderLocale,
+            items: emailItems,
+          })
+        );
+        const adminEmail = await getAdminNotificationEmail(env);
+        if (adminEmail) {
+          await sendEmailSafe(
+            env,
+            newOrderAdminEmail({
+              adminEmail,
+              orderNum,
+              customerName: customer.name,
+              phone: customer.phone,
+              total: finalTotal,
+              orderType,
+              paymentMethod,
+              items: emailItems,
+            })
+          );
+        }
+      } catch (err) {
+        console.error('[email] order-received notification failed:', err);
+      }
+    })()
+  );
 
   // --- Stripe: create the PaymentIntent for a card order ---
   // Done after the order + items are safely committed above, same

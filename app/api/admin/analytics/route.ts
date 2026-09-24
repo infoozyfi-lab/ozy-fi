@@ -31,7 +31,12 @@ async function loadSummary(env: CloudflareEnv) {
       SUM(CASE WHEN created_at >= datetime('now','-60 days') AND created_at < datetime('now','-30 days') THEN 1 ELSE 0 END) AS prev30_orders,
       SUM(CASE WHEN status != 'cancelled' THEN total ELSE 0 END) AS total_revenue,
       COUNT(*) AS total_orders,
-      SUM(CASE WHEN status IN ('received','preparing','on_the_way') THEN 1 ELSE 0 END) AS pending_orders,
+      -- Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 3 —
+      -- 'accepted'/'ready' are new active, not-yet-finished order
+      -- statuses (see lib/types.ts's OrderStatus) — included here so an
+      -- order sitting in either doesn't drop out of "pending" between
+      -- 'received' and 'on_the_way'.
+      SUM(CASE WHEN status IN ('received','accepted','preparing','ready','on_the_way') THEN 1 ELSE 0 END) AS pending_orders,
       SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) AS completed_orders,
       SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_orders
     FROM orders`

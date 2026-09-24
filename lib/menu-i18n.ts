@@ -19,6 +19,7 @@
 import { resolveText } from './i18n/locales';
 import { normalizeScheduledOffer } from './scheduledOffers';
 import { readDiscountSetting } from './pricing';
+import { parseSpecialHours } from './openingHours';
 import type {
   Locale,
   RawCategory,
@@ -33,7 +34,35 @@ import type {
   TrackingConfig,
   Featured,
   MenuBlob,
+  StoryBannerImage,
 } from './types';
+
+// Bundle 1 Task 5 — story banner slider. Same "corrupt/unset -> empty,
+// never crash" fallback as parseSpecialHours (lib/openingHours.ts) and
+// this file's own popularProductIds parse below. Each entry is
+// re-validated shape-wise (not just `Array.isArray`) since this is
+// admin-authored JSON stored as plain TEXT — a hand-edited or
+// half-migrated value should degrade to "fewer/no slides", never crash
+// the homepage. Capped at 10 defensively (the admin UI already enforces
+// this at save time — see app/admin/dashboard/page.tsx — this is a
+// second, independent guard against a stored value ever exceeding it).
+function parseStoryBannerImages(raw: string | null | undefined): StoryBannerImage[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+      .map((item) => ({
+        url: typeof item.url === 'string' ? item.url : '',
+        alt: typeof item.alt === 'string' ? item.alt : '',
+      }))
+      .filter((item) => item.url)
+      .slice(0, 10);
+  } catch {
+    return [];
+  }
+}
 
 // ---------------------------------------------------------------------
 // Categories / products — the subset that Server Components seed as
@@ -71,6 +100,17 @@ export function normalizeProducts(rawProducts: RawProduct[] | null | undefined, 
       toppings: Boolean(item.has_toppings),
       toppingsEnabled: Boolean(item.has_toppings),
       sort_order: item.sort_order,
+      // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 2 — see
+      // Product.searchText's comment (lib/types.ts). Built from every raw
+      // bilingual text field this row has, regardless of `locale`, so a
+      // customer searching the Finnish site for an English word (or vice
+      // versa) still finds the item. Missing translations (untranslated
+      // fields are null/undefined) are simply skipped rather than falling
+      // back to the resolved text twice.
+      searchText: [item.name, item.name_fi, item.description, item.description_fi]
+        .filter((v): v is string => typeof v === 'string' && v.length > 0)
+        .join(' ')
+        .toLowerCase(),
     }));
 }
 
@@ -220,6 +260,14 @@ export function normalizeMenuBlob(raw: MenuData, locale: Locale): MenuBlob {
     popularProductIds = [];
   }
 
+  // Priority-fixes brief (roadmap gap analysis), Part 7 — special/
+  // holiday hours (admin_settings.special_hours). Same "parse once here,
+  // not in every consumer" reasoning as scheduledOffers above.
+  const specialHours = parseSpecialHours(settings.special_hours);
+
+  // Bundle 1 Task 5 — story banner slider.
+  const storyBannerImages = parseStoryBannerImages(settings.story_banner_images);
+
   return {
     categories,
     products,
@@ -243,5 +291,7 @@ export function normalizeMenuBlob(raw: MenuData, locale: Locale): MenuBlob {
     firstOrderDiscount,
     stampCardReward,
     scheduledOffers,
+    specialHours,
+    storyBannerImages,
   };
 }

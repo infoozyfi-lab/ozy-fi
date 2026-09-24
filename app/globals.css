@@ -252,14 +252,79 @@ section{ padding: 80px 0; }
 h2{ font-family:'Anton', sans-serif; font-size: clamp(2rem, 4vw, 3rem); color: var(--cream); margin: 0 0 14px; }
 .section-head p{ color: var(--muted); font-size: 1.05rem; max-width: 55ch; }
 
+/* Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 2 — menu
+   search input (components/MenuSection.tsx). Sits inside .section-head,
+   so it inherits that block's max-width and the page's normal side
+   gutter; no extra breakpoint needed since 100% width already collapses
+   correctly on mobile. */
+.menu-search{ position: relative; margin-top: 20px; max-width: 420px; }
+.menu-search-input{
+  width: 100%; background: var(--bg-card); border: 1px solid var(--line); border-radius: 999px;
+  padding: 12px 40px 12px 18px; color: var(--cream); font-size: 0.95rem; font-family: inherit;
+  -webkit-appearance: none; appearance: none;
+}
+.menu-search-input::placeholder{ color: var(--muted); }
+.menu-search-input:focus{ outline: none; border-color: var(--ember-dark); }
+.menu-search-input::-webkit-search-cancel-button{ display: none; }
+.menu-search-clear{
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  width: 28px; height: 28px; border-radius: 50%; border: none; background: transparent;
+  color: var(--muted); font-size: 1.3rem; line-height: 1; cursor: pointer;
+  display:flex; align-items:center; justify-content:center;
+}
+.menu-search-clear:hover{ color: var(--cream); }
+.menu-search-empty{ padding: 8px 0 32px; color: var(--muted); border-top: 1px solid var(--line); margin-top: 8px; }
+.menu-search-empty-heading{ color: var(--cream); font-weight: 700; font-size: 1.1rem; margin: 20px 0 6px; }
+
 /* ---------- STORY ---------- */
 .story{ background: var(--bg-alt); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.story-grid{ display:grid; grid-template-columns: 0.8fr 1.2fr; gap: 56px; align-items:start; }
+/* Bundle 1 Task 5 — story banner slider. This used to be a two-column
+   grid (a 0.8fr narrow portrait photo beside the text, 4:5 aspect
+   ratio). The business owner specifically asked for a WIDE (16:9)
+   banner-style slider instead — squeezing a 16:9 image into that old
+   narrow column would render it as a short, oddly-cropped strip, so the
+   layout below is stacked instead (full-width banner, text beneath) at
+   every viewport width, rather than only collapsing to one column on
+   mobile the way the old two-column grid did. A deliberate layout
+   change to fit the new image shape, not a partial port of the old one. */
+.story-grid{ display:flex; flex-direction:column; gap: 32px; }
 .story-figure{
-  aspect-ratio: 4/5; border-radius: var(--radius);
+  aspect-ratio: 16/9; border-radius: var(--radius); width: 100%;
   position: relative; overflow:hidden; background: var(--bg-card);
 }
 .story-figure img{ width:100%; height:100%; object-fit:cover; }
+/* Cross-fade slides — every slide is stacked in the same box (position:
+   absolute) and only `opacity` animates, never a transform/position
+   change, which is what makes this a fade rather than a slide/push
+   transition (per the brief's specific request). */
+.story-slide{
+  position:absolute; inset:0; opacity:0; transition: opacity 1s ease;
+}
+.story-slide.is-active{ opacity:1; }
+/* No images configured yet — a plain on-brand block, never the old
+   third-party random-image API and never a blank hole in the layout. */
+.story-placeholder{
+  width:100%; height:100%; background: var(--ember);
+  display:flex; align-items:center; justify-content:center;
+}
+.story-arrow{
+  position:absolute; top:50%; transform:translateY(-50%); z-index:2;
+  width:40px; height:40px; border-radius:50%; border:none; cursor:pointer;
+  background: rgba(20,16,12,0.45); color:#fff; font-size:1.1rem; line-height:1;
+  display:flex; align-items:center; justify-content:center; transition: background 0.15s ease;
+}
+.story-arrow:hover{ background: rgba(20,16,12,0.7); }
+.story-arrow.prev{ left:14px; }
+.story-arrow.next{ right:14px; }
+.story-dots{
+  position:absolute; bottom:14px; left:0; right:0; z-index:2;
+  display:flex; justify-content:center; gap:8px;
+}
+.story-dot{
+  width:9px; height:9px; border-radius:50%; border:none; padding:0; cursor:pointer;
+  background: rgba(255,255,255,0.45); transition: background 0.15s ease, transform 0.15s ease;
+}
+.story-dot.is-active{ background:#fff; transform: scale(1.2); }
 .story-text p{ color: var(--muted); margin: 0 0 18px; font-size: 1.02rem; }
 .story-text p:first-of-type{ color: var(--cream); font-size: 1.15rem; }
 .story-stats{ display:flex; gap: 40px; margin-top: 32px; flex-wrap: wrap; }
@@ -804,6 +869,23 @@ footer{ padding: 56px 0 32px; }
 
 /* ---------- CHECKOUT (kotipizza-style steps) ---------- */
 .checkout-steps{ display:flex; align-items:flex-start; gap: 6px; margin: 0 0 24px; }
+/* Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 3 — this
+   timeline now renders 5 steps (pickup) or 6 (delivery) instead of the
+   previous fixed 4, inside the same narrow .track-page container
+   (max-width 640px, real phones much narrower). Nothing here made the
+   step count itself responsive (each dot+label is flex-shrink:0, by
+   design, so labels never get squished into illegibility) — this is a
+   safety net so a phone too narrow to fit every step at a comfortable
+   width scrolls horizontally instead of blowing out the page's own
+   layout. Never triggers on the wider desktop/CheckoutModal.tsx use of
+   this same class, which has plenty of room for any step count.
+   Wrapped in a media query rather than applied unconditionally so a
+   sudden horizontal scrollbar doesn't appear on a step count that
+   already fit fine (this class is shared with the checkout flow itself,
+   not just /track). */
+@media (max-width: 480px){
+  .checkout-steps{ overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+}
 .checkout-step{ display:flex; flex-direction:column; align-items:center; gap: 6px; flex-shrink:0; }
 .checkout-step-dot{
   width: 26px; height: 26px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); color: var(--muted);
@@ -1257,7 +1339,7 @@ footer{ padding: 56px 0 32px; }
 @media (max-width: 860px){
   .nav-links{ display:none; }
   .burger{ display:block; }
-  .story-grid, .visit-grid{ grid-template-columns: 1fr; }
+  .visit-grid{ grid-template-columns: 1fr; }
   .footer-grid{ grid-template-columns: 1fr; }
   .order-tabs{ flex-direction: column; }
   .menu-item{ padding: 14px; gap: 12px; }

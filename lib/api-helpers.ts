@@ -24,7 +24,16 @@ interface AdminTableDef {
 // schema.sql's comment on those columns for why they're optional and
 // never the sole source of truth.
 export const ADMIN_TABLES: Record<string, AdminTableDef> = {
-  categories: { cols: ['id', 'title', 'title_fi', 'sub', 'sub_fi', 'image', 'sort_order'] },
+  categories: {
+    cols: [
+      'id', 'title', 'title_fi', 'sub', 'sub_fi', 'image', 'sort_order',
+      // Admin SEO fields (worker/migrations/017_admin_seo_fields.sql) —
+      // see that migration's header comment; wired into generateMetadata
+      // in app/(site)/[locale]/menu/[category]/page.tsx.
+      'meta_description', 'meta_description_fi', 'seo_title', 'seo_title_fi',
+      'canonical_url', 'noindex', 'og_image_url',
+    ],
+  },
   products: {
     cols: [
       'id', 'category_id', 'name', 'name_fi', 'description', 'description_fi',
@@ -34,6 +43,9 @@ export const ADMIN_TABLES: Record<string, AdminTableDef> = {
       'meta_description', 'meta_description_fi',
       'price', 'offer_price',
       'image', 'tag', 'has_toppings', 'sort_order', 'active',
+      // Admin SEO fields (worker/migrations/017_admin_seo_fields.sql) —
+      // see that migration's header comment.
+      'seo_title', 'seo_title_fi', 'canonical_url', 'noindex', 'og_image_url',
     ],
   },
   option_groups: { cols: ['id', 'title', 'title_fi', 'kind', 'icon', 'sort_order'] },

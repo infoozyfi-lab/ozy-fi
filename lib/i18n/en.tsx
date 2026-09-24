@@ -105,6 +105,19 @@ const en = {
     // Round-2 fixes brief, Part 6 (item 2) — real closed state, shown
     // instead of openNow when lib/openingHours.ts's isOpenNow says so.
     closedNow: 'Closed now',
+    // Priority-fixes brief (roadmap gap analysis), Part 5 — "next
+    // opening/closing time" messaging, shown instead of the plain
+    // openNow/closedNow above whenever lib/openingHours.ts's
+    // getNextTransition() has something to say (real configured hours,
+    // and the manual store_closed override isn't on). `time` is already
+    // a localized 'HH:MM' string — nothing left to translate there.
+    openClosesAt: (time: string) => `Open — closes at ${time}`,
+    closedOpensAt: (time: string) => `Closed — opens at ${time}`,
+    closedOpensAtDay: (dayLabel: string, time: string) => `Closed — opens ${dayLabel} at ${time}`,
+    // Used for closedOpensAtDay when the next opening is tomorrow rather
+    // than a specific weekday further out (reads more naturally than
+    // "opens Tuesday at..." the day right after today).
+    tomorrow: 'tomorrow',
     etaRange: '25-35 min',
     subtitle: 'Fresh dough, made to order, always hot. Pick a category or browse the full menu — delivery or pickup at checkout.',
   },
@@ -144,6 +157,13 @@ const en = {
     // Round-2 fixes brief, Part 3 — heading above the cross-category link
     // row on a /menu/[category] page (see MenuPageClient.tsx).
     relatedCategoriesHeading: 'You might also like',
+    // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 2 — menu
+    // search (see components/MenuSection.tsx).
+    searchPlaceholder: 'Search the menu…',
+    searchLabel: 'Search menu items',
+    clearSearch: 'Clear search',
+    noResultsHeading: 'No items found',
+    noResults: (query: string) => `No menu items match "${query}". Try a different search.`,
   },
 
   story: {
@@ -153,6 +173,14 @@ const en = {
     stat1Label: 'Made to order',
     stat2Label: 'Items on the menu',
     stat3Label: 'Days a week',
+    // Bundle 1 Task 5 — story banner slider (see components/Story.tsx).
+    // bannerAltFallback covers a photo the admin uploaded without typing
+    // a caption yet — still descriptive, never empty/generic like a bare
+    // "image" or "photo".
+    bannerAltFallback: (index: number) => `Photo from the ozy.fi kitchen (${index + 1})`,
+    bannerPrev: 'Previous photo',
+    bannerNext: 'Next photo',
+    bannerGoTo: (index: number) => `Go to photo ${index + 1}`,
   },
 
   visit: {
@@ -454,12 +482,21 @@ const en = {
     minutesLeft: (n: number) => `about ${n} min left`,
     cancelledNotice: 'This order was cancelled of that’s unexpected, please call us.'.replace('of that', 'If that'),
     stepReceived: 'Order received',
+    // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 3 —
+    // 'accepted' and 'ready' inserted into OrderStatus (worker/migrations/
+    // 019_order_status_accepted_ready.sql is documentation-only — no DB
+    // CHECK constraint exists to migrate). See components/TrackPageClient.tsx's
+    // OrderTimeline for how the pickup vs. delivery step lists differ.
+    stepAccepted: 'Accepted',
     stepPreparing: 'Preparing',
+    stepReady: 'Ready',
     stepOnTheWay: 'On the way',
     stepDelivered: 'Delivered',
     // Round-2 fixes brief, Part 5 — same two timeline steps, pickup-
     // appropriate wording (see components/TrackPageClient.tsx's
-    // OrderTimeline).
+    // OrderTimeline). stepReadyForPickup now labels the 'ready' step
+    // (moved from 'on_the_way', which pickup's timeline no longer shows
+    // as a separate visual step — see that component's comment).
     stepReadyForPickup: 'Ready for pickup',
     stepPickedUp: 'Picked up',
     deliveringTo: (addr: string, method: string) => `Delivering to ${addr} · ${method}`,
@@ -632,6 +669,35 @@ const en = {
       {
         q: 'Can I change or cancel my order after placing it?',
         a: 'Please call us as soon as possible — we can often make changes if your order hasn\'t started preparing yet, but we can\'t guarantee it once the kitchen has started.',
+      },
+      // Priority-fixes brief (roadmap gap analysis), Part 3 — five new
+      // entries covering gaps the FAQ didn't address before, even though
+      // the underlying features/data already exist elsewhere on the
+      // site. Halal availability (also flagged in the gap analysis) is
+      // deliberately NOT included here — this project has no confirmed,
+      // real answer to that question, and the standing rule across this
+      // whole brief is not to invent business facts; it's called out in
+      // this delivery's report as needing the business owner's input
+      // before an honest answer can be added.
+      {
+        q: 'What food do you serve?',
+        a: 'ozy.fi serves fresh, made-to-order pizza, kebab, and burgers, plus schnitzels, chicken, and salads — browse the full menu to see everything available today.',
+      },
+      {
+        q: 'Do you offer pickup, or only delivery?',
+        a: 'Both. Choose "Pickup" as your order type at checkout to skip the delivery fee — pickup orders are prepared as soon as we receive them (there\'s no scheduled pickup time yet, so it\'s first-come, first-served) and are ready to collect from us directly.',
+      },
+      {
+        q: 'What are your opening hours?',
+        a: 'Our current opening hours are shown at the top of the homepage, along with whether we\'re open right now — hours can vary by day, so that\'s always the most up-to-date place to check.',
+      },
+      {
+        q: 'Where are you located?',
+        a: 'Our address is shown in the "Find us" section on the homepage and on our Delivery page, alongside our delivery area and contact details.',
+      },
+      {
+        q: 'What sizes are available?',
+        a: 'Pizzas and other customizable items come in Medium and Large (Large for a small extra charge) — pick your size, base, sauce, cheese, and toppings when you customize the item. Items that aren\'t customizable (like most burgers) come in one size.',
       },
     ],
   },

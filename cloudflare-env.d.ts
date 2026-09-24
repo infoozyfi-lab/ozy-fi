@@ -39,6 +39,19 @@ interface CloudflareEnv extends Env {
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
 
+  // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 1 — email
+  // notifications (lib/email.ts). Same pattern as the Stripe secrets
+  // above: set via the Cloudflare dashboard's Worker → Settings →
+  // Variables and Secrets panel, read through `env.X` at request time.
+  // RESEND_API_KEY is a Secret (encrypted) from Resend's dashboard
+  // (resend.com/api-keys). EMAIL_FROM is optional plain text — a verified
+  // sender address/name for the Resend domain the business owner sets up
+  // (e.g. "ozy.fi <orders@ozy.fi>"); lib/email.ts falls back to a
+  // placeholder default if it's left unset, which will fail to actually
+  // send until a real verified domain is configured in Resend.
+  RESEND_API_KEY?: string;
+  EMAIL_FROM?: string;
+
   // NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is DELIBERATELY NOT declared here.
   // Despite living in "the same env vars area" conceptually, it does not
   // go through this CloudflareEnv/`env.X` runtime binding mechanism at

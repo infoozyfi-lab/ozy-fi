@@ -1,6 +1,8 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { json, phoneMatches } from '@/lib/api-helpers';
 import { getStripe } from '@/lib/stripe';
+import { sendEmailSafe, getAdminNotificationEmail } from '@/lib/email';
+import { cancellationAdminEmail } from '@/lib/email-templates';
 import type { OrderRow } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -31,7 +33,7 @@ export const dynamic = 'force-dynamic';
 // enough" guard the existing GET /api/orders/[orderNum] (order tracking)
 // route already uses — phone number match, same generic 404 either way.
 export async function POST(request: Request, { params }: { params: Promise<{ orderNum: string }> }) {
-  const { env } = await getCloudflareContext({ async: true });
+  const { env, ctx } = await getCloudflareContext({ async: true });
   const { orderNum } = await params;
 
   const body = (await request.json().catch(() => null)) as { phone?: string } | null;
@@ -78,6 +80,27 @@ export async function POST(request: Request, { params }: { params: Promise<{ ord
   }
 
   await env.DB.prepare(`UPDATE orders SET status = 'cancelled' WHERE id = ?`).bind(order.id).run();
+
+  // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 1 —
+  // "cancellation" admin email, same trigger this project's other
+  // cancellation path (the admin status-change PATCH,
+  // app/api/admin/orders/[id]/route.ts) already fires from. Admin-only,
+  // not customer-facing — see that route's comment for the reasoning.
+  ctx.waitUntil(
+    (async () => {
+      try {
+        const adminEmail = await getAdminNotificationEmail(env);
+        if (adminEmail) {
+          await sendEmailSafe(
+            env,
+            cancellationAdminEmail({ adminEmail, orderNum: order.order_num, customerName: order.customer_name })
+          );
+        }
+      } catch (err) {
+        console.error('[email] cancellation notification failed:', err);
+      }
+    })()
+  );
 
   return json({ ok: true });
 }

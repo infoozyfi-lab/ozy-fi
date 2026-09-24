@@ -13,9 +13,20 @@ interface KanbanColumn {
   nextLabel: string | null;
 }
 
+// Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 3 —
+// 'accepted' (between received/preparing) and 'ready' (between
+// preparing/on_the_way) are new columns. Additive to the existing 4-stage
+// board rather than a restructure — every order (delivery or pickup)
+// still moves through the same shared sequence, just with two more real
+// stages than before; see nextLabelFor below for how 'ready' reads
+// differently per order type (the brief's explicit ask), coordinated
+// with the round-2 pickup work's existing pattern of relabeling rather
+// than branching the pipeline itself.
 const COLUMNS: KanbanColumn[] = [
-  { status: 'received', title: 'New', next: 'preparing', nextLabel: 'Start preparing →' },
-  { status: 'preparing', title: 'Preparing', next: 'on_the_way', nextLabel: 'Send out →' },
+  { status: 'received', title: 'New', next: 'accepted', nextLabel: 'Accept order →' },
+  { status: 'accepted', title: 'Accepted', next: 'preparing', nextLabel: 'Start preparing →' },
+  { status: 'preparing', title: 'Preparing', next: 'ready', nextLabel: 'Mark ready →' },
+  { status: 'ready', title: 'Ready', next: 'on_the_way', nextLabel: 'Send out →' },
   { status: 'on_the_way', title: 'Out for delivery', next: 'delivered', nextLabel: 'Mark delivered →' },
   { status: 'delivered', title: 'Delivered', next: null, nextLabel: null },
 ];
@@ -31,10 +42,22 @@ const COLUMNS: KanbanColumn[] = [
 // preparing →") already reads fine for either type. Module-level (not a
 // component-local function) so both OrderDetailModal and the main
 // component's own compact-card grid can share it.
+//
+// Priority-fixes brief, Bundle 1 Task 3 — the two pickup-aware overrides
+// moved down one stage each (from preparing/on_the_way to preparing/ready)
+// now that 'ready' is a real status of its own: "ready for pickup" is
+// exactly what the new 'ready' stage means for a pickup order, so that's
+// where the override now lives; 'on_the_way' keeps its "Mark picked up"
+// wording for pickup, now describing the ready -> on_the_way move instead
+// of preparing -> on_the_way. The final on_the_way -> delivered step is
+// left as the shared "Mark delivered →" for both types, same as before
+// this task — a purely administrative close-out once a pickup customer
+// has already collected their order (see components/TrackPageClient.tsx's
+// OrderTimeline for how that reads on the customer-facing side).
 function nextLabelFor(order: { order_type?: OrderType }, col: KanbanColumn): string | null {
   if (order.order_type === 'pickup') {
     if (col.status === 'preparing') return 'Mark ready for pickup →';
-    if (col.status === 'on_the_way') return 'Mark picked up →';
+    if (col.status === 'ready') return 'Mark picked up →';
   }
   return col.nextLabel;
 }
@@ -336,7 +359,12 @@ function EtaPromptModal({
         onClick={(e: MouseEvent<HTMLDivElement>) => e.stopPropagation()}
         style={{ background: 'var(--bg-card)', border: '1px solid var(--line)', borderRadius: 14, padding: 22, width: '100%', maxWidth: 380, maxHeight: '85vh', overflowY: 'auto' }}
       >
-        <h3 style={{ margin: '0 0 4px' }}>Accept {order.order_num}</h3>
+        {/* Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 3 —
+            was "Accept {order.order_num}" before 'accepted' existed as its
+            own real, earlier stage (see the new received -> accepted
+            column above) — this modal now fires one stage later, when
+            staff actually start cooking. */}
+        <h3 style={{ margin: '0 0 4px' }}>Start preparing {order.order_num}</h3>
 
         <div style={{ margin: '12px 0 16px', padding: 12, background: 'var(--bg-alt)', borderRadius: 8 }}>
           {loadingItems ? (
@@ -709,23 +737,33 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
     return out.slice(0, 6);
   }, [orders]);
 
-  // "Start preparing" on a brand-new order means accepting it — ask for an
-  // ETA first instead of advancing immediately, so the customer can see it
-  // on /track. "Send out" (→ on_the_way) similarly asks who's delivering
-  // (Phase 7.1) — skippable, see DriverPromptModal. Any other column's
-  // "next" action advances right away.
+  // "Start preparing" (accepted -> preparing) is when staff commit to
+  // actually cooking the order — ask for an ETA first instead of advancing
+  // immediately, so the customer can see it on /track. "Send out"
+  // (ready -> on_the_way) similarly asks who's delivering (Phase 7.1) —
+  // skippable, see DriverPromptModal. Any other column's "next" action
+  // (including the new received -> accepted "Accept order" step) advances
+  // right away with no prompt.
+  //
+  // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 3 — both
+  // prompts moved one stage later than before this task (previously
+  // received -> preparing and preparing -> on_the_way) now that 'accepted'
+  // and 'ready' sit in between. The ETA prompt now fires specifically when
+  // cooking actually starts (a more accurate moment to estimate "how long
+  // will this take" than the old received -> preparing jump, which used to
+  // conflate "we've seen this order" with "we've started making it").
   const handleAdvanceClick = (order: OrderRow, nextStatus: OrderStatus) => {
-    if (order.status === 'received' && nextStatus === 'preparing') {
+    if (order.status === 'accepted' && nextStatus === 'preparing') {
       setEtaOrder(order);
-    } else if (order.status === 'preparing' && nextStatus === 'on_the_way' && order.order_type !== 'pickup') {
+    } else if (order.status === 'ready' && nextStatus === 'on_the_way' && order.order_type !== 'pickup') {
       // Round-2 fixes brief, Part 5 — "who's delivering this" makes no
       // sense for a pickup order (nobody is), so it skips straight to
       // `advance` below instead of opening DriverPromptModal. Deliberately
       // NOT restructuring the shared OrderStatus pipeline/COLUMNS array
       // itself for this — see this file's own delivery-report note — a
-      // pickup order still moves through the same received → preparing →
-      // on_the_way → delivered stages, just under pickup-aware button
-      // labels (nextLabelFor below) and without this one prompt.
+      // pickup order still moves through the same shared stages, just
+      // under pickup-aware button labels (nextLabelFor below) and without
+      // this one prompt.
       setDriverOrder(order);
     } else {
       advance(order, nextStatus);

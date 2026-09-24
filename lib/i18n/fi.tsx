@@ -89,6 +89,13 @@ const fi = {
     titleEm: 'tilauksesi',
     openNow: 'Avoinna nyt',
     closedNow: 'Suljettu nyt',
+    // Priority-fixes brief (roadmap gap analysis), Part 5 — same
+    // next-transition messaging as en.tsx's hero block; see that file's
+    // comment for when this is shown instead of the plain openNow/closedNow.
+    openClosesAt: (time: string) => `Avoinna — suljetaan klo ${time}`,
+    closedOpensAt: (time: string) => `Suljettu — avataan klo ${time}`,
+    closedOpensAtDay: (dayLabel: string, time: string) => `Suljettu — avataan ${dayLabel} klo ${time}`,
+    tomorrow: 'huomenna',
     etaRange: '25–35 min',
     subtitle: 'Tuoretta taikinaa, valmistettu tilauksesta, aina kuumana. Valitse kategoria tai selaa koko ruokalistaa — kotiinkuljetus tai nouto valitaan kassalla.',
   },
@@ -126,6 +133,13 @@ const fi = {
     loadError: 'Ruokalistaa ei voitu ladata. Yritä uudelleen.',
     note: 'Lisätäytteet 2,50 €: 120 g pihvi, pekoni, juusto, ananas, sinihomejuusto, sipuli, kananmuna · Kastikkeet: ketsuppi, jogurttikastike, suolakurkku, sitruunamehu, majoneesi, amerikanmajoneesi, persilja, minttu, chilihiutaleet.',
     relatedCategoriesHeading: 'Saatat pitää myös näistä',
+    // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 2 — menu
+    // search (see components/MenuSection.tsx).
+    searchPlaceholder: 'Hae ruokalistalta…',
+    searchLabel: 'Hae ruokalistan tuotteita',
+    clearSearch: 'Tyhjennä haku',
+    noResultsHeading: 'Tuloksia ei löytynyt',
+    noResults: (query: string) => `Yksikään tuote ei vastaa hakua "${query}". Kokeile toista hakusanaa.`,
   },
 
   story: {
@@ -135,6 +149,10 @@ const fi = {
     stat1Label: 'Valmistetaan tilauksesta',
     stat2Label: 'Tuotetta ruokalistalla',
     stat3Label: 'Päivää viikossa',
+    bannerAltFallback: (index: number) => `Kuva ozy.fi:n keittiöstä (${index + 1})`,
+    bannerPrev: 'Edellinen kuva',
+    bannerNext: 'Seuraava kuva',
+    bannerGoTo: (index: number) => `Siirry kuvaan ${index + 1}`,
   },
 
   visit: {
@@ -381,7 +399,9 @@ const fi = {
     minutesLeft: (n: number) => `noin ${n} min jäljellä`,
     cancelledNotice: 'Tämä tilaus on peruutettu. Jos tämä on odottamatonta, soita meille.',
     stepReceived: 'Tilaus vastaanotettu',
+    stepAccepted: 'Hyväksytty',
     stepPreparing: 'Valmistetaan',
+    stepReady: 'Valmis',
     stepOnTheWay: 'Matkalla',
     stepDelivered: 'Toimitettu',
     stepReadyForPickup: 'Valmis noudettavaksi',
@@ -537,6 +557,32 @@ const fi = {
       {
         q: 'Voinko muuttaa tai peruuttaa tilaukseni sen tekemisen jälkeen?',
         a: 'Soita meille mahdollisimman pian — voimme usein tehdä muutoksia, jos tilauksesi valmistus ei ole vielä alkanut, mutta emme voi taata sitä valmistuksen jo alettua.',
+      },
+      // Priority-fixes-korjaukset (roadmap gap analysis), osa 3 — viisi
+      // uutta kysymystä. Halal-saatavuutta ei lisätä tähän tarkoituksella:
+      // meillä ei ole vahvistettua vastausta siihen, eikä tämän koko
+      // toimeksiannon säännöissä keksitä liiketoimintatietoja — tämä on
+      // merkitty toimituksen raporttiin liikkeenomistajan vahvistusta
+      // odottavaksi.
+      {
+        q: 'Mitä ruokaa tarjoatte?',
+        a: 'ozy.fi tarjoaa tuoretta, tilauksesta valmistettua pizzaa, kebabia ja hampurilaisia sekä schnitzeleitä, kanaa ja salaatteja — selaa koko ruokalistaa nähdäksesi kaiken tänään saatavilla olevan.',
+      },
+      {
+        q: 'Onko teillä nouto vai vain kotiinkuljetus?',
+        a: 'Molemmat. Valitse kassalla tilaustyypiksi "Nouto" välttääksesi toimitusmaksun — noutotilaukset valmistetaan heti niiden saavuttua (erillistä noutoaikaa ei vielä voi varata, joten tilaukset valmistuvat saapumisjärjestyksessä) ja ne ovat noudettavissa suoraan meiltä.',
+      },
+      {
+        q: 'Mitkä ovat aukioloaikanne?',
+        a: 'Ajantasaiset aukioloaikamme näkyvät etusivun yläosassa, samoin kuin se, olemmeko juuri nyt avoinna — ajat voivat vaihdella päivittäin, joten sieltä näet aina uusimman tiedon.',
+      },
+      {
+        q: 'Missä sijaitsette?',
+        a: 'Osoitteemme näkyy etusivun "Löydä meidät" -osiossa sekä Toimitus-sivullamme, yhdessä toimitusalueemme ja yhteystietojemme kanssa.',
+      },
+      {
+        q: 'Mitä kokoja on saatavilla?',
+        a: 'Pizzat ja muut muokattavat tuotteet ovat saatavilla Medium- ja Large-koossa (Large pientä lisämaksua vastaan) — valitse koko, pohja, kastike, juusto ja täytteet muokatessasi tuotetta. Tuotteet, joita ei voi muokata (kuten useimmat hampurilaiset), ovat saatavilla yhdessä koossa.',
       },
     ],
   },

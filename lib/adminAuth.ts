@@ -66,7 +66,13 @@ function base64UrlToBytes(str: string): Uint8Array {
 // Roles
 // ---------------------------------------------------------------------
 
-export const ROLES: StaffRole[] = ['kitchen', 'manager', 'owner'];
+// Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 4 — 'staff'
+// added. This array is what getSession() below checks a decoded token's
+// role against (`if (!ROLES.includes(role...))`) — leaving 'staff' out
+// here would mean a staff member's otherwise-valid, correctly-signed
+// session token gets silently rejected as invalid on every request, not
+// just denied by a specific requireRole() call.
+export const ROLES: StaffRole[] = ['kitchen', 'staff', 'manager', 'owner'];
 
 // ---------------------------------------------------------------------
 // Password hashing (staff accounts) — PBKDF2 via Web Crypto, available
@@ -178,7 +184,7 @@ async function signPayload(env: any, payload: string): Promise<string> {
   return `${bytesToBase64Url(new TextEncoder().encode(payload))}.${bytesToBase64Url(new Uint8Array(signature))}`;
 }
 
-// staff: { id: number, role: 'kitchen'|'manager'|'owner', name: string }
+// staff: { id: number, role: 'kitchen'|'staff'|'manager'|'owner', name: string }
 export async function createStaffToken(env: any, staff: StaffTokenInput): Promise<string> {
   const timestamp = Math.floor(Date.now() / 1000);
   const nameB64 = bytesToBase64Url(new TextEncoder().encode(staff.name || ''));

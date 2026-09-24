@@ -56,9 +56,19 @@ export const STATUS: Record<'good' | 'warning' | 'serious' | 'critical' | 'neutr
   refund: '#3987e5',
 };
 
+// Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 3 — two new
+// mid-pipeline statuses need their own tones, distinct from every
+// existing STATUS.* value here. Rather than inventing unvalidated hexes,
+// these pull from CATEGORICAL above (same reasoning as STATUS.refund's
+// own comment) — violet for 'accepted' (acknowledged, not yet cooking)
+// and aqua for 'ready' (done cooking, waiting on the next step), both
+// visually distinct from neutral/serious/warning/good/critical already
+// in use by their neighbors in the pipeline.
 export const ORDER_STATUS_COLOR: Record<OrderStatus, string> = {
   received: STATUS.neutral,
+  accepted: CATEGORICAL[6], // violet
   preparing: STATUS.serious,
+  ready: CATEGORICAL[2], // aqua
   on_the_way: STATUS.warning,
   delivered: STATUS.good,
   cancelled: STATUS.critical,

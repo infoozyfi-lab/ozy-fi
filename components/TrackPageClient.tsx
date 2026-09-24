@@ -28,17 +28,42 @@ function stepIndex(status: OrderStatus, STEPS: Step[]) {
 // Round-2 fixes brief, Part 5 — "On the way"/"Delivered" are delivery-
 // specific language that's simply wrong for a pickup order (nobody is
 // "on the way" to a customer who's coming to collect it themselves).
-// Same OrderStatus values drive both (no new statuses were introduced —
-// see this feature's delivery report for that scope decision), just
-// different labels for the two steps where the wording actually differs.
+//
+// Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 3 — OrderStatus
+// gained 'accepted' (between received/preparing) and 'ready' (between
+// preparing/on_the_way). For a DELIVERY order this is a straightforward
+// extra two steps in the same timeline. For PICKUP there's no real
+// "on the way" phase at all — the round-2 pickup work already reused
+// on_the_way's slot to mean "ready and waiting for the customer" before
+// this task existed; now that 'ready' is a real status of its own, that
+// meaning moves to 'ready' ("Ready for pickup"), and the pickup timeline
+// simply doesn't show 'on_the_way' as its own visual step — an order
+// that has moved past 'ready' into 'on_the_way' (the admin's "Mark
+// picked up" action — see components/admin/OrderKanban.tsx) is shown as
+// already at the final "Picked up" milestone (active, not yet checked),
+// which is checked off once the admin's last, purely administrative
+// on_the_way -> delivered close-out happens. This is a genuine,
+// deliberate scope decision (not an oversight) — seemed the honest
+// customer-facing depiction of a flow pickup was never going to have an
+// "on the way" leg for regardless of how many backend statuses exist.
 function OrderTimeline({ status, orderType, t }: { status: OrderStatus; orderType?: OrderType; t: any }) {
   const isPickup = orderType === 'pickup';
-  const STEPS: Step[] = [
-    { key: 'received', label: t.track.stepReceived },
-    { key: 'preparing', label: t.track.stepPreparing },
-    { key: 'on_the_way', label: isPickup ? t.track.stepReadyForPickup : t.track.stepOnTheWay },
-    { key: 'delivered', label: isPickup ? t.track.stepPickedUp : t.track.stepDelivered },
-  ];
+  const STEPS: Step[] = isPickup
+    ? [
+        { key: 'received', label: t.track.stepReceived },
+        { key: 'accepted', label: t.track.stepAccepted },
+        { key: 'preparing', label: t.track.stepPreparing },
+        { key: 'ready', label: t.track.stepReadyForPickup },
+        { key: 'delivered', label: t.track.stepPickedUp },
+      ]
+    : [
+        { key: 'received', label: t.track.stepReceived },
+        { key: 'accepted', label: t.track.stepAccepted },
+        { key: 'preparing', label: t.track.stepPreparing },
+        { key: 'ready', label: t.track.stepReady },
+        { key: 'on_the_way', label: t.track.stepOnTheWay },
+        { key: 'delivered', label: t.track.stepDelivered },
+      ];
 
   if (status === 'cancelled') {
     return (
@@ -49,7 +74,12 @@ function OrderTimeline({ status, orderType, t }: { status: OrderStatus; orderTyp
     );
   }
 
-  const current = stepIndex(status, STEPS);
+  // See this function's own comment — a pickup order's real 'on_the_way'
+  // status has no visual step of its own; treat it the same as 'delivered'
+  // (active, not yet checked) for the purposes of computing which step is
+  // current.
+  const effectiveStatus = isPickup && status === 'on_the_way' ? 'delivered' : status;
+  const current = stepIndex(effectiveStatus, STEPS);
 
   return (
     <div className="checkout-steps" style={{ marginTop: 20 }}>
@@ -434,7 +464,12 @@ function TrackForm({ t, locale }: { t: any; locale: string }) {
             </div>
           </div>
 
-          {order.estimated_ready_at && ['preparing', 'on_the_way'].includes(order.status) && (
+          {/* Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 3 —
+              'ready' added to the same "still worth showing the ETA"
+              window this already covered ('preparing' through
+              'on_the_way'), so inserting it between them doesn't create a
+              one-stage gap where the countdown briefly disappears. */}
+          {order.estimated_ready_at && ['preparing', 'ready', 'on_the_way'].includes(order.status) && (
             <EtaCountdown etaIso={order.estimated_ready_at} t={t} locale={locale} />
           )}
 

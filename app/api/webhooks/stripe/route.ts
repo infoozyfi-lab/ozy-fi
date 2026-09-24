@@ -1,6 +1,9 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { json } from '@/lib/api-helpers';
 import { getStripe } from '@/lib/stripe';
+import { sendEmailSafe, getAdminNotificationEmail } from '@/lib/email';
+import { paymentSuccessfulCustomerEmail, failedPaymentAdminEmail, refundCustomerEmail, refundAdminEmail } from '@/lib/email-templates';
+import type { OrderRow } from '@/lib/types';
 import type Stripe from 'stripe';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +26,7 @@ export const dynamic = 'force-dynamic';
 // charge.refunded, then copy its "Signing secret" into the
 // STRIPE_WEBHOOK_SECRET Cloudflare secret (see cloudflare-env.d.ts).
 export async function POST(request: Request) {
-  const { env } = await getCloudflareContext({ async: true });
+  const { env, ctx } = await getCloudflareContext({ async: true });
 
   if (!env.STRIPE_WEBHOOK_SECRET) {
     // Fails loudly rather than silently trusting an unverified payload —
@@ -55,6 +58,54 @@ export async function POST(request: Request) {
     await env.DB.prepare(
       `UPDATE orders SET payment_status = ? WHERE stripe_payment_intent_id = ?`
     ).bind(status, paymentIntent.id).run();
+
+    // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 1 —
+    // "payment successful" (customer) and "failed payment" (admin), fired
+    // from this exact webhook handler per the brief's own instruction
+    // ("reuse that existing webhook handler... as the trigger point,
+    // don't create a second, parallel 'did payment succeed' check").
+    // Fetched AFTER the update above so `order` reflects the new
+    // payment_status (not strictly needed for the email content itself,
+    // but keeps this one query authoritative rather than trusting the
+    // pre-update row). Fire-and-forget — never lets a slow/failed email
+    // delay this webhook's response to Stripe (which retries on non-2xx).
+    ctx.waitUntil(
+      (async () => {
+        try {
+          const order = await env.DB.prepare('SELECT * FROM orders WHERE stripe_payment_intent_id = ?')
+            .bind(paymentIntent.id)
+            .first<OrderRow>();
+          if (!order) return;
+
+          if (status === 'paid') {
+            await sendEmailSafe(
+              env,
+              paymentSuccessfulCustomerEmail({
+                orderNum: order.order_num,
+                email: order.email,
+                total: Number(order.total),
+                locale: order.locale === 'fi' ? 'fi' : 'en',
+              })
+            );
+          } else {
+            const adminEmail = await getAdminNotificationEmail(env);
+            if (adminEmail) {
+              await sendEmailSafe(
+                env,
+                failedPaymentAdminEmail({
+                  adminEmail,
+                  orderNum: order.order_num,
+                  customerName: order.customer_name,
+                  total: Number(order.total),
+                })
+              );
+            }
+          }
+        } catch (err) {
+          console.error('[email] payment_intent webhook notification failed:', err);
+        }
+      })()
+    );
   }
 
   // Part C (admin-initiated refunds) — the admin refund route
@@ -83,6 +134,49 @@ export async function POST(request: Request) {
       await env.DB.prepare(
         `UPDATE orders SET payment_status = ?, refunded_amount = ?, refunded_at = ? WHERE stripe_payment_intent_id = ?`
       ).bind(status, refundedAmount, refundedAt, paymentIntentId).run();
+
+      // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 1 —
+      // "refund processed", customer + admin. Per this task's brief
+      // ("trigger from the existing refund webhook handling"), a CARD
+      // order's refund email fires HERE, once Stripe actually confirms
+      // it — not from app/api/admin/orders/[id]/refund/route.ts's own
+      // POST handler, which only ever asks Stripe to refund the charge
+      // and never itself knows whether that succeeded (see that route's
+      // own comment on why payment_status isn't set there). A COD
+      // order's refund has no Stripe charge and therefore never reaches
+      // this webhook at all — that email fires directly from the refund
+      // route instead (see that file).
+      ctx.waitUntil(
+        (async () => {
+          try {
+            const order = await env.DB.prepare('SELECT * FROM orders WHERE stripe_payment_intent_id = ?')
+              .bind(paymentIntentId)
+              .first<OrderRow>();
+            if (!order) return;
+
+            const isFull = status === 'refunded';
+            await sendEmailSafe(
+              env,
+              refundCustomerEmail({
+                orderNum: order.order_num,
+                email: order.email,
+                amount: refundedAmount,
+                isFull,
+                locale: order.locale === 'fi' ? 'fi' : 'en',
+              })
+            );
+            const adminEmail = await getAdminNotificationEmail(env);
+            if (adminEmail) {
+              await sendEmailSafe(
+                env,
+                refundAdminEmail({ adminEmail, orderNum: order.order_num, amount: refundedAmount, isFull })
+              );
+            }
+          } catch (err) {
+            console.error('[email] charge.refunded webhook notification failed:', err);
+          }
+        })()
+      );
     }
   }
 

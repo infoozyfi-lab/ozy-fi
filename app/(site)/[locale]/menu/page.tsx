@@ -23,6 +23,9 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       languages: hreflangAlternates('/menu'),
     },
     openGraph: { title, description, url: `https://ozy.fi/${locale}/menu`, locale: locale === 'fi' ? 'fi_FI' : 'en_US', type: 'website' },
+    // Priority-fixes brief, Part 6 — Twitter/X Card metadata, reusing
+    // the same title/description already computed above.
+    twitter: { card: 'summary', title, description },
   };
 }
 

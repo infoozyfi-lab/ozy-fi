@@ -7,19 +7,37 @@ import type { StaffRole } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-// Same access as app/api/admin/[table]/route.js — see its comment.
+// Same access as app/api/admin/[table]/route.js — see its comment. (Also
+// see PUT below for 'staff's narrow, allow-listed exception to this.)
 const TABLE_ROLES: StaffRole[] = ['manager', 'owner'];
 
 export async function PUT(request: Request, { params }: { params: Promise<{ table: string; id: string }> }) {
   const { env, ctx } = await getCloudflareContext({ async: true });
-  const denied = await requireRole(request, env, TABLE_ROLES);
-  if (denied) return denied;
-
   const { table: tableName, id } = await params;
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+
+  // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 4 — the
+  // one write a 'staff' session is allowed here: flipping a product's
+  // `active` flag (its GET counterpart above explains why read access to
+  // products/categories is separately allowed). This is an allow-list,
+  // not a bypass of requireRole below — anything that doesn't match
+  // (wrong table, or any body field besides `active`) falls through to
+  // the exact same 403 every other non-Manager/Owner role already gets.
+  const session = await getSession(request, env);
+  if (session?.role === 'staff') {
+    const bodyKeys = Object.keys(body).filter((k) => k !== 'id');
+    const isAvailabilityToggle = tableName === 'products' && bodyKeys.length > 0 && bodyKeys.every((k) => k === 'active');
+    if (!isAvailabilityToggle) {
+      return json({ error: 'Forbidden — your role does not have access to this.' }, 403);
+    }
+  } else {
+    const denied = await requireRole(request, env, TABLE_ROLES);
+    if (denied) return denied;
+  }
+
   const table = ADMIN_TABLES[tableName];
   if (!table) return json({ error: 'Unknown table' }, 404);
 
-  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const cols = table.cols.filter((c) => c in body && c !== 'id');
 
   if (!cols.length) {
@@ -62,7 +80,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ tabl
 
   await purgeMenuCache(request, ctx);
 
-  const session = await getSession(request, env);
+  // `session` was already fetched above (needed there to decide staff's
+  // narrower allow-list) — reused here rather than a second identical
+  // getSession() call.
   ctx.waitUntil(
     logActivity(env, session, `${tableName}.updated`, `Updated ${tableName} "${id}" (${cols.join(', ')})`)
   );

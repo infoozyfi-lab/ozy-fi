@@ -41,9 +41,16 @@ export default async function sitemap() {
   // Record<string, unknown> — an explicitly-narrower callback parameter
   // annotation isn't reliably enough on its own for .flatMap() under the
   // real @cloudflare/workers-types + strict mode.
+  // Priority-fixes brief (roadmap gap analysis), Part 2 — a category or
+  // product with the admin's new `noindex` toggle set (worker/migrations/
+  // 017_admin_seo_fields.sql) is excluded here, matching the `noindex`
+  // robots metadata generateMetadata emits for that same row in
+  // menu/[category]/page.tsx / product/[id]/page.tsx — the sitemap and
+  // the page's own robots tag can never disagree about whether a given
+  // row should be indexed.
   const [categories, products] = await Promise.all([
-    env.DB.prepare('SELECT id FROM categories').all<{ id: string }>(),
-    env.DB.prepare('SELECT id FROM products WHERE active = 1').all<{ id: string }>(),
+    env.DB.prepare('SELECT id FROM categories WHERE noindex = 0').all<{ id: string }>(),
+    env.DB.prepare('SELECT id FROM products WHERE active = 1 AND noindex = 0').all<{ id: string }>(),
   ]);
 
   const now = new Date();

@@ -245,13 +245,18 @@ export default function ResourceForm({
           }
           if (f.type === 'checkbox') {
             return (
-              <label key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 22 }}>
-                <input
-                  type="checkbox"
-                  checked={form[f.key]}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setField(f.key, e.target.checked)}
-                />
-                {f.label}
+              <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 22 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={form[f.key]}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setField(f.key, e.target.checked)}
+                  />
+                  {f.label}
+                </span>
+                {f.hint && (
+                  <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 400 }}>{f.hint}</span>
+                )}
               </label>
             );
           }
@@ -259,6 +264,11 @@ export default function ResourceForm({
             return (
               <label key={f.key} style={{ gridColumn: '1 / -1' }}>
                 {f.label}
+                {f.hint && (
+                  <span style={{ display: 'block', fontSize: 12, color: 'var(--muted)', fontWeight: 400, marginTop: 2 }}>
+                    {f.hint}
+                  </span>
+                )}
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
                   {form[f.key] ? (
                     <img
@@ -316,6 +326,11 @@ export default function ResourceForm({
           return (
             <label key={f.key}>
               {f.label}
+              {f.hint && (
+                <span style={{ display: 'block', fontSize: 12, color: 'var(--muted)', fontWeight: 400, marginTop: 2 }}>
+                  {f.hint}
+                </span>
+              )}
               <input
                 style={inputStyle}
                 type={f.type === 'number' ? 'number' : 'text'}

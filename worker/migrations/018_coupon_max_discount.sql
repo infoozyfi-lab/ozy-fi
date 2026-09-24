@@ -1,0 +1,18 @@
+-- Priority-fixes brief (roadmap gap analysis), Part 4 — 🟡 coupon
+-- maximum-discount cap.
+--
+-- Run against the LIVE database with:
+--   npx wrangler d1 execute ozyfi-db --remote --file=./worker/migrations/018_coupon_max_discount.sql
+--
+-- Before this migration, a percent-type coupon had no ceiling — a large
+-- order with a percent-off coupon had unbounded discount potential.
+-- Nullable, purely additive: every existing coupon keeps applying its
+-- discount exactly as it does today (uncapped) until an admin explicitly
+-- sets a cap on it. See lib/coupons.ts's validateCoupon for where this
+-- is actually enforced (clamping the computed discount amount, applied
+-- to both percent- and amount-type coupons — a capped amount-type
+-- coupon is a no-op today since discount_value alone already IS the
+-- amount, but this keeps the cap meaningful if this coupon is ever
+-- switched from percent to amount later without remembering to clear
+-- the cap).
+ALTER TABLE coupons ADD COLUMN max_discount_amount REAL;

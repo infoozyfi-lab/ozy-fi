@@ -63,6 +63,18 @@ export async function POST(request: Request) {
     }
   }
 
+  // Priority-fixes brief (roadmap gap analysis), Part 4 — optional euro
+  // ceiling on this coupon's discount (worker/migrations/
+  // 018_coupon_max_discount.sql). Same "blank means not set" pattern as
+  // min_order_amount/usage_limit above.
+  let maxDiscountAmount: number | null = null;
+  if (body.max_discount_amount !== undefined && body.max_discount_amount !== null && body.max_discount_amount !== '') {
+    maxDiscountAmount = Number(body.max_discount_amount);
+    if (!Number.isFinite(maxDiscountAmount) || maxDiscountAmount <= 0) {
+      return json({ error: 'max_discount_amount must be a positive number.' }, 400);
+    }
+  }
+
   // expires_at: stored as-is (an ISO date/datetime string from the admin
   // form's <input type="date">) — validated only for "is this a date at
   // all", the exact time-of-day granularity doesn't matter for a coupon
@@ -81,9 +93,9 @@ export async function POST(request: Request) {
   if (existing) return json({ error: `Coupon code "${code}" already exists.` }, 409);
 
   await env.DB.prepare(
-    `INSERT INTO coupons (code, discount_type, discount_value, active, expires_at, min_order_amount, usage_limit)
-     VALUES (?, ?, ?, 1, ?, ?, ?)`
-  ).bind(code, discountType, discountValue, expiresAt, minOrderAmount, usageLimit).run();
+    `INSERT INTO coupons (code, discount_type, discount_value, active, expires_at, min_order_amount, usage_limit, max_discount_amount)
+     VALUES (?, ?, ?, 1, ?, ?, ?, ?)`
+  ).bind(code, discountType, discountValue, expiresAt, minOrderAmount, usageLimit, maxDiscountAmount).run();
 
   const session = await getSession(request, env);
   const valueLabel = discountType === 'percent' ? `${discountValue}%` : `${discountValue}€`;

@@ -22,6 +22,10 @@ const HOMEPAGE_KEYS = new Set([
   'featured_banner_price',
   'featured_banner_image',
   'popular_product_ids',
+  // Bundle 1 Task 5 — story banner slider (components/Story.tsx). Same
+  // "homepage content" bucket as the featured-card/popular-products keys
+  // above, edited from the same Homepage Display tab.
+  'story_banner_images',
 ]);
 
 // Menu & Pricing's "Pricing rules" box — Manager already fully manages
@@ -142,6 +146,26 @@ export async function PUT(request: Request) {
 
   if (!keys.length) {
     return json({ ok: true }); // nothing left to write after stripping the auth keys above
+  }
+
+  // Bundle 1 Task 5 — the admin UI already caps this list at 10 images
+  // client-side (app/admin/dashboard/page.tsx's HomepageDisplaySettings);
+  // this is the server-side backstop so a hand-crafted request can't
+  // exceed it either, matching the brief's own "capped at a maximum of
+  // 10 images" requirement rather than trusting the client alone.
+  if ('story_banner_images' in body) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(String(body.story_banner_images ?? '[]'));
+    } catch {
+      return json({ error: 'Invalid story_banner_images value.' }, 400);
+    }
+    if (!Array.isArray(parsed)) {
+      return json({ error: 'story_banner_images must be a JSON array.' }, 400);
+    }
+    if (parsed.length > 10) {
+      return json({ error: 'Story banner is limited to 10 images — remove some before adding more.' }, 400);
+    }
   }
 
   const stmts = Object.entries(body).map(([key, value]) =>

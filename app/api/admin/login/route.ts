@@ -24,11 +24,19 @@ export async function POST(request: Request) {
   const ip = request.headers.get('cf-connecting-ip') || 'unknown';
 
   // Opportunistic cleanup — keeps the table small without a separate
-  // scheduled job. Cheap: one indexed delete per login attempt.
+  // scheduled job. Cheap: one indexed delete per login attempt. Not
+  // scoped by purpose — a stale row is stale regardless of which
+  // endpoint wrote it, so one shared cleanup for the whole table is
+  // correct and simplest.
   await env.DB.prepare("DELETE FROM login_attempts WHERE attempted_at < datetime('now', '-1 day')").run();
 
+  // purpose = 'login' (worker/migrations/016_referral_rate_limit.sql) —
+  // this table is now also written by app/api/referral/route.ts's own,
+  // separately-scoped rate limit; without this filter, a burst of public
+  // referral-endpoint traffic from one IP could count toward — and lock
+  // out — an admin login attempt from that same IP.
   const recentAttempts = await env.DB.prepare(
-    `SELECT COUNT(*) AS count FROM login_attempts WHERE ip = ? AND attempted_at >= datetime('now', ?)`
+    `SELECT COUNT(*) AS count FROM login_attempts WHERE ip = ? AND purpose = 'login' AND attempted_at >= datetime('now', ?)`
   ).bind(ip, `-${WINDOW_MINUTES} minutes`).first<{ count: number }>();
 
   if (recentAttempts && recentAttempts.count >= MAX_ATTEMPTS) {
@@ -47,7 +55,7 @@ export async function POST(request: Request) {
   }
 
   const fail = async () => {
-    await env.DB.prepare('INSERT INTO login_attempts (ip) VALUES (?)').bind(ip).run();
+    await env.DB.prepare("INSERT INTO login_attempts (ip, purpose) VALUES (?, 'login')").bind(ip).run();
     return json({ error: 'Invalid email or password' }, 401);
   };
 

@@ -20,6 +20,35 @@ export const dynamic = 'force-dynamic';
 // turn an unconfigured referral program off.
 const DEFAULT_REFERRAL_DISCOUNT_AMOUNT = 3;
 
+// Priority-fixes brief (roadmap gap analysis), Part 1 — 🔴 this route was
+// flagged (by its own prior header comment, now fixed below) as having
+// no rate limiting at all: nothing stopped a script from calling it
+// repeatedly with fake-but-valid-looking emails to mint many single-use
+// coupons, at no cost to whoever did it. Reuses the exact same IP+time-
+// window `login_attempts` mechanism the admin login/2FA routes already
+// use (per the brief's own instruction not to build a second mechanism),
+// scoped with `purpose = 'referral'` (worker/migrations/
+// 016_referral_rate_limit.sql) so this can never share a lockout budget
+// with real admin login attempts from the same IP.
+//
+// Unlike the login routes — which only record a FAILED attempt (a
+// correct password/code costs nothing) — every call here counts toward
+// the limit, success or failure alike. The abuse this guards against is
+// many SUCCESSFUL calls with different fake emails (each one mints a
+// real, valid coupon), not repeated guessing against one target, so
+// "was this request valid" isn't the thing being rate-limited.
+//
+// MAX_ATTEMPTS/WINDOW_MINUTES intentionally match the login routes'
+// existing numbers (5 per 15 minutes) for consistency rather than a
+// separately-tuned value — generous enough that a real household
+// referring a couple of friends back-to-back never hits it (this is a
+// single click per person, not a multi-step form), tight enough that a
+// script minting dozens of coupons per minute is stopped cold. Easy to
+// retune independently later since it's its own column value, not a
+// shared counter.
+const MAX_ATTEMPTS = 5;
+const WINDOW_MINUTES = 15;
+
 function normalizeEmail(raw: unknown): string {
   return String(raw || '').trim().toLowerCase();
 }
@@ -27,14 +56,7 @@ function normalizeEmail(raw: unknown): string {
 // Feature 4 — referral program, Phase 1 (on-screen code only, no email
 // sending — see this feature's brief). Public, unauthenticated by design
 // (same as the Footer form that calls it): a visitor doesn't need an
-// account to ask for a friend coupon. Flagged as a real gap in this
-// delivery's summary: with no auth and no rate-limiting, nothing stops a
-// script from calling this repeatedly with fake-but-valid-looking emails
-// to mint many single-use coupons — acceptable for this project's
-// current scale/threat model (same "acceptable at this business's
-// volume" tradeoff already made elsewhere, e.g. the coupon-usage race in
-// app/api/orders/route.ts), but worth revisiting before this gets
-// meaningfully more traffic.
+// account to ask for a friend coupon.
 //
 // Rewards dashboard consolidation — honest finding: this route only ever
 // mints ONE coupon, for the person who submits their email (the "friend"
@@ -47,6 +69,25 @@ function normalizeEmail(raw: unknown): string {
 // relocation — out of scope for this consolidation task.
 export async function POST(request: Request) {
   const { env } = await getCloudflareContext({ async: true });
+
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+
+  // Opportunistic cleanup, same as the login routes — not scoped by
+  // purpose, a stale row is stale regardless of which endpoint wrote it.
+  await env.DB.prepare("DELETE FROM login_attempts WHERE attempted_at < datetime('now', '-1 day')").run();
+
+  const recentAttempts = await env.DB.prepare(
+    `SELECT COUNT(*) AS count FROM login_attempts WHERE ip = ? AND purpose = 'referral' AND attempted_at >= datetime('now', ?)`
+  ).bind(ip, `-${WINDOW_MINUTES} minutes`).first<{ count: number }>();
+
+  if (recentAttempts && recentAttempts.count >= MAX_ATTEMPTS) {
+    return json({ error: `Too many requests. Please try again in ${WINDOW_MINUTES} minutes.` }, 429);
+  }
+
+  // Recorded for every request that makes it past the check above,
+  // success or failure alike (unlike the login routes' fail-only
+  // insert) — see the header comment on MAX_ATTEMPTS for why.
+  await env.DB.prepare("INSERT INTO login_attempts (ip, purpose) VALUES (?, 'referral')").bind(ip).run();
 
   const body = (await request.json().catch(() => ({}))) as { email?: string };
   const email = normalizeEmail(body.email);

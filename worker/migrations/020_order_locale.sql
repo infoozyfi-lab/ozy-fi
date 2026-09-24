@@ -1,0 +1,20 @@
+-- Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 1 — email
+-- notifications. A customer's transactional emails must be sent in
+-- whichever locale they were actually ordering in (see this project's
+-- existing bilingual-site convention), but nothing on the `orders` row
+-- previously recorded that — `locale` only ever lived in the URL/cookie
+-- on the customer's own browser (lib/i18n/locales.ts's LOCALE_COOKIE),
+-- never persisted server-side. Email-sending happens at several points
+-- AFTER the request that placed the order has finished (the Stripe
+-- webhook confirming payment, an admin moving the order through the
+-- Kanban board, a refund being processed) — those later trigger points
+-- have no browser session to read a cookie from, only this row, so the
+-- locale has to be captured once, at order-creation time, and stored
+-- here for every later email to read back.
+--
+-- Additive, nullable-with-default column — same pattern as every other
+-- migration in this project (order_type, discount_source, etc.):
+-- existing rows silently backfill to 'en' (a safe, harmless default for
+-- historical orders, none of which will ever trigger a NEW email anyway
+-- — this only affects orders placed after this migration runs).
+ALTER TABLE orders ADD COLUMN locale TEXT NOT NULL DEFAULT 'en';

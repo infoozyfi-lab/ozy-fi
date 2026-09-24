@@ -5,10 +5,13 @@ import { requireRole } from '@/lib/adminAuth';
 export const dynamic = 'force-dynamic';
 
 // Orders board — every role needs this (it's Kitchen's entire job, and
-// Manager/Owner both see it too).
+// Manager/Owner both see it too). Priority-fixes brief (roadmap gap
+// analysis), Bundle 1 Task 4 — 'staff' gets the same order access as
+// 'kitchen' (its chosen boundary is "kitchen-level order access, plus
+// menu availability").
 export async function GET(request: Request) {
   const { env } = await getCloudflareContext({ async: true });
-  const denied = await requireRole(request, env, ['kitchen', 'manager', 'owner']);
+  const denied = await requireRole(request, env, ['kitchen', 'staff', 'manager', 'owner']);
   if (denied) return denied;
 
   const url = new URL(request.url);

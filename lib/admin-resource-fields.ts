@@ -40,5 +40,30 @@ export function getProductFields(categories: RawCategory[]): ResourceField[] {
     { key: 'has_toppings', label: 'Customizable (pizza-style toppings)', type: 'checkbox' },
     { key: 'sort_order', label: 'Sort order', type: 'number', default: 0 },
     { key: 'active', label: 'Active (visible on site)', type: 'checkbox', default: true },
+    // Priority-fixes brief (roadmap gap analysis), Part 2 — admin SEO
+    // fields (worker/migrations/017_admin_seo_fields.sql). Every field
+    // below is optional and overrides an auto-derived default when set —
+    // see the fallback chain in generateMetadata,
+    // app/(site)/[locale]/product/[id]/page.tsx.
+    {
+      key: 'seo_title', label: 'SEO title (English, optional)', type: 'text',
+      hint: 'Overrides the page <title>. Leave blank to use the product name.',
+    },
+    {
+      key: 'seo_title_fi', label: 'SEO title (Finnish, optional)', type: 'text',
+      hint: 'Overrides the page <title>. Leave blank to use the product name.',
+    },
+    {
+      key: 'canonical_url', label: 'Canonical URL override (optional)', type: 'text',
+      hint: 'Rarely needed — leave blank unless you specifically need this page to point its canonical somewhere other than its own URL.',
+    },
+    {
+      key: 'noindex', label: "Hide from search engines (noindex)", type: 'checkbox',
+      hint: 'When checked, this page is excluded from the sitemap and told not to be indexed.',
+    },
+    {
+      key: 'og_image_url', label: 'Social share image override (optional)', type: 'image',
+      hint: 'Shown when this page is shared on social media. Leave blank to use the product image above.',
+    },
   ];
 }

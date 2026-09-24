@@ -68,6 +68,17 @@ export default function MenuSection({
   const [headerHeight, setHeaderHeight] = useState(65);
   const [scrollspyOffset, setScrollspyOffset] = useState(FALLBACK_SCROLLSPY_OFFSET);
 
+  // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 2 — menu
+  // search. Client-side only, against the already-loaded `items` — no new
+  // API endpoint, matches the brief. Matched against Product.searchText
+  // (lib/menu-i18n.ts's normalizeProducts), which carries both locales'
+  // name/description already lowercased, so a query typed in either
+  // language finds a match regardless of which locale is currently shown.
+  const [search, setSearch] = useState('');
+  const query = search.trim().toLowerCase();
+  const matchesSearch = (item: (typeof items)[number]) => !query || (item.searchText || '').includes(query);
+  const totalMatches = query ? items.filter(matchesSearch).length : items.length;
+
   useEffect(() => {
     const header = document.querySelector('header');
     const tabsBar = tabsBarRef.current;
@@ -244,6 +255,31 @@ export default function MenuSection({
           <p>
             {t.menuSection.description}
           </p>
+
+          {/* Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 2 —
+              menu search input. Placed in section-head (above the
+              sticky cat-tabs bar) so it's reachable at a glance and
+              stays out of the sticky-header height measurement above. */}
+          <div className="menu-search">
+            <input
+              type="search"
+              className="menu-search-input"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t.menuSection.searchPlaceholder}
+              aria-label={t.menuSection.searchLabel}
+            />
+            {search && (
+              <button
+                type="button"
+                className="menu-search-clear"
+                onClick={() => setSearch('')}
+                aria-label={t.menuSection.clearSearch}
+              >
+                ×
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Audit-fixes brief, Part 6.6 — `top` here overrides globals.css's
@@ -281,9 +317,23 @@ export default function MenuSection({
           ))}
         </div>
 
+        {/* Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 2 —
+            while a search is active, a category with zero matches is
+            skipped entirely (rather than rendered with an empty item
+            list) so the results read as "here's what matched", not a
+            page of empty category headers. */}
+        {query && totalMatches === 0 && (
+          <div className="menu-search-empty">
+            <p className="menu-search-empty-heading">{t.menuSection.noResultsHeading}</p>
+            <p>{t.menuSection.noResults(search.trim())}</p>
+          </div>
+        )}
+
         {categories
           .filter((cat) => !onlyCategory || cat.id === onlyCategory)
-          .map((cat) => (
+          .map((cat) => ({ cat, catItems: items.filter((item) => item.cat === cat.id && matchesSearch(item)) }))
+          .filter(({ catItems }) => !query || catItems.length > 0)
+          .map(({ cat, catItems }) => (
           <div
             key={cat.id}
             id={cat.id}
@@ -300,8 +350,7 @@ export default function MenuSection({
               {cat.sub}
             </p>
 
-            {items
-              .filter((item) => item.cat === cat.id)
+            {catItems
               .map((item) => (
                 <Link
                   key={item.id}

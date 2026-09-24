@@ -91,19 +91,45 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 
   const title = resolveText(category.title, category.title_fi, locale);
   const sub = resolveText(category.sub, category.sub_fi, locale);
-  const pageTitle = locale === 'fi' ? `${title} — Ruokalista | ozy.fi` : `${title} Menu — ozy.fi`;
-  const description = sub || (locale === 'fi'
+  // Priority-fixes brief (roadmap gap analysis), Part 2 — admin SEO
+  // fields (worker/migrations/017_admin_seo_fields.sql). Categories had
+  // NONE of this before (not even a meta description) — an unmodified
+  // category (every new field still NULL) renders exactly as it did
+  // before this migration.
+  const seoTitleOverride = resolveText(category.seo_title, category.seo_title_fi, locale);
+  const pageTitle = seoTitleOverride || (locale === 'fi' ? `${title} — Ruokalista | ozy.fi` : `${title} Menu — ozy.fi`);
+  const metaDescOverride = resolveText(category.meta_description, category.meta_description_fi, locale);
+  const description = metaDescOverride || sub || (locale === 'fi'
     ? `Selaa ${title}-valikoimaamme ja tilaa verkosta kotiinkuljetuksena tai noutona.`
     : `Browse our ${title} menu and order online for delivery or pickup.`);
+  const canonicalOverride = category.canonical_url || undefined;
+  const ogImage = category.og_image_url || category.image || undefined;
+  const isNoindex = Boolean(Number(category.noindex));
 
   return {
     title: pageTitle,
     description,
     alternates: {
-      canonical: `/${locale}/menu/${categorySlug}`,
+      canonical: canonicalOverride || `/${locale}/menu/${categorySlug}`,
       languages: hreflangAlternates(`/menu/${categorySlug}`),
     },
-    openGraph: { title: pageTitle, description, url: `https://ozy.fi/${locale}/menu/${categorySlug}`, locale: locale === 'fi' ? 'fi_FI' : 'en_US', type: 'website' },
+    ...(isNoindex ? { robots: { index: false, follow: false } } : {}),
+    openGraph: {
+      title: pageTitle,
+      description,
+      url: `https://ozy.fi/${locale}/menu/${categorySlug}`,
+      locale: locale === 'fi' ? 'fi_FI' : 'en_US',
+      type: 'website',
+      images: ogImage ? [{ url: ogImage }] : undefined,
+    },
+    // Priority-fixes brief, Part 6 — Twitter/X Card metadata, reusing
+    // the same values already computed above.
+    twitter: {
+      card: ogImage ? 'summary_large_image' : 'summary',
+      title: pageTitle,
+      description,
+      images: ogImage ? [ogImage] : undefined,
+    },
   };
 }
 

@@ -72,10 +72,28 @@ export async function validateCoupon(env: CloudflareEnv, rawCode: unknown, subto
   // coupon bigger than a small order), now shared with the other four
   // growth features via lib/pricing.ts's computeDiscountAmount rather
   // than duplicated here.
-  const discountAmount = computeDiscountAmount(
+  let discountAmount = computeDiscountAmount(
     { type: coupon.discount_type, value: coupon.discount_value },
     subtotal
   );
+
+  // Priority-fixes brief (roadmap gap analysis), Part 4 — an optional
+  // per-coupon ceiling (worker/migrations/018_coupon_max_discount.sql).
+  // Deliberately NOT folded into the shared computeDiscountAmount() in
+  // lib/pricing.ts — that function is reused by scheduled offers,
+  // referral, and the stamp card too, none of which have (or asked for)
+  // a cap concept, so the clamp is applied locally here, only for
+  // coupons. Clamping the already-computed amount (rather than passing
+  // the cap into computeDiscountAmount) keeps this a pure "never exceed
+  // X euros" ceiling regardless of whether the coupon is percent- or
+  // amount-type — for an amount-type coupon this is a no-op in practice
+  // (discount_value alone already IS the amount, and an admin would
+  // have no reason to set a cap below it), but it stays meaningful if a
+  // coupon is later switched from percent to amount without clearing
+  // the cap.
+  if (coupon.max_discount_amount != null && discountAmount > coupon.max_discount_amount) {
+    discountAmount = coupon.max_discount_amount;
+  }
 
   const finalTotal = Math.round((subtotal - discountAmount) * 100) / 100;
 

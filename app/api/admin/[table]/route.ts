@@ -14,10 +14,25 @@ const TABLE_ROLES: StaffRole[] = ['manager', 'owner'];
 
 export async function GET(request: Request, { params }: { params: Promise<{ table: string }> }) {
   const { env } = await getCloudflareContext({ async: true });
-  const denied = await requireRole(request, env, TABLE_ROLES);
-  if (denied) return denied;
-
   const { table: tableName } = await params;
+
+  // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 4 — Staff
+  // gets read-only access to exactly the two tables its "menu
+  // availability" admin tab needs: products (to toggle `active`) and
+  // categories (to group them by name instead of a raw id). Every other
+  // table here (option_groups/options/addons/bundles — all price-bearing
+  // — and scheduled_offers, which IS a discount) stays Manager/Owner-only,
+  // matching the chosen boundary ("...menu availability... but not
+  // pricing, discounts..."). Read access isn't itself the restricted
+  // thing — a staff member toggling a product off needs to see its name
+  // and price for context — only WRITE access is narrowed (see PUT below).
+  const session = await getSession(request, env);
+  const isStaffMenuRead = session?.role === 'staff' && (tableName === 'products' || tableName === 'categories');
+  if (!isStaffMenuRead) {
+    const denied = await requireRole(request, env, TABLE_ROLES);
+    if (denied) return denied;
+  }
+
   const table = ADMIN_TABLES[tableName];
   if (!table) return json({ error: 'Unknown table' }, 404);
 

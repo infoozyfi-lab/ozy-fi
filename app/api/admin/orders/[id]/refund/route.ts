@@ -4,6 +4,8 @@ import { requireRole, getSession } from '@/lib/adminAuth';
 import { logActivity } from '@/lib/auditLog';
 import { getStripe } from '@/lib/stripe';
 import { trackRefundServerSide } from '@/lib/server-tracking';
+import { sendEmailSafe, getAdminNotificationEmail } from '@/lib/email';
+import { refundCustomerEmail, refundAdminEmail } from '@/lib/email-templates';
 import type { StaffRole, OrderRow } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -90,6 +92,38 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         )
       );
     }
+
+    // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 1 —
+    // "refund processed", customer + admin. A COD refund has no Stripe
+    // charge and therefore no charge.refunded webhook to trigger from
+    // (see app/api/webhooks/stripe/route.ts's own comment on the split)
+    // — this manual marker IS the confirmation, so the email fires
+    // directly here, right after it's written.
+    ctx.waitUntil(
+      (async () => {
+        try {
+          await sendEmailSafe(
+            env,
+            refundCustomerEmail({
+              orderNum: order.order_num,
+              email: order.email,
+              amount: requestedAmount,
+              isFull: newStatus === 'refunded',
+              locale: order.locale === 'fi' ? 'fi' : 'en',
+            })
+          );
+          const adminEmail = await getAdminNotificationEmail(env);
+          if (adminEmail) {
+            await sendEmailSafe(
+              env,
+              refundAdminEmail({ adminEmail, orderNum: order.order_num, amount: requestedAmount, isFull: newStatus === 'refunded' })
+            );
+          }
+        } catch (err) {
+          console.error('[email] COD refund notification failed:', err);
+        }
+      })()
+    );
 
     return json({ ok: true, paymentStatus: newStatus });
   }

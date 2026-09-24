@@ -3,11 +3,16 @@ import { json } from '@/lib/api-helpers';
 import { requireRole, getSession } from '@/lib/adminAuth';
 import { logActivity } from '@/lib/auditLog';
 import { trackRefundServerSide } from '@/lib/server-tracking';
+import { sendEmailSafe, getAdminNotificationEmail } from '@/lib/email';
+import { orderStatusCustomerEmail, cancellationAdminEmail, type CustomerFacingStatus } from '@/lib/email-templates';
 import type { StaffRole, OrderStatus, OrderRow } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-const ORDER_ROLES: StaffRole[] = ['kitchen', 'manager', 'owner'];
+// Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 4 — 'staff'
+// gets the same order access as 'kitchen' here too (view + advance/cancel
+// status — no pricing/refund fields are touched by this route).
+const ORDER_ROLES: StaffRole[] = ['kitchen', 'staff', 'manager', 'owner'];
 
 interface PatchOrderBody {
   status?: unknown;
@@ -37,7 +42,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const { id } = await params;
 
   const body = (await request.json().catch(() => ({}))) as PatchOrderBody;
-  const allowed: OrderStatus[] = ['received', 'preparing', 'on_the_way', 'delivered', 'cancelled'];
+  // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 3 —
+  // 'accepted'/'ready' are now valid transitions too (see lib/types.ts's
+  // OrderStatus).
+  const allowed: OrderStatus[] = ['received', 'accepted', 'preparing', 'ready', 'on_the_way', 'delivered', 'cancelled'];
 
   if (!allowed.includes(body.status as OrderStatus)) {
     return json({ error: 'Invalid status' }, 400);
@@ -86,6 +94,58 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   ctx.waitUntil(
     logActivity(env, session, 'order.status_changed', `Order ${order?.order_num || id} → ${body.status}${etaNote}`)
   );
+
+  // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 1 — order-
+  // status-change emails. Customer-facing for the four statuses the
+  // brief names ("preparing, ready, dispatched/picked-up, completed" —
+  // i.e. CustomerFacingStatus below); 'received'/'accepted' have nothing
+  // new to tell the customer beyond the "order received" email already
+  // sent at creation, and 'cancelled' is deliberately admin-only (see
+  // cancellationAdminEmail below) rather than also emailing the customer
+  // — a scope decision, not an oversight; flagged in this task's delivery
+  // report. Fire-and-forget, same reasoning as every other email call
+  // site — never lets a slow/failed send delay this admin action.
+  const CUSTOMER_FACING_STATUSES: CustomerFacingStatus[] = ['preparing', 'ready', 'on_the_way', 'delivered'];
+  if (order) {
+    if (CUSTOMER_FACING_STATUSES.includes(body.status as CustomerFacingStatus)) {
+      ctx.waitUntil(
+        (async () => {
+          try {
+            await sendEmailSafe(
+              env,
+              orderStatusCustomerEmail({
+                orderNum: order.order_num,
+                email: order.email,
+                status: body.status as CustomerFacingStatus,
+                orderType: order.order_type || 'delivery',
+                locale: order.locale === 'fi' ? 'fi' : 'en',
+                estimatedReadyAt: order.estimated_ready_at,
+                driverName: order.driver_name,
+              })
+            );
+          } catch (err) {
+            console.error('[email] order-status notification failed:', err);
+          }
+        })()
+      );
+    } else if (body.status === 'cancelled') {
+      ctx.waitUntil(
+        (async () => {
+          try {
+            const adminEmail = await getAdminNotificationEmail(env);
+            if (adminEmail) {
+              await sendEmailSafe(
+                env,
+                cancellationAdminEmail({ adminEmail, orderNum: order.order_num, customerName: order.customer_name })
+              );
+            }
+          } catch (err) {
+            console.error('[email] cancellation notification failed:', err);
+          }
+        })()
+      );
+    }
+  }
 
   // Tell the ad platforms this order didn't actually happen, so revenue
   // reports and campaign optimization don't count it — see the "Refund

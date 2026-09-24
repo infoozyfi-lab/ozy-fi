@@ -24,14 +24,23 @@ DROP TABLE IF EXISTS coupons;
 -- the _fi one is empty (see lib/menu-i18n.js's resolveText()), so the
 -- bilingual site works correctly even for products nobody has
 -- translated yet.
+-- SEO fields (worker/migrations/017_admin_seo_fields.sql) — see that
+-- migration's header comment for the fallback chain each one feeds.
 CREATE TABLE categories (
-  id         TEXT PRIMARY KEY,
-  title      TEXT NOT NULL,
-  title_fi   TEXT,
-  sub        TEXT,
-  sub_fi     TEXT,
-  image      TEXT,
-  sort_order INTEGER NOT NULL DEFAULT 0
+  id                   TEXT PRIMARY KEY,
+  title                TEXT NOT NULL,
+  title_fi             TEXT,
+  sub                  TEXT,
+  sub_fi               TEXT,
+  image                TEXT,
+  sort_order           INTEGER NOT NULL DEFAULT 0,
+  meta_description     TEXT,
+  meta_description_fi  TEXT,
+  seo_title            TEXT,
+  seo_title_fi         TEXT,
+  canonical_url        TEXT,
+  noindex              INTEGER NOT NULL DEFAULT 0,
+  og_image_url         TEXT
 );
 
 CREATE TABLE products (
@@ -60,7 +69,14 @@ CREATE TABLE products (
   tag             TEXT,
   has_toppings    INTEGER NOT NULL DEFAULT 0,
   sort_order      INTEGER NOT NULL DEFAULT 0,
-  active          INTEGER NOT NULL DEFAULT 1
+  active          INTEGER NOT NULL DEFAULT 1,
+  -- Admin SEO fields (worker/migrations/017_admin_seo_fields.sql) — see
+  -- that migration's header comment for the fallback chain each feeds.
+  seo_title       TEXT,
+  seo_title_fi    TEXT,
+  canonical_url   TEXT,
+  noindex         INTEGER NOT NULL DEFAULT 0,
+  og_image_url    TEXT
 );
 
 -- kind: 'base' | 'sauce' | 'cheese' | 'sauce_stripe' | 'dip' | 'filling'
@@ -178,6 +194,13 @@ CREATE TABLE orders (
   -- Client-supplied and trusted as-is — informational/reporting only,
   -- never used in any price or discount calculation.
   is_reorder         INTEGER NOT NULL DEFAULT 0,
+  -- Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 1
+  -- (worker/migrations/020_order_locale.sql) — the locale the customer
+  -- was ordering in, captured once here so every later email-sending
+  -- trigger point (the Stripe webhook, an admin status change, a
+  -- refund) can send in the right language without needing a live
+  -- browser session/cookie to read it from. 'fi' | 'en'.
+  locale             TEXT NOT NULL DEFAULT 'en',
   created_at         TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -275,25 +298,35 @@ CREATE INDEX idx_orders_stripe_payment_intent_id ON orders (stripe_payment_inten
 -- Failed-login tracking for /api/admin/login rate-limiting. Rows older
 -- than a day are pruned opportunistically by the login route itself, so
 -- this table stays small — no scheduled cleanup job needed.
+-- purpose ('login' | 'referral', worker/migrations/016_referral_rate_
+-- limit.sql) keeps the admin-login rate limit and the public referral-
+-- endpoint rate limit as two independent counters sharing one table,
+-- rather than one shared counter that could let referral traffic lock
+-- an admin out of their own login (or vice versa) just for sharing an IP.
 CREATE TABLE login_attempts (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   ip           TEXT NOT NULL,
-  attempted_at TEXT NOT NULL DEFAULT (datetime('now'))
+  attempted_at TEXT NOT NULL DEFAULT (datetime('now')),
+  purpose      TEXT NOT NULL DEFAULT 'login'
 );
-CREATE INDEX idx_login_attempts_ip ON login_attempts(ip, attempted_at);
+CREATE INDEX idx_login_attempts_ip_purpose ON login_attempts(ip, purpose, attempted_at);
 
 -- Individual staff accounts, replacing the single shared ADMIN_EMAIL/
 -- ADMIN_PASSWORD login. password_hash is "<saltB64url>:<iterations>:
 -- <hashB64url>" — see lib/adminAuth.js's hashPassword/verifyPassword,
 -- never a plaintext password.
--- role: 'kitchen' | 'manager' | 'owner' — see lib/adminAuth.js's ROLES
--- and the per-route requireRole() calls for exactly what each can do.
+-- role: 'kitchen' | 'staff' | 'manager' | 'owner' — see lib/adminAuth.ts's
+-- ROLES and the per-route requireRole() calls for exactly what each can
+-- do. 'staff' (worker/migrations/019_staff_role.sql) sits between
+-- 'kitchen' and 'manager': same order/manage-orders access as kitchen,
+-- plus toggling a product's availability, but none of manager's
+-- pricing/discount/settings access.
 CREATE TABLE staff (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   name          TEXT NOT NULL,
   email         TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
-  role          TEXT NOT NULL CHECK (role IN ('kitchen', 'manager', 'owner')),
+  role          TEXT NOT NULL CHECK (role IN ('kitchen', 'staff', 'manager', 'owner')),
   active        INTEGER NOT NULL DEFAULT 1,
   -- Phase 7.9 — optional per-account TOTP 2FA (see lib/totp.js). NULL
   -- secret + 0 means "never set up"; a secret can also sit here with
@@ -344,6 +377,13 @@ CREATE TABLE coupons (
   usage_limit      INTEGER,
   times_used       INTEGER NOT NULL DEFAULT 0,
   created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+  -- Priority-fixes brief (roadmap gap analysis), Part 4 — nullable
+  -- ceiling on the euro amount a single coupon can ever discount off one
+  -- order, applied in lib/coupons.ts's validateCoupon (clamped after
+  -- computeDiscountAmount, before finalTotal). NULL (the default) means
+  -- uncapped — every coupon created before worker/migrations/
+  -- 018_coupon_max_discount.sql keeps behaving exactly as before.
+  max_discount_amount REAL,
   -- Growth features (Phase: referral program) — set only on a coupon
   -- auto-created by the Footer referral form (POST /api/referral),
   -- normalized (trimmed + lowercased) so a second submission from the

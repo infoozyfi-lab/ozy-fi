@@ -34,6 +34,16 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       locale: locale === 'fi' ? 'fi_FI' : 'en_US',
       type: 'website',
     },
+    // Priority-fixes brief, Part 6 — Twitter/X Card metadata, reusing
+    // the same title/description already computed above for Open Graph
+    // rather than duplicating them. No image: the homepage itself has
+    // none (see components/Hero.tsx — text-only hero, no OG image here
+    // either), so this correctly omits `images` rather than inventing one.
+    twitter: {
+      card: 'summary',
+      title,
+      description,
+    },
   };
 }
 

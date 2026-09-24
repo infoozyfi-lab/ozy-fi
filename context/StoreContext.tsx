@@ -34,6 +34,8 @@ import type {
   DiscountSource,
   DiscountValue,
   OrderType,
+  SpecialHoursEntry,
+  StoryBannerImage,
 } from '@/lib/types';
 
 interface StoreContextValue {
@@ -124,6 +126,18 @@ interface StoreContextValue {
   storeClosed: boolean;
   trackingConfig: TrackingConfig;
   openingHours: OpeningHours;
+  // Priority-fixes brief (roadmap gap analysis), Part 7 — special/
+  // holiday hours overriding openingHours for specific calendar dates.
+  // Same "real data, empty array until loaded" contract as openingHours.
+  specialHours: SpecialHoursEntry[];
+  // Bundle 1 Task 5 — admin-uploaded photos for the homepage story
+  // banner slider (components/Story.tsx), in slide order. Same "real
+  // data, empty array until loaded/configured" contract as
+  // specialHours/openingHours above — an empty array means either "still
+  // loading" or "the admin hasn't configured any yet", and Story.tsx
+  // treats both the same way (its own on-brand placeholder, never the
+  // old third-party random-image API).
+  storyBannerImages: StoryBannerImage[];
   // Audit-fixes brief, Part 6.4 — real admin_settings.email/phone/address
   // (the same three keys lib/site-settings.ts's getPublicSettings reads
   // for /contact, /about, /pickup), so components/Footer.tsx and
@@ -351,6 +365,12 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
   // free-text shape — components/Visit.js falls back to its own
   // placeholder rows in either case rather than rendering nothing.
   const [openingHours, setOpeningHours] = useState<OpeningHours>(null);
+  // Priority-fixes brief (roadmap gap analysis), Part 7 — see this
+  // field's own comment on StoreContextValue above.
+  const [specialHours, setSpecialHours] = useState<SpecialHoursEntry[]>([]);
+  // Bundle 1 Task 5 — see this field's own comment on StoreContextValue
+  // above.
+  const [storyBannerImages, setStoryBannerImages] = useState<StoryBannerImage[]>([]);
   // Audit-fixes brief, Part 6.4 — see this field's own comment on
   // StoreContextValue above. Empty strings (not null/undefined) so
   // Footer.tsx/Visit.tsx can treat "not loaded yet" and "not configured in
@@ -433,6 +453,8 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         setStoreClosed(blob.storeClosed);
         setTrackingConfig(blob.trackingConfig);
         setOpeningHours(blob.openingHours);
+        setSpecialHours(blob.specialHours);
+        setStoryBannerImages(blob.storyBannerImages);
         // Audit-fixes brief, Part 6.4 — read straight off `data.settings`
         // (the raw, pre-normalizeMenuBlob response) rather than `blob`:
         // normalizeMenuBlob's return shape never carried these three
@@ -867,6 +889,13 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       // reads, same "never trust the client" principle as every other
       // amount in this payload.
       orderType,
+      // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 1 —
+      // captured once here (from this component's own `locale`, already
+      // read above via useLocale()) so the server can persist it on the
+      // order row and send every later transactional email in the same
+      // language the customer was actually checking out in — see
+      // app/api/orders/route.ts's CreateOrderBody.locale.
+      locale,
       // Whether this customer consented to marketing/analytics cookies
       // (see components/CookieBanner.js) — read fresh at order time
       // rather than trusted from anywhere else, so the server knows
@@ -1141,6 +1170,8 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     storeClosed,
     trackingConfig,
     openingHours,
+    specialHours,
+    storyBannerImages,
     contactInfo,
     deliverySettings,
     drinks,

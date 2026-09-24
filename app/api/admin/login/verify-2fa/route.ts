@@ -33,8 +33,13 @@ export async function POST(request: Request) {
 
   await env.DB.prepare("DELETE FROM login_attempts WHERE attempted_at < datetime('now', '-1 day')").run();
 
+  // purpose = 'login' — see the identical note in ../route.ts. A 2FA
+  // code guess and a plain password guess share the same lockout budget
+  // by design (both are "someone trying to get into this admin account"),
+  // but neither should share a budget with the unrelated public referral
+  // endpoint.
   const recentAttempts = await env.DB.prepare(
-    `SELECT COUNT(*) AS count FROM login_attempts WHERE ip = ? AND attempted_at >= datetime('now', ?)`
+    `SELECT COUNT(*) AS count FROM login_attempts WHERE ip = ? AND purpose = 'login' AND attempted_at >= datetime('now', ?)`
   ).bind(ip, `-${WINDOW_MINUTES} minutes`).first<{ count: number }>();
 
   if (recentAttempts && recentAttempts.count >= MAX_ATTEMPTS) {
@@ -46,7 +51,7 @@ export async function POST(request: Request) {
   const code = String(body.code || '');
 
   const fail = async (message?: string) => {
-    await env.DB.prepare('INSERT INTO login_attempts (ip) VALUES (?)').bind(ip).run();
+    await env.DB.prepare("INSERT INTO login_attempts (ip, purpose) VALUES (?, 'login')").bind(ip).run();
     return json({ error: message || 'Invalid or expired code.' }, 401);
   };
 

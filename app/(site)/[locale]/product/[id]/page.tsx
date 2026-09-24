@@ -52,7 +52,13 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   }
 
   const name = resolveText(product.name, product.name_fi, locale);
-  const title = `${name} — ozy.fi`;
+  // Priority-fixes brief (roadmap gap analysis), Part 2 — an admin-set
+  // seo_title/seo_title_fi (worker/migrations/017_admin_seo_fields.sql)
+  // now overrides the auto-derived "<name> — ozy.fi" title when present;
+  // an unmodified product (both fields still NULL) renders the exact
+  // same title as before this field existed.
+  const seoTitleOverride = resolveText(product.seo_title, product.seo_title_fi, locale);
+  const title = seoTitleOverride || `${name} — ozy.fi`;
   // SEO meta description fallback chain (worker/migrations/
   // 014_product_meta_description.sql): a purpose-written meta_description
   // first, since a good search-result snippet reads differently from an
@@ -66,20 +72,41 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     ? `Tilaa ${name} verkosta kotiinkuljetuksena tai noutona ozy.fi:stä.`
     : `Order ${name} online for delivery or pickup from ozy.fi.`);
 
+  // Part 2 continued — canonical_url override (rare; admin's own
+  // responsibility if used) and og_image_url override (falls back to the
+  // product's own image exactly as before this field existed).
+  const canonicalOverride = product.canonical_url || undefined;
+  const ogImage = product.og_image_url || product.image || undefined;
+  const isNoindex = Boolean(Number(product.noindex));
+
   return {
     title,
     description,
     alternates: {
-      canonical: `/${locale}/product/${id}`,
+      canonical: canonicalOverride || `/${locale}/product/${id}`,
       languages: hreflangAlternates(`/product/${id}`),
     },
+    // Part 2 — noindex toggle. Only ever sets `index: false`; never
+    // forces `index: true`, so this can't accidentally override some
+    // other, more specific reason a page shouldn't be indexed in the
+    // future.
+    ...(isNoindex ? { robots: { index: false, follow: false } } : {}),
     openGraph: {
       title,
       description,
       url: `https://ozy.fi/${locale}/product/${id}`,
       locale: locale === 'fi' ? 'fi_FI' : 'en_US',
       type: 'website',
-      images: product.image ? [{ url: product.image }] : undefined,
+      images: ogImage ? [{ url: ogImage }] : undefined,
+    },
+    // Priority-fixes brief, Part 6 — Twitter/X Card metadata, reusing
+    // the exact same title/description/image already computed above
+    // rather than duplicating the fallback logic a second time.
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: ogImage ? [ogImage] : undefined,
     },
   };
 }

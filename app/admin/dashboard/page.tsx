@@ -28,16 +28,23 @@ import type {
   RawSettings,
   ResourceField,
   OpeningHoursDay,
+  SpecialHoursEntry,
+  StoryBannerImage,
   AuditLogRow,
   CouponRow as CouponRowType,
   StaffRow as StaffRowType,
 } from '@/lib/types';
 import { getProductFields } from '@/lib/admin-resource-fields';
 
-const ORDER_STATUSES: OrderStatus[] = ['received', 'preparing', 'on_the_way', 'delivered', 'cancelled'];
+// Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 3 —
+// 'accepted'/'ready' inserted between the existing stages (see
+// lib/types.ts's OrderStatus for why no migration was needed).
+const ORDER_STATUSES: OrderStatus[] = ['received', 'accepted', 'preparing', 'ready', 'on_the_way', 'delivered', 'cancelled'];
 const STATUS_LABELS: Record<OrderStatus, string> = {
   received: 'Received',
+  accepted: 'Accepted',
   preparing: 'Preparing',
+  ready: 'Ready',
   on_the_way: 'Out for delivery',
   delivered: 'Delivered',
   cancelled: 'Cancelled',
@@ -877,8 +884,12 @@ function ReportsTab({ analytics, loading }: { analytics: AnalyticsData | null; l
 
   const todayDelivered = todayStatusBreakdown.find((s) => s.status === 'delivered')?.count || 0;
   const todayCancelled = todayStatusBreakdown.find((s) => s.status === 'cancelled')?.count || 0;
+  // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 3 —
+  // 'accepted'/'ready' are new in-progress statuses too (see
+  // lib/types.ts's OrderStatus) — included so an order sitting in either
+  // one isn't dropped from today's "in progress" count.
   const todayInProgress = todayStatusBreakdown
-    .filter((s) => ['received', 'preparing', 'on_the_way'].includes(s.status))
+    .filter((s) => ['received', 'accepted', 'preparing', 'ready', 'on_the_way'].includes(s.status))
     .reduce((sum, s) => sum + s.count, 0);
 
   return (
@@ -1078,6 +1089,47 @@ function parseOpeningHours(raw: string | undefined | null): OpeningHoursDay[] | 
   return null;
 }
 
+// Priority-fixes brief (roadmap gap analysis), Part 7 — special/holiday
+// hours editor (admin_settings.special_hours). Mirrors parseOpeningHours'
+// own "corrupt/unset -> empty" fallback — see lib/openingHours.ts's
+// parseSpecialHours for the read-side counterpart the storefront
+// actually uses (this admin-side copy exists only so a malformed stored
+// value renders an empty editable list instead of crashing the settings
+// page; kept deliberately simple/local rather than importing the
+// storefront's own parser, since this one doesn't need its stricter
+// silent-drop-per-entry behavior — any admin-authored entry here is
+// about to be edited and re-saved anyway).
+function parseSpecialHoursAdmin(raw: string | undefined | null): SpecialHoursEntry[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+// Bundle 1 Task 5 — story banner slider editor
+// (admin_settings.story_banner_images). Same "corrupt/unset -> empty
+// list, never crash" fallback as parseSpecialHoursAdmin above — see
+// lib/menu-i18n.ts's parseStoryBannerImages for the read-side counterpart
+// the storefront actually renders from (kept as its own simple local
+// copy here for the same reason parseSpecialHoursAdmin is: this one is
+// about to be edited and re-saved, not rendered as-is).
+function parseStoryBannerImagesAdmin(raw: string | undefined | null): StoryBannerImage[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((item) => ({
+      url: typeof item?.url === 'string' ? item.url : '',
+      alt: typeof item?.alt === 'string' ? item.alt : '',
+    }));
+  } catch {
+    return [];
+  }
+}
+
 // Shared by all three settings sections below — each one loads the full
 // settings object (cheap: it's one small key/value table) but only ever
 // PUTs back the handful of keys it actually owns, so the three sections
@@ -1131,6 +1183,11 @@ function RestaurantInfoSettings({ token }: { token: string }) {
   const [hours, setHours] = useState<OpeningHoursDay[]>(defaultOpeningHours());
   const [hoursWasFreeText, setHoursWasFreeText] = useState(false);
   const hoursInitialized = useRef(false);
+  // Priority-fixes brief (roadmap gap analysis), Part 7 — special/
+  // holiday hours, initialized the same once-on-load way as `hours`
+  // above (see the effect below).
+  const [specialHours, setSpecialHours] = useState<SpecialHoursEntry[]>([]);
+  const specialHoursInitialized = useRef(false);
 
   // Initialize the structured-hours editor once, the first time settings
   // finish loading — not on every `values` change, or typing in any other
@@ -1152,6 +1209,12 @@ function RestaurantInfoSettings({ token }: { token: string }) {
     }
   }, [loading, values.opening_hours]);
 
+  useEffect(() => {
+    if (loading || specialHoursInitialized.current) return;
+    specialHoursInitialized.current = true;
+    setSpecialHours(parseSpecialHoursAdmin(values.special_hours));
+  }, [loading, values.special_hours]);
+
   const setField = (key: string, val: string) => {
     setValues((v) => ({ ...v, [key]: val }));
     setSaved(false);
@@ -1159,6 +1222,20 @@ function RestaurantInfoSettings({ token }: { token: string }) {
 
   const setDay = (dayKey: string, patch: Partial<OpeningHoursDay>) => {
     setHours((h) => h.map((d) => (d.day === dayKey ? { ...d, ...patch } : d)));
+    setSaved(false);
+  };
+
+  // Priority-fixes brief (roadmap gap analysis), Part 7.
+  const addSpecialHoursRow = () => {
+    setSpecialHours((rows) => [...rows, { date: '', closed: true, open: '11:00', close: '22:00' }]);
+    setSaved(false);
+  };
+  const updateSpecialHoursRow = (index: number, patch: Partial<SpecialHoursEntry>) => {
+    setSpecialHours((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+    setSaved(false);
+  };
+  const removeSpecialHoursRow = (index: number) => {
+    setSpecialHours((rows) => rows.filter((_, i) => i !== index));
     setSaved(false);
   };
 
@@ -1181,6 +1258,11 @@ function RestaurantInfoSettings({ token }: { token: string }) {
       const body: Record<string, string> = {};
       SETTINGS_FIELDS.forEach((f) => { body[f.key] = values[f.key] || ''; });
       body.opening_hours = JSON.stringify(hours);
+      // Priority-fixes brief (roadmap gap analysis), Part 7 — drop any
+      // row the admin left with a blank date (e.g. clicked "+ Add" and
+      // then changed their mind) rather than saving an unusable entry
+      // that could never match a real calendar date.
+      body.special_hours = JSON.stringify(specialHours.filter((r) => r.date));
       await fetch('/api/admin/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -1290,6 +1372,55 @@ function RestaurantInfoSettings({ token }: { token: string }) {
           })}
         </div>
 
+        <h3 style={{ margin: '24px 0 4px', fontSize: 15 }}>Special / holiday hours</h3>
+        <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--muted)' }}>
+          Overrides the regular weekly hours above for one specific date — a public holiday, a one-off early
+          closing, etc. Checked before the weekly schedule wherever the site shows the live open/closed badge and
+          next opening/closing time (the homepage). Leave a date&apos;s row out entirely on a normal week.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {specialHours.map((row, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <input
+                type="date"
+                value={row.date}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => updateSpecialHoursRow(i, { date: e.target.value })}
+                style={{ ...inputStyle, width: 'auto', marginTop: 0 }}
+              />
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--muted)' }}>
+                <input
+                  type="checkbox"
+                  checked={row.closed}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => updateSpecialHoursRow(i, { closed: e.target.checked })}
+                />
+                Closed all day
+              </label>
+              {!row.closed && (
+                <>
+                  <input
+                    type="time"
+                    value={row.open || ''}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => updateSpecialHoursRow(i, { open: e.target.value })}
+                    style={{ ...inputStyle, width: 'auto', marginTop: 0 }}
+                  />
+                  <span style={{ color: 'var(--muted)' }}>–</span>
+                  <input
+                    type="time"
+                    value={row.close || ''}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => updateSpecialHoursRow(i, { close: e.target.value })}
+                    style={{ ...inputStyle, width: 'auto', marginTop: 0 }}
+                  />
+                </>
+              )}
+              <button type="button" style={btnDanger} onClick={() => removeSpecialHoursRow(i)}>Remove</button>
+            </div>
+          ))}
+          {!specialHours.length && <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)' }}>No special dates configured.</p>}
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <button type="button" style={btn} onClick={addSpecialHoursRow}>+ Add a date</button>
+        </div>
+
         <div style={{ marginTop: 16 }}>
           <button type="submit" style={btnPrimary} disabled={saving}>{saving ? 'Saving…' : 'Save settings'}</button>
           {saved && <span style={{ marginLeft: 12, color: 'var(--gold)' }}>Saved ✓</span>}
@@ -1312,6 +1443,17 @@ function HomepageDisplaySettings({ token }: { token: string }) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
 
+  // Bundle 1 Task 5 — story banner slider. Initialized once (same
+  // once-on-load pattern as RestaurantInfoSettings' `hours`/
+  // `specialHours` above) so typing elsewhere in this form doesn't keep
+  // resetting whatever the admin is mid-edit on here.
+  const [storyImages, setStoryImages] = useState<StoryBannerImage[]>([]);
+  const storyImagesInitialized = useRef(false);
+  const [storyUploading, setStoryUploading] = useState(false);
+  const [storyUploadError, setStoryUploadError] = useState('');
+
+  const MAX_STORY_IMAGES = 10;
+
   useEffect(() => {
     fetch('/api/admin/products')
       .then((r) => r.json())
@@ -1319,8 +1461,65 @@ function HomepageDisplaySettings({ token }: { token: string }) {
       .catch(() => {});
   }, [token]);
 
+  useEffect(() => {
+    if (loading || storyImagesInitialized.current) return;
+    storyImagesInitialized.current = true;
+    setStoryImages(parseStoryBannerImagesAdmin(values.story_banner_images));
+  }, [loading, values.story_banner_images]);
+
   const setField = (key: string, val: string) => {
     setValues((v) => ({ ...v, [key]: val }));
+    setSaved(false);
+  };
+
+  // Bundle 1 Task 5 — same nameHint pattern as uploadBannerImage below
+  // (and ResourceManager.tsx/BundleManager.tsx before it), so these
+  // photos get a real, SEO-meaningful storage key/URL instead of a
+  // camera-roll filename.
+  const uploadStoryImage = async (file: File) => {
+    if (storyImages.length >= MAX_STORY_IMAGES) return;
+    setStoryUploading(true);
+    setStoryUploadError('');
+    try {
+      const body = new FormData();
+      body.append('file', file, file.name || 'upload.jpg');
+      body.append('nameHint', 'ozy-fi-story-banner');
+      const res = await fetch('/api/admin/upload', { method: 'POST', body });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; url?: string };
+      if (!res.ok) throw new Error(data.error || 'Upload failed.');
+      setStoryImages((imgs) => [...imgs, { url: data.url || '', alt: '' }]);
+      setSaved(false);
+    } catch (err: any) {
+      setStoryUploadError(err.message || 'Upload failed.');
+    } finally {
+      setStoryUploading(false);
+    }
+  };
+
+  const removeStoryImage = (index: number) => {
+    setStoryImages((imgs) => imgs.filter((_, i) => i !== index));
+    setSaved(false);
+  };
+
+  const setStoryImageAlt = (index: number, alt: string) => {
+    setStoryImages((imgs) => imgs.map((img, i) => (i === index ? { ...img, alt } : img)));
+    setSaved(false);
+  };
+
+  // Up/down move, not drag-and-drop — this admin panel has no existing
+  // drag-reorder pattern anywhere (categories/products/bundles reorder
+  // via a plain numeric "Sort order" field on each independent DB row,
+  // which doesn't map onto a single flat JSON-array setting like this
+  // one), and the brief explicitly allows "even a simple up/down or drag
+  // pattern" as the fallback when no pattern already exists to match.
+  const moveStoryImage = (index: number, direction: -1 | 1) => {
+    setStoryImages((imgs) => {
+      const target = index + direction;
+      if (target < 0 || target >= imgs.length) return imgs;
+      const next = imgs.slice();
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
     setSaved(false);
   };
 
@@ -1375,6 +1574,11 @@ function HomepageDisplaySettings({ token }: { token: string }) {
         featured_banner_price: values.featured_banner_price || '',
         featured_banner_image: values.featured_banner_image || '',
         popular_product_ids: values.popular_product_ids || '[]',
+        // Bundle 1 Task 5 — drop any image an admin removed mid-edit
+        // (removeStoryImage already keeps this in sync) and any leftover
+        // blank alt text stays as an empty string (Story.tsx supplies its
+        // own fallback alt when one is blank — see that component).
+        story_banner_images: JSON.stringify(storyImages.filter((img) => img.url).slice(0, MAX_STORY_IMAGES)),
       };
       await fetch('/api/admin/settings', {
         method: 'PUT',
@@ -1478,6 +1682,63 @@ function HomepageDisplaySettings({ token }: { token: string }) {
             );
           })}
         </div>
+
+        <h3 style={{ marginBottom: 4 }}>Story banner</h3>
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: -2, marginBottom: 14 }}>
+          Real photos for the homepage &quot;Our Story&quot; section, shown as an
+          auto-advancing slider. Wide (16:9) photos work best — around
+          3840×2160 is ideal, but anything close to that ratio will fill the
+          banner cleanly. Up to {MAX_STORY_IMAGES} images; add a short,
+          descriptive caption for each (used as its alt text). With none
+          configured, the section shows a plain on-brand placeholder instead
+          — never a stock/random photo.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+          {storyImages.map((img, i) => (
+            <div
+              key={img.url + i}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12, padding: 10,
+                border: '1px solid var(--line)', borderRadius: 8, background: 'var(--bg-alt)',
+              }}
+            >
+              <img src={img.url} alt="" style={{ width: 96, height: 54, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />
+              <input
+                style={{ ...inputStyle, flex: 1 }}
+                value={img.alt}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setStoryImageAlt(i, e.target.value)}
+                placeholder="Caption / alt text (e.g. 'Fresh dough being hand-stretched')"
+              />
+              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                <button type="button" style={{ ...btn, padding: '6px 10px', opacity: i === 0 ? 0.4 : 1 }} disabled={i === 0} onClick={() => moveStoryImage(i, -1)} aria-label="Move up">↑</button>
+                <button type="button" style={{ ...btn, padding: '6px 10px', opacity: i === storyImages.length - 1 ? 0.4 : 1 }} disabled={i === storyImages.length - 1} onClick={() => moveStoryImage(i, 1)} aria-label="Move down">↓</button>
+                <button type="button" style={{ ...btnDanger, padding: '6px 10px' }} onClick={() => removeStoryImage(i)}>Remove</button>
+              </div>
+            </div>
+          ))}
+          {!storyImages.length && (
+            <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0 }}>No images yet — add up to {MAX_STORY_IMAGES} below.</p>
+          )}
+        </div>
+        <label style={{ display: 'block', marginBottom: 24 }}>
+          {storyImages.length < MAX_STORY_IMAGES ? (
+            <input
+              type="file"
+              accept="image/*"
+              disabled={storyUploading}
+              style={{ color: 'var(--cream)' }}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                const f = e.target.files && e.target.files[0];
+                if (f) uploadStoryImage(f);
+                e.target.value = '';
+              }}
+            />
+          ) : (
+            <span style={{ fontSize: 13, color: 'var(--muted)' }}>Maximum of {MAX_STORY_IMAGES} images reached — remove one to add another.</span>
+          )}
+          {storyUploading && <p style={{ fontSize: 12, color: 'var(--muted)', margin: '4px 0 0' }}>Uploading…</p>}
+          {storyUploadError && <p style={{ fontSize: 12, color: 'var(--danger)', margin: '4px 0 0' }}>{storyUploadError}</p>}
+        </label>
 
         <div style={{ marginTop: 16 }}>
           <button type="submit" style={btnPrimary} disabled={saving}>{saving ? 'Saving…' : 'Save settings'}</button>
@@ -2526,6 +2787,127 @@ function OptionsManager({
 }
 
 
+/* ---------------- Menu Availability (Staff role) ---------------- */
+
+// Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 4 — the
+// entire admin surface a 'staff' account gets for "menu availability":
+// a flat list of products (grouped by category name, for orientation
+// only — nothing here is clickable/editable) with a single on/off toggle
+// per row, writing only `active` via PUT /api/admin/products/:id. This
+// is deliberately NOT the full ResourceManager-based Menu & Pricing tab
+// (which exposes price/name/image/etc. editing) — staff's chosen
+// permission boundary is "menu availability, not pricing", and the
+// server-side enforcement of that same boundary lives in
+// app/api/admin/[table]/[id]/route.ts's PUT (rejects any field but
+// `active`, and any table but `products`, for this role) — this
+// component's simplicity is a UX nicety on top of that, not the actual
+// access control, same relationship as ROLE_TABS has to requireRole()
+// elsewhere in this file.
+function MenuAvailabilityTab({ token }: { token: string }) {
+  const [categories, setCategories] = useState<RawCategory[]>([]);
+  const [products, setProducts] = useState<RawProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const load = () => {
+    setLoading(true);
+    setError('');
+    Promise.all([
+      fetch('/api/admin/categories').then((r) => r.json()),
+      fetch('/api/admin/products').then((r) => r.json()),
+    ])
+      .then(([cats, prods]) => {
+        setCategories(Array.isArray(cats) ? cats : []);
+        setProducts(Array.isArray(prods) ? prods : []);
+      })
+      .catch(() => setError('Could not load the menu.'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, [token]);
+
+  const categoryTitle = (id: string) => categories.find((c) => c.id === id)?.title || id;
+
+  const toggleActive = async (product: RawProduct) => {
+    setBusyId(product.id);
+    setError('');
+    const next = product.active ? 0 : 1;
+    try {
+      const res = await fetch(`/api/admin/products/${product.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: next }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error || 'Could not update availability.');
+      }
+      setProducts((list) => list.map((p) => (p.id === product.id ? { ...p, active: next } : p)));
+    } catch (err: any) {
+      setError(err.message || 'Could not update availability.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const sorted = products.slice().sort((a, b) => {
+    const catCompare = categoryTitle(a.category_id).localeCompare(categoryTitle(b.category_id));
+    if (catCompare !== 0) return catCompare;
+    return (a.sort_order || 0) - (b.sort_order || 0);
+  });
+
+  return (
+    <div style={box}>
+      <h2 style={{ marginTop: 0 }}>Menu Availability</h2>
+      <p style={{ color: 'var(--muted)', fontSize: 13.5 }}>
+        Turn an item off when it&apos;s sold out or unavailable today — it disappears from the menu immediately.
+        Turn it back on any time. Prices, descriptions and everything else here can only be changed by a Manager
+        or Owner.
+      </p>
+      {error && <p style={{ color: 'var(--danger)' }}>{error}</p>}
+      {loading ? (
+        <p>Loading menu…</p>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={th}>Category</th>
+                <th style={th}>Item</th>
+                <th style={th}>Price</th>
+                <th style={th}>Available</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((p) => (
+                <tr key={p.id}>
+                  <td style={td}>{categoryTitle(p.category_id)}</td>
+                  <td style={td}>{p.name}</td>
+                  <td style={td}>{formatCurrency(p.price)}</td>
+                  <td style={td}>
+                    <button
+                      type="button"
+                      disabled={busyId === p.id}
+                      onClick={() => toggleActive(p)}
+                      style={p.active ? btnPrimary : btnDanger}
+                    >
+                      {busyId === p.id ? '…' : p.active ? '🟢 Available' : '⚪ Unavailable'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {!sorted.length && (
+                <tr><td style={td} colSpan={4}>No menu items yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MenuTabs({ token, initialTab }: { token: string; initialTab?: string | null }) {
   const [categories, setCategories] = useState<RawCategory[]>([]);
   const [optionGroups, setOptionGroups] = useState<RawOptionGroup[]>([]);
@@ -2560,6 +2942,39 @@ function MenuTabs({ token, initialTab }: { token: string; initialTab?: string | 
     { key: 'sub_fi', label: 'Subtitle (Finnish, optional)', type: 'text' },
     { key: 'image', label: 'Image', type: 'image' },
     { key: 'sort_order', label: 'Sort order', type: 'number', default: 0 },
+    // Priority-fixes brief (roadmap gap analysis), Part 2 — admin SEO
+    // fields (worker/migrations/017_admin_seo_fields.sql). Categories had
+    // none of this before — not even a meta description — see the
+    // fallback chain in generateMetadata,
+    // app/(site)/[locale]/menu/[category]/page.tsx.
+    {
+      key: 'meta_description', label: 'Meta description (English, optional)', type: 'textarea',
+      hint: 'Shown in Google search results — aim for under ~160 characters. Leave blank to use the subtitle above.',
+    },
+    {
+      key: 'meta_description_fi', label: 'Meta description (Finnish, optional)', type: 'textarea',
+      hint: 'Shown in Google search results — aim for under ~160 characters. Leave blank to use the subtitle above.',
+    },
+    {
+      key: 'seo_title', label: 'SEO title (English, optional)', type: 'text',
+      hint: 'Overrides the page <title>. Leave blank to use the category title.',
+    },
+    {
+      key: 'seo_title_fi', label: 'SEO title (Finnish, optional)', type: 'text',
+      hint: 'Overrides the page <title>. Leave blank to use the category title.',
+    },
+    {
+      key: 'canonical_url', label: 'Canonical URL override (optional)', type: 'text',
+      hint: 'Rarely needed — leave blank unless you specifically need this page to point its canonical somewhere other than its own URL.',
+    },
+    {
+      key: 'noindex', label: 'Hide from search engines (noindex)', type: 'checkbox',
+      hint: 'When checked, this page is excluded from the sitemap and told not to be indexed.',
+    },
+    {
+      key: 'og_image_url', label: 'Social share image override (optional)', type: 'image',
+      hint: 'Shown when this page is shared on social media. Leave blank to use the category image above.',
+    },
   ];
 
   const optionGroupFields: ResourceField[] = [
@@ -2663,8 +3078,15 @@ function MenuTabs({ token, initialTab }: { token: string; initialTab?: string | 
 
 /* ---------------- Staff Management (Owner-only) ---------------- */
 
+// Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 4 — 'staff'
+// inserted between 'kitchen' and 'manager', matching its chosen
+// permission boundary (a step up from kitchen, still well short of
+// manager). Feeds both the "create account" role picker and each
+// existing account's role-change dropdown (StaffRow below) — adding it
+// here is the entire admin-UI surface needed to let an Owner assign it.
 const ROLE_OPTIONS: { value: StaffRole; label: string }[] = [
   { value: 'kitchen', label: 'Kitchen' },
+  { value: 'staff', label: 'Staff' },
   { value: 'manager', label: 'Manager' },
   { value: 'owner', label: 'Owner' },
 ];
@@ -2981,12 +3403,15 @@ function AddCouponForm({ onAdded }: { onAdded: () => void }) {
   const [expiresAt, setExpiresAt] = useState('');
   const [minOrderAmount, setMinOrderAmount] = useState('');
   const [usageLimit, setUsageLimit] = useState('');
+  // Priority-fixes brief (roadmap gap analysis), Part 4 — optional cap
+  // on this coupon's discount, in euros.
+  const [maxDiscountAmount, setMaxDiscountAmount] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const reset = () => {
     setCode(''); setDiscountType('percent'); setDiscountValue('');
-    setExpiresAt(''); setMinOrderAmount(''); setUsageLimit(''); setError('');
+    setExpiresAt(''); setMinOrderAmount(''); setUsageLimit(''); setMaxDiscountAmount(''); setError('');
   };
 
   const submit = async (e: FormEvent) => {
@@ -3004,6 +3429,7 @@ function AddCouponForm({ onAdded }: { onAdded: () => void }) {
           expires_at: expiresAt || null,
           min_order_amount: minOrderAmount === '' ? null : Number(minOrderAmount),
           usage_limit: usageLimit === '' ? null : Number(usageLimit),
+          max_discount_amount: maxDiscountAmount === '' ? null : Number(maxDiscountAmount),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -3054,6 +3480,10 @@ function AddCouponForm({ onAdded }: { onAdded: () => void }) {
           Usage limit (optional)
           <input style={inputStyle} type="number" min="1" step="1" value={usageLimit} onChange={(e: ChangeEvent<HTMLInputElement>) => setUsageLimit(e.target.value)} placeholder="Unlimited" />
         </label>
+        <label>
+          Maximum discount € (optional)
+          <input style={inputStyle} type="number" min="0.01" step="0.01" value={maxDiscountAmount} onChange={(e: ChangeEvent<HTMLInputElement>) => setMaxDiscountAmount(e.target.value)} placeholder="No cap" />
+        </label>
       </div>
       <div style={{ marginTop: 8 }}>
         <button type="submit" style={btnPrimary} disabled={saving}>{saving ? 'Creating…' : 'Create coupon'}</button>
@@ -3094,6 +3524,7 @@ function CouponRow({ coupon, onChanged }: { coupon: CouponRowType; onChanged: ()
     <tr>
       <td style={td}><strong>{coupon.code}</strong></td>
       <td style={td}>{valueLabel}</td>
+      <td style={td}>{coupon.max_discount_amount != null ? `${Number(coupon.max_discount_amount).toFixed(2)} €` : '—'}</td>
       <td style={td}>{coupon.min_order_amount != null ? `${Number(coupon.min_order_amount).toFixed(2)} €` : '—'}</td>
       <td style={td}>{usageLabel}</td>
       <td style={td}>{coupon.expires_at || '—'}{expiredAlready ? ' (expired)' : ''}</td>
@@ -3133,6 +3564,7 @@ function CouponsTab({ token }: { token: string }) {
               <tr>
                 <th style={th}>Code</th>
                 <th style={th}>Discount</th>
+                <th style={th}>Max. discount</th>
                 <th style={th}>Min. order</th>
                 <th style={th}>Used</th>
                 <th style={th}>Expires</th>
@@ -3143,7 +3575,7 @@ function CouponsTab({ token }: { token: string }) {
             <tbody>
               {coupons.map((c) => <CouponRow key={c.code} coupon={c} onChanged={reload} />)}
               {!coupons.length && (
-                <tr><td style={td} colSpan={7}>No coupons yet.</td></tr>
+                <tr><td style={td} colSpan={8}>No coupons yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -3160,8 +3592,13 @@ function CouponsTab({ token }: { token: string }) {
 // app/api/admin/**/route.js), so a role never sees a tab whose API call
 // would 403 anyway. This list is the UX nicety on top of that real
 // enforcement, not a substitute for it.
+// Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 4 — 'staff'
+// gets 'orders' (same as kitchen) plus the new, narrower
+// 'menu_availability' tab (see MenuAvailabilityTab above) — not 'menu'
+// itself, which exposes pricing.
 const ROLE_TABS: Record<StaffRole, string[]> = {
   kitchen: ['orders'],
+  staff: ['orders', 'menu_availability'],
   manager: ['overview', 'orders', 'menu', 'rewards', 'coupons', 'homepage', 'customers', 'customer_source', 'reports'],
   owner: ['overview', 'orders', 'menu', 'rewards', 'coupons', 'homepage', 'customers', 'customer_source', 'reports', 'tracking', 'settings', 'staff', 'activity'],
 };
@@ -3284,6 +3721,10 @@ function AdminDashboardView() {
     { id: 'overview', label: '🏠 Dashboard' },
     { id: 'orders', label: '📦 Orders', badge: pendingCount },
     { id: 'menu', label: '🍕 Menu & Pricing' },
+    // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 4 — only
+    // ever shown to 'staff' (see ROLE_TABS above); manager/owner already
+    // have the full 'menu' tab above, which is a strict superset.
+    { id: 'menu_availability', label: '🍽️ Menu Availability' },
     { id: 'rewards', label: '🎁 Rewards' },
     { id: 'coupons', label: '🏷️ Coupons' },
     { id: 'homepage', label: '🖼️ Homepage Display' },
@@ -3301,7 +3742,7 @@ function AdminDashboardView() {
   // nothing extra for an unrecognized role rather than guessing broad.
   const TOP_TABS = ALL_TABS.filter((t) => (role ? ROLE_TABS[role] : []).includes(t.id));
 
-  const ROLE_LABEL: Record<StaffRole, string> = { kitchen: 'Kitchen', manager: 'Manager', owner: 'Owner' };
+  const ROLE_LABEL: Record<StaffRole, string> = { kitchen: 'Kitchen', staff: 'Staff', manager: 'Manager', owner: 'Owner' };
 
   // Audit-fixes brief, Part 6.8 — the flat 13-tab strip (more, for an
   // Owner, than any other role sees) was one long wrapped row with no way
@@ -3393,6 +3834,7 @@ function AdminDashboardView() {
         )}
         {tab === 'orders' && <OrdersTab token={token} />}
         {tab === 'menu' && <MenuTabs token={token} initialTab={searchParams.get('menuTab')} />}
+        {tab === 'menu_availability' && <MenuAvailabilityTab token={token} />}
         {tab === 'rewards' && <RewardsTab token={token} />}
         {tab === 'coupons' && <CouponsTab token={token} />}
         {tab === 'homepage' && <HomepageDisplaySettings token={token} />}

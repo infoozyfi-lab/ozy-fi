@@ -10,6 +10,8 @@
 
 import type { RawScheduledOffer, ScheduledOffer } from './scheduledOffers';
 export type { RawScheduledOffer, ScheduledOffer };
+import type { SpecialHoursEntry } from './openingHours';
+export type { SpecialHoursEntry };
 
 export type Locale = 'fi' | 'en';
 
@@ -53,6 +55,17 @@ export interface RawCategory {
   sub_fi?: string | null;
   image?: string | null;
   sort_order?: number;
+  // Admin SEO fields (worker/migrations/017_admin_seo_fields.sql) — see
+  // that migration's header comment for what each one overrides, and
+  // generateMetadata in app/(site)/[locale]/menu/[category]/page.tsx for
+  // the fallback chain when unset.
+  meta_description?: string | null;
+  meta_description_fi?: string | null;
+  seo_title?: string | null;
+  seo_title_fi?: string | null;
+  canonical_url?: string | null;
+  noindex?: number | boolean;
+  og_image_url?: string | null;
   [key: string]: unknown;
 }
 
@@ -78,6 +91,13 @@ export interface RawProduct {
   has_toppings?: number | boolean;
   sort_order?: number;
   active?: number;
+  // Admin SEO fields (worker/migrations/017_admin_seo_fields.sql) — see
+  // that migration's header comment for what each one overrides.
+  seo_title?: string | null;
+  seo_title_fi?: string | null;
+  canonical_url?: string | null;
+  noindex?: number | boolean;
+  og_image_url?: string | null;
   [key: string]: unknown;
 }
 
@@ -194,6 +214,16 @@ export interface Product {
   toppingsEnabled?: boolean;
   has_toppings?: number | boolean;
   sort_order?: number;
+  // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 2 — menu
+  // search. `name`/`desc` above are already resolved to ONE locale (see
+  // normalizeProducts's resolveText calls), so they can't be used to match
+  // a query typed in the other language. This carries a single
+  // lowercased, whitespace-normalized string built from BOTH locales'
+  // name/description (English + Finnish) purely for search matching —
+  // never rendered. Optional because the same Product shape is also used
+  // for a raw D1 row passed straight through as productHint (see this
+  // interface's own comment above), which never has this field.
+  searchText?: string;
 }
 
 export interface OptionItem {
@@ -336,6 +366,34 @@ export interface MenuBlob {
   // it's needed, via lib/scheduledOffers.ts's findBestActiveScheduledOffer
   // — see context/StoreContext.tsx). Empty array if none are configured.
   scheduledOffers: ScheduledOffer[];
+  // Priority-fixes brief (roadmap gap analysis), Part 7 — special/holiday
+  // hours overriding the regular weekly schedule for specific calendar
+  // dates (see lib/openingHours.ts's SpecialHoursEntry/getEffectiveHoursForDate).
+  // Empty array if none are configured.
+  specialHours: SpecialHoursEntry[];
+  // Story banner slider (Bundle 1 Task 5) — admin-uploaded photos for
+  // components/Story.tsx's homepage banner slider, in slide order. Empty
+  // array (the pre-this-feature state, and any fresh install) renders the
+  // slider's own on-brand placeholder rather than the old third-party
+  // random-image API — see that component. Capped at 10 by the admin UI
+  // and defensively again here (lib/menu-i18n.ts's normalizeMenuBlob).
+  storyBannerImages: StoryBannerImage[];
+}
+
+// Story banner slider (Bundle 1 Task 5) — one admin-uploaded photo, with
+// its own admin-entered alt text (never left empty/generic — the brief
+// specifically calls for real, descriptive alt text per image, which a
+// bare list of URLs can't carry on its own). Stored as a JSON-encoded
+// array under admin_settings.story_banner_images — same "ordered list as
+// one flat-settings JSON value" pattern already established by
+// admin_settings.popular_product_ids (see lib/menu-i18n.ts's
+// normalizeMenuBlob and app/admin/dashboard/page.tsx's
+// HomepageDisplaySettings) — chosen over a new dedicated table since this
+// is a small (max 10), admin-owned, single-purpose ordered list with no
+// need for its own id/foreign keys/independent querying.
+export interface StoryBannerImage {
+  url: string;
+  alt: string;
 }
 
 // ---------------------------------------------------------------------
@@ -571,7 +629,16 @@ declare global {
 // row + `items`) and app/api/orders/by-phone/route.js (a small projection).
 // ---------------------------------------------------------------------
 
-export type OrderStatus = 'received' | 'preparing' | 'on_the_way' | 'delivered' | 'cancelled';
+// Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 3 —
+// 'accepted' (between received/preparing) and 'ready' (between
+// preparing/on_the_way) are new. No DB CHECK constraint exists on
+// orders.status (worker/schema.sql — it's a plain TEXT column with a
+// 'received' default), so this is a pure application-level/TypeScript
+// change; no migration was needed to allow these two new string values.
+// Every existing order row keeps its current status string untouched —
+// this only affects what NEW transitions are offered going forward (see
+// components/admin/OrderKanban.tsx's COLUMNS).
+export type OrderStatus = 'received' | 'accepted' | 'preparing' | 'ready' | 'on_the_way' | 'delivered' | 'cancelled';
 
 // Round-2 fixes brief, Part 5 (worker/migrations/015_pickup_fulfillment.sql)
 // — a customer either has this delivered, or comes to collect it
@@ -646,7 +713,16 @@ export interface RecentOrder {
 
 // lib/adminAuth.js's ROLES array, in the exact order the DB CHECK
 // constraint (worker/schema.sql, `staff.role`) lists them.
-export type StaffRole = 'kitchen' | 'manager' | 'owner';
+//
+// Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 4 — 'staff'
+// (worker/migrations/019_staff_role.sql) sits between 'kitchen' and
+// 'manager'. Chosen permission boundary: same order-view/manage access
+// as kitchen, PLUS toggling a product's availability (active on/off) —
+// but none of manager's access to pricing, discounts, refunds, staff
+// management, or settings. See the per-route requireRole()/getSession()
+// role checks (app/api/admin/[table]/**/route.ts's PUT in particular)
+// for exactly where that line is drawn.
+export type StaffRole = 'kitchen' | 'staff' | 'manager' | 'owner';
 
 // Returned by lib/adminAuth.js's getSession(). staffId is null exactly
 // when isLegacy is true (the fallback ADMIN_EMAIL/ADMIN_PASSWORD login
@@ -691,6 +767,12 @@ export interface CouponRow {
   usage_limit?: number | null;
   times_used: number;
   created_at: string;
+  // Priority-fixes brief (roadmap gap analysis), Part 4
+  // (worker/migrations/018_coupon_max_discount.sql) — nullable euro
+  // ceiling on this coupon's discount, enforced in lib/coupons.ts's
+  // validateCoupon. NULL/undefined means uncapped (every coupon's
+  // behavior before this migration).
+  max_discount_amount?: number | null;
   // Growth features (Phase: referral program) — set only on a coupon
   // auto-created by POST /api/referral; see worker/schema.sql's comment.
   referral_email?: string | null;
@@ -790,6 +872,11 @@ export interface OrderRow {
   // existing row), but treated as "delivery" wherever it matters, same as
   // the column's own default.
   order_type?: OrderType;
+  // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 1
+  // (worker/migrations/020_order_locale.sql) — see that migration's
+  // comment. Optional here for the same reason as order_type above (a
+  // handful of call sites project only a subset of `orders` columns).
+  locale?: Locale;
   created_at: string;
 }
 

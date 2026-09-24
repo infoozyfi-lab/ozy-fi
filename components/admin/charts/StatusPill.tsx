@@ -3,9 +3,13 @@
 import type { OrderStatus } from '@/lib/types';
 import { ORDER_STATUS_COLOR } from './colors';
 
+// Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 3 —
+// 'accepted'/'ready' added between the existing stages.
 const STATUS_LABELS: Record<OrderStatus, string> = {
   received: 'Received',
+  accepted: 'Accepted',
   preparing: 'Preparing',
+  ready: 'Ready',
   on_the_way: 'Out for delivery',
   delivered: 'Delivered',
   cancelled: 'Cancelled',
