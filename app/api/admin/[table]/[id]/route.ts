@@ -74,9 +74,24 @@ export async function PUT(request: Request, { params }: { params: Promise<{ tabl
   const setClause = cols.map((c) => `${c} = ?`).join(', ');
   const values = cols.map((c) => body[c]);
 
-  await env.DB.prepare(
-    `UPDATE ${tableName} SET ${setClause} WHERE id = ?`
-  ).bind(...values, id).run();
+  // Save-failed bug report — same missing-try/catch gap as the sibling
+  // POST route (app/api/admin/[table]/route.ts): an uncaught D1 error here
+  // would propagate as a raw, non-JSON response, which is exactly what
+  // components/admin/SizesEditor.tsx's saveTier() can't turn into a real
+  // message (its `data.error || 'Save failed.'` fallback has no `.error`
+  // to read from a response that isn't valid JSON at all). This specific
+  // UPDATE didn't reproduce a real failure for a normal, correctly-scoped
+  // edit (verified for real — see worker/test-data/save-failed-bug-verify.js),
+  // but any admin-table write going through this shared route is one
+  // unhandled D1 exception away from the same silent, undiagnosable
+  // failure, so it gets the same defensive fix as its sibling.
+  try {
+    await env.DB.prepare(
+      `UPDATE ${tableName} SET ${setClause} WHERE id = ?`
+    ).bind(...values, id).run();
+  } catch (err: any) {
+    return json({ error: err?.message || `Could not update this ${tableName} row.` }, 500);
+  }
 
   await purgeMenuCache(request, ctx);
 
@@ -99,7 +114,16 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ t
   const table = ADMIN_TABLES[tableName];
   if (!table) return json({ error: 'Unknown table' }, 404);
 
-  await env.DB.prepare(`DELETE FROM ${tableName} WHERE id = ?`).bind(id).run();
+  // Save-failed bug report — same defensive fix as PUT above (this file)
+  // and POST (app/api/admin/[table]/route.ts): don't let an uncaught D1
+  // error (e.g. a FOREIGN KEY reference from another row) turn into a
+  // raw, non-JSON response the admin UI's `data.error` fallbacks can't
+  // read anything from.
+  try {
+    await env.DB.prepare(`DELETE FROM ${tableName} WHERE id = ?`).bind(id).run();
+  } catch (err: any) {
+    return json({ error: err?.message || `Could not delete this ${tableName} row.` }, 500);
+  }
 
   await purgeMenuCache(request, ctx);
 

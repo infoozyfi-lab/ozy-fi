@@ -110,13 +110,22 @@ check(
 const blobAfter = normalizeMenuBlob(rawMenuAfterFirstTierAdded(), 'en');
 const productAfter = blobAfter.products.find((p) => p.id === productId);
 check(!!productAfter, 'Product found in normalized "after" blob');
+// Save-failed bug report (data-model gap) — normalizeMenuBlob now prepends
+// a synthetic base-price ("Normaali"/"Regular") entry whenever a product
+// has any real tier, so this assertion's expected shape grew from
+// `[tier1]` to `[base, tier1]` — see that fix's own comment in
+// lib/menu-i18n.ts. This is the INTENDED behavior change, not a
+// regression: the caching-fix conclusion this harness exists to prove
+// (normalizeMenuBlob's product_id-scoped attachment isn't the cache bug)
+// is untouched by it.
 check(
-  Array.isArray(productAfter.sizeOptions) && productAfter.sizeOptions.length === 1 && productAfter.sizeOptions[0].id === `size-${productId}-tier1`,
-  "AFTER adding the FIRST tier: product.sizeOptions correctly contains the new tier (proves normalizeMenuBlob's 'size' attachment logic is NOT the bug)",
+  Array.isArray(productAfter.sizeOptions) && productAfter.sizeOptions.length === 2 &&
+    productAfter.sizeOptions[0].delta === 0 && productAfter.sizeOptions[1].id === `size-${productId}-tier1`,
+  "AFTER adding the FIRST tier: product.sizeOptions correctly contains [base, new tier] (proves normalizeMenuBlob's 'size' attachment logic is NOT the bug)",
   productAfter.sizeOptions
 );
 check(
-  productAfter.sizeOptions[0].label === 'Small' && productAfter.sizeOptions[0].delta === 0,
+  productAfter.sizeOptions[1].label === 'Small' && productAfter.sizeOptions[1].delta === 0,
   'New tier\'s label/delta round-trip correctly through normalizeMenuBlob'
 );
 

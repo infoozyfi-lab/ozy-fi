@@ -125,8 +125,15 @@ export default function SizesEditor({ productId, productPrice }: { productId: st
         }),
       });
       if (!res.ok) {
+        // Save-failed bug report — prefer the server's real `data.error`
+        // (now always present for a genuine write failure, since
+        // app/api/admin/[table]/[id]/route.ts's PUT handler no longer lets
+        // an uncaught D1 error escape as a raw, non-JSON response — see
+        // that file's own comment). The bare "Save failed." fallback below
+        // now only fires for a truly unexpected response shape, and even
+        // then includes the HTTP status so it's never a dead end.
         const data = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error || 'Save failed.');
+        throw new Error(data.error || `Save failed (server returned ${res.status}).`);
       }
       setTiers((ts) => ts.map((t) => (t.id === tier.id ? { ...t, saving: false, dirty: false } : t)));
     } catch (err: any) {
@@ -152,8 +159,14 @@ export default function SizesEditor({ productId, productPrice }: { productId: st
           body: JSON.stringify({ id: gid, title: 'Size', kind: 'size', product_id: productId, sort_order: 0 }),
         });
         if (!groupRes.ok) {
+          // Save-failed bug report — same real-error preference as
+          // saveTier() above; see app/api/admin/[table]/route.ts's POST
+          // handler for the fix that makes `data.error` reliably present
+          // now (including for the exact PK-collision case this
+          // component's own header comment on `addTier` already
+          // documents: a stale/orphaned same-id group).
           const data = (await groupRes.json().catch(() => ({}))) as { error?: string };
-          throw new Error(data.error || 'Could not create this product’s size group.');
+          throw new Error(data.error || `Could not create this product's size group (server returned ${groupRes.status}).`);
         }
         setGroupId(gid);
       }
@@ -170,7 +183,7 @@ export default function SizesEditor({ productId, productPrice }: { productId: st
       });
       if (!optRes.ok) {
         const data = (await optRes.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error || 'Could not add a new tier.');
+        throw new Error(data.error || `Could not add a new tier (server returned ${optRes.status}).`);
       }
       await load();
     } catch (err: any) {
@@ -186,7 +199,14 @@ export default function SizesEditor({ productId, productPrice }: { productId: st
     setError('');
     try {
       const res = await fetch(`/api/admin/options/${encodeURIComponent(pendingDelete.id)}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Delete failed.');
+      if (!res.ok) {
+        // Save-failed bug report — this previously never even tried to
+        // read the server's real error (unlike saveTier/addTier above),
+        // always showing the same bare "Delete failed." regardless of
+        // why. Same real-error preference as the rest of this file now.
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error || `Delete failed (server returned ${res.status}).`);
+      }
       setPendingDelete(null);
       // A now-empty size group is left in place (harmless — normalizeMenuBlob
       // only ever reads it via its options, and an empty options list for a
@@ -213,6 +233,29 @@ export default function SizesEditor({ productId, productPrice }: { productId: st
         This product&apos;s own size tiers and prices. Only used by this product — editing a price here
         never affects any other product&apos;s sizes. If no tiers are added, this product shows no size
         selector at all and is sold at its regular price above.
+      </p>
+
+      {/*
+        Save-failed bug report ("Also fix: make the base-price/Sizes
+        relationship clear in the UI") — the price above (this product's
+        own `price` field) already IS its Normaali/smallest size; this
+        section is only for ADDITIONAL tiers above that, so an admin
+        should never re-add "Normaali"/"Regular" as its own row here (see
+        lib/menu-i18n.ts's normalizeMenuBlob for the matching fix that
+        makes the base price actually selectable as its own tier on the
+        customer-facing side). Bilingual since the business owner reading
+        this note works in Finnish — same EN-then-FI pairing this admin UI
+        already uses for label/label_fi fields just below.
+      */}
+      <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: -8, marginBottom: 16 }}>
+        The price above is already this product&apos;s smallest size (e.g. &quot;Normaali&quot;) — no need to add
+        it again below. Add a row here only for each size ABOVE that base price (e.g. &quot;Pannu&quot;, &quot;Perhe&quot;).
+        <br />
+        <span style={{ fontStyle: 'italic' }}>
+          Yllä oleva hinta on jo tämän tuotteen pienin koko (esim. &quot;Normaali&quot;) — sitä ei tarvitse lisätä
+          tähän uudelleen. Lisää rivi tähän vain kutakin perushintaa SUUREMPAA kokoa varten (esim. &quot;Pannu&quot;,
+          &quot;Perhe&quot;).
+        </span>
       </p>
 
       {error && (

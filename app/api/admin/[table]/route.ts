@@ -82,9 +82,33 @@ export async function POST(request: Request, { params }: { params: Promise<{ tab
   const placeholders = cols.map(() => '?').join(', ');
   const values = cols.map((c) => body[c]);
 
-  await env.DB.prepare(
-    `INSERT INTO ${tableName} (${cols.join(', ')}) VALUES (${placeholders})`
-  ).bind(...values).run();
+  // Save-failed bug report — this INSERT had no try/catch, so a real D1
+  // error (most concretely: a `${tableName}.id` PRIMARY KEY collision —
+  // e.g. SizesEditor.tsx's addTier() always creates a product's size
+  // group as `size-<productId>`, deterministically, so it collides if a
+  // group with that exact id already exists but wasn't found by that
+  // product's own scoped lookup, such as a pre-migration-021 'size' group
+  // whose product_id backfilled to NULL — see worker/migrations/
+  // 021_option_group_product_id.sql's own comment) propagated as an
+  // UNCAUGHT exception. In a live Worker that becomes a raw, non-JSON
+  // error response — exactly what SizesEditor's `data.error || 'Save
+  // failed.'` fallback can't do anything with, since there's no `.error`
+  // to read. Confirmed for real (not just reasoned about): a runtime
+  // harness that executes this actual route against a real PK collision
+  // reproduces this exact uncaught-exception shape — see
+  // worker/test-data/save-failed-bug-verify.js.
+  //
+  // Catching it here and returning a normal `json({error}, 500)` doesn't
+  // change any successful-path behavior at all — it only means a genuine
+  // write failure now surfaces the real reason instead of a generic,
+  // undiagnosable client-side message.
+  try {
+    await env.DB.prepare(
+      `INSERT INTO ${tableName} (${cols.join(', ')}) VALUES (${placeholders})`
+    ).bind(...values).run();
+  } catch (err: any) {
+    return json({ error: err?.message || `Could not create this ${tableName} row.` }, 500);
+  }
 
   await purgeMenuCache(request, ctx);
 
