@@ -217,9 +217,13 @@ const en = {
     cartAriaLabel: 'Cart',
     removeOneAriaLabel: 'Remove one',
     addOneAriaLabel: 'Add one',
+    // Per-product-size brief — the M/L toggle is fully retired, so `size`
+    // is now the sole heading for the per-product 'size' option-group
+    // selector (components/ProductPage.tsx). The temporary separate
+    // `sizeOptionsHeading` key (and the old `medium`/`large` labels) from
+    // the pizza-size-feature brief have been removed — this is the smaller,
+    // cleaner consolidation the brief asked for.
     size: 'Size',
-    medium: 'Medium',
-    large: 'Large',
     finishToppings: 'Finish — tap to add toppings',
     bottom: 'Bottom',
     change: 'change',
@@ -246,7 +250,6 @@ const en = {
     addToOrder: (price: string) => `Add to order — ${price}`,
     addToBundle: 'Add to bundle',
     addToBundleExtra: (price: string) => `Add to bundle — +${price}`,
-    largeUpchargeDetail: (price: string) => `Large (+${price})`,
   },
 
   bundleModal: {

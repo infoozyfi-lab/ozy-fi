@@ -11,7 +11,6 @@ import {
   CATEGORIES,
   ITEMS,
   TOPPING_PRICE,
-  SIZE_LARGE_UPCHARGE,
   TOPPINGS,
   BASE_OPTIONS,
   SAUCE_OPTIONS,
@@ -133,12 +132,13 @@ addons('snack', SNACKS);
 lines.push('');
 
 // Global pricing settings.
+// Per-product-size brief, Part 2 — `size_large_upcharge` is no longer
+// written here; the M/L toggle it drove is fully retired, and per-product
+// size pricing lives in product_id-scoped 'size' option_groups rows instead
+// of a single global admin_settings value.
 lines.push('-- Settings');
 lines.push(
   `INSERT INTO admin_settings (key, value) VALUES ('topping_price', ${sqlStr(TOPPING_PRICE)});`
-);
-lines.push(
-  `INSERT INTO admin_settings (key, value) VALUES ('size_large_upcharge', ${sqlStr(SIZE_LARGE_UPCHARGE)});`
 );
 lines.push('');
 

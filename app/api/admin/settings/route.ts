@@ -28,15 +28,13 @@ const HOMEPAGE_KEYS = new Set([
   'story_banner_images',
 ]);
 
-// Menu & Pricing's "Pricing rules" box — Manager already fully manages
-// the menu itself (app/api/admin/[table]/** allows manager+owner), so it
-// should be able to set the one remaining rule that lives there too
-// (this was a real, reported gap before this fix: Manager got a 403
-// trying to save this box at all, since only HOMEPAGE_KEYS was ever
-// allow-listed for that role).
-const MENU_PRICING_KEYS = new Set([
-  'size_large_upcharge',
-]);
+// Per-product-size brief, Part 2 — Menu & Pricing's "Pricing rules" box
+// (and the MENU_PRICING_KEYS allow-list that existed solely to let a
+// Manager save its one field, `size_large_upcharge`) is fully retired
+// along with the M/L toggle. Per-product size pricing is now edited from
+// each product's own edit page (already manager+owner via the generic
+// admin CRUD routes) rather than through admin_settings, so there is no
+// replacement key/box needed here.
 
 // Growth features batch 3 (Rewards dashboard consolidation) — every
 // setting now managed from the dedicated "Rewards" admin section (see
@@ -78,7 +76,7 @@ const REWARDS_KEYS = new Set([
 ]);
 
 function managerCanAccessKey(key: string): boolean {
-  return HOMEPAGE_KEYS.has(key) || MENU_PRICING_KEYS.has(key) || REWARDS_KEYS.has(key);
+  return HOMEPAGE_KEYS.has(key) || REWARDS_KEYS.has(key);
 }
 
 export async function GET(request: Request) {

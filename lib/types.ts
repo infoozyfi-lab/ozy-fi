@@ -113,10 +113,25 @@ export interface RawOption {
 
 export interface RawOptionGroup {
   id: string;
-  kind: 'base' | 'sauce' | 'cheese' | 'sauce_stripe' | 'dip' | 'topping' | 'filling' | string;
+  // Pizza-size-feature brief — 'size' added alongside the existing kinds.
+  // Required/single-select, identical selection behavior to 'base' (see
+  // lib/menu-i18n.ts's normalizeMenuBlob and context/StoreContext.tsx's
+  // calcUnitPrice). The pre-existing `size: 'M'|'L'` binary upcharge
+  // toggle this originally had to coexist with (Selection.size/
+  // CartLineSelectionData.size) was retired by the per-product-size
+  // brief — `sizeOptionId` (see Selection/CartLineSelectionData below) is
+  // now the only size-related field.
+  kind: 'base' | 'sauce' | 'cheese' | 'sauce_stripe' | 'dip' | 'topping' | 'filling' | 'size' | string;
   title?: string;
   title_fi?: string | null;
   icon?: string | null;
+  // Per-product-size brief (worker/migrations/021_option_group_product_id.sql)
+  // — NULL/undefined means a global group, shared by every product, the
+  // same behavior every kind but 'size' still has. Only 'size'-kind groups
+  // are looked up by this field (lib/menu-i18n.ts's normalizeMenuBlob
+  // builds one sizeOptions list PER product_id, not one shared list) — see
+  // that file and this brief's delivery summary for the full design.
+  product_id?: string | null;
   options?: RawOption[];
   [key: string]: unknown;
 }
@@ -214,6 +229,19 @@ export interface Product {
   toppingsEnabled?: boolean;
   has_toppings?: number | boolean;
   sort_order?: number;
+  // Per-product-size brief — THIS product's own size tiers (e.g. a real
+  // pizza's Normaali/Pannu/Perhe), built by lib/menu-i18n.ts's
+  // normalizeMenuBlob from whichever `'size'`-kind option_groups row(s)
+  // have this product's own id as `product_id` — not a shared/global list
+  // (see MenuBlob's own comment history for why the prior, global design
+  // couldn't support this). Always at least one entry (falls back to the
+  // single "Default"/delta-0 option, same convention as every other
+  // option kind, when this product has no size tiers configured) — never
+  // undefined on a normalized product; optional here only because this
+  // same `Product` shape also covers a raw D1 row passed straight through
+  // as StoreContext.openProduct()'s productHint (see this interface's own
+  // header comment), which was never run through normalizeMenuBlob.
+  sizeOptions?: OptionItem[];
   // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 2 — menu
   // search. `name`/`desc` above are already resolved to ONE locale (see
   // normalizeProducts's resolveText calls), so they can't be used to match
@@ -335,13 +363,18 @@ export interface MenuBlob {
   cheeseOptions: OptionItem[];
   sauceStripeOptions: OptionItem[];
   dipOptions: OptionItem[];
+  // Per-product-size brief — the 'size' kind is no longer a shared/global
+  // list here. Each product now carries its OWN size tiers directly on
+  // `Product.sizeOptions` (see that field's comment) — this is why MenuBlob
+  // itself has no top-level `sizeOptions` field the way baseOptions/
+  // sauceOptions/etc. do; there is no one list that would even make sense
+  // to expose at this level anymore.
   toppings: OptionItem[];
   fillingCategories: FillingCategory[];
   drinks: Addon[];
   dipCups: Addon[];
   snacks: Addon[];
   bundles: Bundle[];
-  sizeLargeUpcharge: number;
   storeClosed: boolean;
   trackingConfig: TrackingConfig;
   openingHours: OpeningHours;
@@ -352,8 +385,8 @@ export interface MenuBlob {
   // percentage (admin_settings' first_order_discount_percent /
   // stamp_card_reward_percent); now a DiscountValue so either feature can
   // be configured as a flat euro amount instead — value 0 still means
-  // "not configured / disabled" for each, same as before (mirrors
-  // sizeLargeUpcharge's own "unset admin_settings key → Number('') || 0"
+  // "not configured / disabled" for each, same as before (mirrors the
+  // project's usual "unset admin_settings key → Number('') || 0"
   // fallback, just one level down inside the shape). See
   // CheckoutModal.tsx (welcome-discount banner), lib/pricing.ts
   // (computeDiscountAmount/readDiscountSetting), and
@@ -411,7 +444,6 @@ export interface StoryBannerImage {
 // human-readable `details` strings (which is all the cart line carried
 // before this money-correctness pass — see CartLine.details below).
 export interface CartLineSelectionData {
-  size: 'M' | 'L';
   toppingIds: string[];
   baseId?: string;
   sauceId?: string;
@@ -419,6 +451,16 @@ export interface CartLineSelectionData {
   fillings: Record<string, number>;
   sauceStripeId?: string;
   dipId?: string;
+  // Per-product-size brief — the chosen `'size'`-kind option_groups
+  // option id (e.g. a real pizza's Normaali/Pannu/Perhe choice), scoped
+  // to THIS line's own product (see lib/pricing.ts's calcUnitPriceFromSelection
+  // — it looks this id up against that specific product's own sizeOptions,
+  // never a shared/global list, so a tampered id belonging to a different
+  // product simply isn't found and contributes nothing). This used to
+  // coexist with a separate pre-existing `size: 'M'|'L'` field (the old
+  // binary upcharge toggle) — that field is retired by this brief
+  // (Part 2), so `sizeOptionId` is now the sole size-related field here.
+  sizeOptionId?: string;
 }
 
 // One filled bundle-slot unit, as sent to POST /api/orders — see
@@ -481,7 +523,6 @@ export interface Selection {
   basePrice: number;
   toppingsEnabled: boolean;
   qty: number;
-  size: 'M' | 'L';
   toppings: string[];
   base?: string;
   sauce?: string;
@@ -489,6 +530,19 @@ export interface Selection {
   fillings: Record<string, number>;
   sauceStripe?: string;
   dip?: string;
+  // Per-product-size brief — mirrors `base`/`sauce`/`cheese` above exactly
+  // (set via the same generic `setOption('sizeOptionId', id)` call — see
+  // context/StoreContext.tsx's setOption).
+  sizeOptionId?: string;
+  // Per-product-size brief — a SNAPSHOT of the active product's own
+  // `Product.sizeOptions` (see that field's comment), captured once when
+  // the product page opens (context/StoreContext.tsx's openProduct), so
+  // calcUnitPrice can look up `sizeOptionId`'s delta against THIS
+  // product's own tiers without needing a separate context-level lookup —
+  // the same reason `basePrice`/`toppingsEnabled` above are already
+  // snapshotted onto Selection rather than re-read from `products` on
+  // every price calculation.
+  sizeOptions: OptionItem[];
   bundleSlotIndex: number | null;
 }
 

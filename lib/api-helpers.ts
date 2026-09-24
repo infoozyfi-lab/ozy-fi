@@ -48,7 +48,10 @@ export const ADMIN_TABLES: Record<string, AdminTableDef> = {
       'seo_title', 'seo_title_fi', 'canonical_url', 'noindex', 'og_image_url',
     ],
   },
-  option_groups: { cols: ['id', 'title', 'title_fi', 'kind', 'icon', 'sort_order'] },
+  // Per-product-size brief — `product_id` added (nullable, see
+  // worker/migrations/021_option_group_product_id.sql); NULL/omitted keeps
+  // a group global exactly as before, set only for a per-product 'size' group.
+  option_groups: { cols: ['id', 'title', 'title_fi', 'kind', 'icon', 'sort_order', 'product_id'] },
   options: { cols: ['id', 'group_id', 'label', 'label_fi', 'price_delta', 'color', 'sort_order'] },
   addons: { cols: ['id', 'type', 'name', 'name_fi', 'price', 'image', 'active', 'sort_order'] },
   bundles: { cols: ['id', 'title', 'title_fi', 'description', 'description_fi', 'image', 'price', 'slots', 'active', 'sort_order'] },

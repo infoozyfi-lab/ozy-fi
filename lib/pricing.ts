@@ -25,7 +25,7 @@
 // price — see normalizeProducts()) already lives, which the *previous*
 // floor check did not use (it read the raw `products.price` column
 // directly) — see this feature's summary for that pre-existing gap.
-import type { CartLineSelectionData, CartLineBundleItem, MenuBlob, DiscountValue } from './types';
+import type { CartLineSelectionData, CartLineBundleItem, MenuBlob, DiscountValue, OptionItem } from './types';
 
 export interface PriceCheckResult {
   ok: boolean;
@@ -63,7 +63,12 @@ function findDelta(options: { id: string; delta: number }[], id: string | undefi
 function validateSelectionShape(selection: unknown): selection is CartLineSelectionData {
   if (!selection || typeof selection !== 'object') return false;
   const s = selection as Record<string, unknown>;
-  if (s.size !== 'M' && s.size !== 'L') return false;
+  // Per-product-size brief, Part 2 — the old binary M/L `size` field is
+  // retired; no shape check for it anymore. A HISTORICAL selection_json
+  // blob (a past order, reordered) may still carry a `size: 'M'|'L'` key
+  // from before this brief — that's just an inert, ignored extra property
+  // on the parsed object now (this function only checks the keys it
+  // cares about), never a validation failure.
   if (!Array.isArray(s.toppingIds) || s.toppingIds.length > MAX_TOPPINGS) return false;
   if (!s.toppingIds.every((t) => typeof t === 'string')) return false;
   if (s.fillings !== undefined) {
@@ -72,7 +77,13 @@ function validateSelectionShape(selection: unknown): selection is CartLineSelect
       if (!Number.isInteger(qty) || (qty as number) < 0 || (qty as number) > MAX_FILLING_QTY) return false;
     }
   }
-  for (const key of ['baseId', 'sauceId', 'cheeseId', 'sauceStripeId', 'dipId'] as const) {
+  // Pizza-size-feature brief — sizeOptionId added to this list, same
+  // "optional, must be a string if present" check as every other option
+  // kind's id field. Not bounds-checked against real option ids here (any
+  // more than baseId/sauceId/etc. are) — an id that doesn't match a real
+  // option simply contributes 0 in calcUnitPriceFromSelection below, same
+  // fallback as those.
+  for (const key of ['baseId', 'sauceId', 'cheeseId', 'sauceStripeId', 'dipId', 'sizeOptionId'] as const) {
     if (s[key] !== undefined && typeof s[key] !== 'string') return false;
   }
   return true;
@@ -85,21 +96,39 @@ function validateSelectionShape(selection: unknown): selection is CartLineSelect
 // exist, and there's no client-supplied "toppingsEnabled" flag left to
 // tamper with in the other direction (omit extras on a customizable one)
 // — see verifyProductLine below.
+//
+// Per-product-size brief — `sizeOptions` is a REQUIRED parameter, not read
+// off `menu` the way base/sauce/cheese/etc. still are, and it must always
+// be THIS SPECIFIC LINE'S OWN product's `sizeOptions` (menu.products.find
+// (p => p.id === theThisLinesProductId)!.sizeOptions — see every call site
+// below). This is the money-critical fix this brief asked for: option ids
+// are globally unique (`options.id TEXT PRIMARY KEY`, worker/schema.sql),
+// so a tampered `sizeOptionId` naming a DIFFERENT product's (more
+// expensive, or differently-priced) size tier simply isn't present in
+// THIS product's own `sizeOptions` array and contributes 0 via findDelta's
+// existing "not found" fallback below — it can never resolve to another
+// product's price. Verified for real in this brief's runtime harness (see
+// the delivery summary), not just reasoned about.
 export function calcUnitPriceFromSelection(
   basePrice: number,
   toppingsEligible: boolean,
   selection: CartLineSelectionData,
-  menu: MenuBlob
+  menu: MenuBlob,
+  sizeOptions: OptionItem[]
 ): number {
   let unit = basePrice;
   if (!toppingsEligible) return unit;
 
-  if (selection.size === 'L') unit += menu.sizeLargeUpcharge;
   const toppingPrice = menu.toppings[0]?.delta || 0;
   unit += selection.toppingIds.length * toppingPrice;
   unit += findDelta(menu.baseOptions, selection.baseId);
   unit += findDelta(menu.sauceOptions, selection.sauceId);
   unit += findDelta(menu.cheeseOptions, selection.cheeseId);
+  // Per-product-size brief — looked up against THIS product's own
+  // sizeOptions (the new parameter above), never a shared/global list —
+  // see this function's own header comment for the money-correctness
+  // reasoning.
+  unit += findDelta(sizeOptions, selection.sizeOptionId);
 
   const allFillings = menu.fillingCategories.flatMap((c) => c.items);
   for (const [id, qty] of Object.entries(selection.fillings || {})) {
@@ -162,7 +191,11 @@ export function verifyProductLine(line: ProductLineInput, menu: MenuBlob): Price
     if (!validateSelectionShape(line.selection)) {
       return { ok: false, error: `Invalid customization data for "${name}". Please refresh your cart and try again.` };
     }
-    expectedUnit = calcUnitPriceFromSelection(basePrice, toppingsEligible, line.selection, menu);
+    // product!.sizeOptions — THIS product's own size tiers (see
+    // calcUnitPriceFromSelection's header comment for why passing the
+    // right product's own list here is what actually makes a
+    // cross-product sizeOptionId tamper attempt fail).
+    expectedUnit = calcUnitPriceFromSelection(basePrice, toppingsEligible, line.selection, menu, product!.sizeOptions || []);
   }
   // No `selection` sent at all is treated as "no customization, base
   // price only" — the same thing a real customer gets by picking a
@@ -229,7 +262,7 @@ export function verifyBundleLine(line: BundleLineInput, menu: MenuBlob): PriceCh
     }
     const basePrice = product.price ?? 0;
     const toppingsEligible = Boolean(product.toppingsEnabled);
-    const unit = calcUnitPriceFromSelection(basePrice, toppingsEligible, item.selection, menu);
+    const unit = calcUnitPriceFromSelection(basePrice, toppingsEligible, item.selection, menu, product.sizeOptions || []);
     // Same "customization extra over this product's own base price" the
     // client computes in StoreContext.addToCart's bundleSlotIndex branch
     // (`unitPrice - activeProduct.basePrice!`) — basePrice itself is
@@ -313,7 +346,7 @@ export function computeCurrentProductPrice(
   let resolvedSelection: CartLineSelectionData | undefined;
   if (selection !== undefined && validateSelectionShape(selection)) {
     resolvedSelection = selection;
-    unitPrice = calcUnitPriceFromSelection(basePrice, toppingsEligible, selection, menu);
+    unitPrice = calcUnitPriceFromSelection(basePrice, toppingsEligible, selection, menu, product!.sizeOptions || []);
   }
   return { ok: true, productId, name: product!.name, image: product!.image, unitPrice, selection: resolvedSelection };
 }
@@ -354,7 +387,7 @@ export function computeCurrentBundlePrice(
     if (item.selection !== undefined && validateSelectionShape(item.selection)) {
       const basePrice = product.price ?? 0;
       const toppingsEligible = Boolean(product.toppingsEnabled);
-      const unit = calcUnitPriceFromSelection(basePrice, toppingsEligible, item.selection, menu);
+      const unit = calcUnitPriceFromSelection(basePrice, toppingsEligible, item.selection, menu, product.sizeOptions || []);
       extrasTotal += unit - basePrice;
       resolvedItems.push({ productId: item.productId, selection: item.selection });
     } else {

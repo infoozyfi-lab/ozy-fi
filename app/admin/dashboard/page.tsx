@@ -1141,8 +1141,9 @@ function useSettingsValues(token: string) {
   // loading } are unaffected. Added so a caller that used to render nothing
   // at all on failure (return null while loading, forever, on a request
   // that never settles or a non-OK response) can instead show a visible
-  // "why" — see PricingRulesBox below, added while diagnosing a report of
-  // its box silently never appearing.
+  // "why" — added while diagnosing a report of the (now-retired)
+  // PricingRulesBox silently never appearing; RewardSettingsForm below
+  // still relies on the same visible-error behavior.
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -1880,83 +1881,20 @@ const GROUP_KIND_CUSTOMER_VIEW: Record<string, string> = {
   dip: 'Shown on the site as: "Dip the edges"',
   topping: 'Shown on the site as: "Finish — tap to add toppings"',
   filling: 'Shown on the site as: "Fillings"',
+  // Pizza-size-feature brief — see optionGroupFields' own 'size' option
+  // comment above for the full "global, not per-product" caveat; repeated
+  // here in plain language since this hint is what an admin actually sees
+  // while managing option groups.
+  size: 'Shown on the site as: a "Size" row — tap to change the size (applies to EVERY product with toppings enabled, same as Base/Sauce/Cheese — not per-product)',
 };
 
-// A pricing rule that applies across products (not tied to any one
-// category/product/option), so it lives here on the Product Management
-// landing page — the more natural home for "a rule that affects
-// pricing" than Settings, which is otherwise just restaurant contact
-// info. Was originally added under Settings; moved here per the
-// business owner's feedback.
-function PricingRulesBox({ token }: { token: string }) {
-  const { values, setValues, loading, error } = useSettingsValues(token);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  const save = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      await fetch('/api/admin/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          size_large_upcharge: values.size_large_upcharge || '',
-        }),
-      });
-      setSaved(true);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Was `if (loading) return null;` — while settings were loading (or on
-  // any fetch/HTTP error, previously swallowed silently — see
-  // useSettingsValues above), this box rendered nothing at all: no
-  // heading, no error, just an empty gap indistinguishable from the box
-  // not existing. That made a real failure here look identical to "this
-  // never shipped." Now every state is visible, so if this box goes
-  // missing again there will be an on-page message to report back
-  // instead of just silence.
-  if (loading) {
-    return (
-      <div style={{ ...box, marginBottom: 20, padding: 16, color: 'var(--muted)' }}>
-        Loading pricing rules…
-      </div>
-    );
-  }
-  if (error) {
-    return (
-      <div style={{ ...box, marginBottom: 20, padding: 16, color: 'var(--danger)' }}>
-        Pricing rules: {error}
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ ...box, marginBottom: 20, padding: 16 }}>
-      <h3 style={{ marginTop: 0, marginBottom: 4 }}>Pricing rules</h3>
-      <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0, marginBottom: 12 }}>
-        Rules that apply across every product, rather than one product at a time. Looking for the
-        first-order discount, stamp card, referral, scheduled offers, or Ozy Wow Moment settings?
-        Those moved to the new <strong>Rewards</strong> tab.
-      </p>
-      <form onSubmit={save} style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
-        <label style={{ minWidth: 240 }}>
-          Large size upcharge (€) — added to any pizza when a customer picks Large instead of Medium
-          <input
-            style={inputStyle}
-            type="number" step="0.1"
-            value={values.size_large_upcharge || ''}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => { setValues((v) => ({ ...v, size_large_upcharge: e.target.value })); setSaved(false); }}
-          />
-        </label>
-        <button type="submit" style={btnPrimary} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
-        {saved && <span style={{ color: 'var(--gold)' }}>Saved ✓</span>}
-      </form>
-    </div>
-  );
-}
+// Per-product-size brief, Part 2 — `PricingRulesBox` is fully retired.
+// It existed solely to edit the single global `size_large_upcharge` value
+// behind the old M/L toggle; that toggle and its admin_settings-backed
+// upcharge are gone, and the box had no other content, so it's removed
+// rather than left empty. Per-product size pricing is now edited directly
+// from each product's own edit page (see app/admin/products/[id]/edit/
+// page.tsx's Sizes section) instead of a cross-product Settings-style box.
 
 /* ---------------- Rewards (growth-features consolidation) ---------------- */
 //
@@ -2030,9 +1968,9 @@ function DiscountValueInput({
 }
 
 // One small reusable form for a handful of admin_settings keys — the
-// same shape as PricingRulesBox above (useSettingsValues + a form that
-// PUTs back only the keys it owns), just parameterized so each Rewards
-// card doesn't need its own hand-copied version of that box. A
+// same useSettingsValues-plus-a-form-that-PUTs-back-only-its-own-keys
+// shape the now-retired PricingRulesBox used, just parameterized so each
+// Rewards card doesn't need its own hand-copied version of that box. A
 // `discount: true` field reads/writes its `_type`/`_value` pair via
 // DiscountValueInput instead of a single plain number.
 function RewardSettingsForm({
@@ -2987,7 +2925,19 @@ function MenuTabs({ token, initialTab }: { token: string; initialTab?: string | 
         { value: 'base', label: 'Base' }, { value: 'sauce', label: 'Sauce' }, { value: 'cheese', label: 'Cheese' },
         { value: 'sauce_stripe', label: 'Sauce stripe' }, { value: 'dip', label: 'Dip' },
         { value: 'topping', label: 'Topping (checkbox list)' }, { value: 'filling', label: 'Filling category' },
+        // Per-product-size brief — required/single-select, same as
+        // 'base'/'sauce'/etc. above, but now genuinely PER-PRODUCT rather
+        // than global: pick which product this size ladder belongs to in
+        // the "Product" field below (see lib/menu-i18n.ts's
+        // normalizeMenuBlob for the product_id-scoped lookup this drives).
+        // Every other 'kind' here stays global exactly as before.
+        { value: 'size', label: 'Size (per-product tiers — pick a Product below)' },
       ],
+    },
+    {
+      key: 'product_id', label: 'Product (only used by "Size" groups)', type: 'select',
+      options: [{ value: '', label: '— none (global — every other kind) —' }, ...products.map((p) => ({ value: p.id, label: `${p.name} (${p.id})` }))],
+      hint: 'Only matters for a "Size" group: it scopes that size ladder to this one product. Ignored for every other kind, which stay global/shared by every product exactly as before.',
     },
     { key: 'icon', label: 'Icon (emoji, optional)', type: 'text' },
     { key: 'sort_order', label: 'Sort order', type: 'number', default: 0 },
@@ -3031,7 +2981,6 @@ function MenuTabs({ token, initialTab }: { token: string; initialTab?: string | 
     return (
       <div>
         <h2 style={{ marginTop: 0, marginBottom: 16 }}>Product Management</h2>
-        <PricingRulesBox token={token} />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
           {TABS.map((t) => (
             <button

@@ -322,9 +322,9 @@ function RelatedProducts({
 export default function ProductPage() {
   const {
     activeProduct, selection, unitPrice, lineTotal,
-    isProductPageOpen, closeProduct, toggleTopping, setSize, setQty, setOption,
+    isProductPageOpen, closeProduct, toggleTopping, setQty, setOption,
     setFillingQty, addToCart, goToCheckoutDirect,
-    toppings: TOPPINGS, toppingPrice: TOPPING_PRICE, sizeLargeUpcharge: SIZE_LARGE_UPCHARGE,
+    toppings: TOPPINGS, toppingPrice: TOPPING_PRICE,
     baseOptions: BASE_OPTIONS, sauceOptions: SAUCE_OPTIONS, cheeseOptions: CHEESE_OPTIONS,
     fillingCategories: FILLING_CATEGORIES, allFillings: ALL_FILLINGS,
     sauceStripeOptions: SAUCE_STRIPE_OPTIONS, dipOptions: DIP_OPTIONS,
@@ -377,23 +377,28 @@ export default function ProductPage() {
 
           {selection.toppingsEnabled && (
             <>
+              {/* Per-product-size brief — the M/L toggle that used to live
+                  here has been fully retired (Part 2). This is now the
+                  ONLY size-related control: the `'size'`-kind option-group
+                  selector, reusing BottomRow verbatim (the exact same
+                  required, single-select UI as 'base' below — a collapsed
+                  pill showing the current choice, expanding to a radio
+                  list with each non-default option's price delta). Reads
+                  `selection.sizeOptions` — THIS product's own snapshotted
+                  size tiers (see Selection.sizeOptions's own comment),
+                  never a context-level global list. Only ever renders a
+                  real row once a 'size' option_groups group is actually
+                  configured for this product — until then
+                  FALLBACK_OPTION's single 'Default' entry renders exactly
+                  like every other unconfigured option kind already does
+                  (see this component's SauceStripeRow/DipRow for the same
+                  fallback behavior), so this is invisible-in-effect on any
+                  product with no size group configured (e.g. a non-pizza
+                  item). */}
               <div className="pp-section">
                 <p className="pp-label">{t.productPage.size}</p>
-                <div className="pp-toggle">
-                  <button
-                    type="button"
-                    className={`pp-toggle-opt${selection.size === 'M' ? ' active' : ''}`}
-                    onClick={() => setSize('M')}
-                  >
-                    {t.productPage.medium}
-                  </button>
-                  <button
-                    type="button"
-                    className={`pp-toggle-opt${selection.size === 'L' ? ' active' : ''}`}
-                    onClick={() => setSize('L')}
-                  >
-                    {t.productPage.large}<span className="pp-toggle-sub">+{SIZE_LARGE_UPCHARGE.toFixed(2)} €</span>
-                  </button>
+                <div className="pp-bottom-list">
+                  <BottomRow label="size" options={selection.sizeOptions} current={selection.sizeOptionId} onChange={(id) => setOption('sizeOptionId', id)} t={t} />
                 </div>
               </div>
 

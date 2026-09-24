@@ -142,6 +142,17 @@ export function normalizeMenuBlob(raw: MenuData, locale: Locale): MenuBlob {
   let dipOptions = FALLBACK_OPTION;
   let toppings: OptionItem[] = [];
   const fillingCategories: FillingCategory[] = [];
+  // Per-product-size brief — 'size' is no longer one shared/global list
+  // like base/sauce/cheese/etc. above. Every `'size'`-kind group is keyed
+  // here by its own `product_id` (worker/migrations/
+  // 021_option_group_product_id.sql) — a group with no product_id set is
+  // simply never applied to any product below (unlike every other kind,
+  // which stays global regardless of product_id — see that migration's
+  // own comment on why only 'size' needed this). If, unexpectedly, more
+  // than one 'size' group is ever configured for the same product, the
+  // last one processed wins — same "last one wins" behavior every other
+  // kind already has for multiple same-kind groups.
+  const sizeOptionsByProduct: Record<string, OptionItem[]> = {};
 
   const groups = raw.optionGroups || [];
   groups.forEach((g) => {
@@ -168,6 +179,17 @@ export function normalizeMenuBlob(raw: MenuData, locale: Locale): MenuBlob {
       case 'dip':
         dipOptions = opts.length ? opts : FALLBACK_OPTION;
         break;
+      case 'size':
+        // Options arrive already sorted by `options.sort_order`
+        // (lib/menu-data.ts's `ORDER BY sort_order` query), so displaying
+        // them in ascending resulting price is purely a matter of how
+        // `sort_order` is assigned on each size option row (the admin
+        // product-edit page's Sizes editor does this automatically) —
+        // nothing to sort here, same as every other option kind.
+        if (g.product_id && opts.length) {
+          sizeOptionsByProduct[g.product_id] = opts;
+        }
+        break;
       case 'topping':
         toppings = opts;
         break;
@@ -186,6 +208,14 @@ export function normalizeMenuBlob(raw: MenuData, locale: Locale): MenuBlob {
       default:
         break;
     }
+  });
+
+  // Attach each product's own size tiers (or the same single-"Default"
+  // fallback every other unconfigured option kind uses) directly onto it
+  // — see Product.sizeOptions's own comment (lib/types.ts) for why this
+  // lives on the product itself rather than as a MenuBlob-level list.
+  products.forEach((p) => {
+    p.sizeOptions = sizeOptionsByProduct[p.id] || FALLBACK_OPTION;
   });
 
   const addons = raw.addons || [];
@@ -212,7 +242,13 @@ export function normalizeMenuBlob(raw: MenuData, locale: Locale): MenuBlob {
   });
 
   const settings = raw.settings || {};
-  const sizeLargeUpcharge = Number(settings.size_large_upcharge) || 0;
+  // Per-product-size brief, Part 2 — the old binary Medium/Large upcharge
+  // toggle (and its admin_settings.size_large_upcharge value) is fully
+  // retired; per-product `'size'` option groups (above) are now the only
+  // size-related pricing mechanism. Any leftover `size_large_upcharge` row
+  // in admin_settings is simply never read anymore (harmless orphaned
+  // data — see this brief's delivery summary for why it was left in place
+  // rather than deleted).
   const storeClosed = settings.store_closed === '1';
   // Growth features — shared discount-value shape (see lib/types.ts's
   // DiscountValue). readDiscountSetting falls back to a value of 0 when
@@ -282,7 +318,6 @@ export function normalizeMenuBlob(raw: MenuData, locale: Locale): MenuBlob {
     dipCups,
     snacks,
     bundles,
-    sizeLargeUpcharge,
     storeClosed,
     trackingConfig,
     openingHours,

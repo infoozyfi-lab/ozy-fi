@@ -55,7 +55,10 @@ interface StoreContextValue {
   openProduct: (item: Product, bundleSlotIndex?: number | null, options?: OpenProductOptions) => void;
   closeProduct: () => void;
   toggleTopping: (topping: string) => void;
-  setSize: (size: 'M' | 'L') => void;
+  // Per-product-size brief, Part 2 — the old binary Medium/Large
+  // `setSize`/`'M'|'L'` toggle is fully retired; `setOption('sizeOptionId',
+  // id)` (the same generic setter base/sauce/cheese already use) is now
+  // the only way to change a product's size.
   setQty: (fn: (qty: number) => number) => void;
   setOption: (key: string, id: string) => void;
   setFillingQty: (fillingId: string, nextQty: number) => void;
@@ -118,11 +121,15 @@ interface StoreContextValue {
   cheeseOptions: OptionItem[];
   sauceStripeOptions: OptionItem[];
   dipOptions: OptionItem[];
+  // Per-product-size brief — 'size' is no longer exposed as one global
+  // list here; each product carries its own `sizeOptions` directly (see
+  // `Product.sizeOptions`, lib/types.ts) and `selection.sizeOptions` is a
+  // per-open-product snapshot of it (see `Selection.sizeOptions`) — read
+  // whichever of those is in scope instead.
   toppings: OptionItem[];
   toppingPrice: number;
   fillingCategories: FillingCategory[];
   allFillings: FillingItem[];
-  sizeLargeUpcharge: number;
   storeClosed: boolean;
   trackingConfig: TrackingConfig;
   openingHours: OpeningHours;
@@ -354,9 +361,11 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
   const [cheeseOptions, setCheeseOptions] = useState<OptionItem[]>(FALLBACK_OPTION);
   const [sauceStripeOptions, setSauceStripeOptions] = useState<OptionItem[]>([{ id: 'default', label: 'None', delta: 0, color: 'transparent' }]);
   const [dipOptions, setDipOptions] = useState<OptionItem[]>(FALLBACK_OPTION);
+  // Per-product-size brief — no global sizeOptions state anymore; each
+  // product in `products` above already carries its own `sizeOptions`
+  // (set by lib/menu-i18n.ts's normalizeMenuBlob).
   const [toppings, setToppings] = useState<OptionItem[]>([]); // [{ id, label, delta }]
   const [fillingCategories, setFillingCategories] = useState<FillingCategory[]>([]);
-  const [sizeLargeUpcharge, setSizeLargeUpcharge] = useState(0);
   const [storeClosed, setStoreClosed] = useState(false);
   const [trackingConfig, setTrackingConfig] = useState<TrackingConfig>({ ga4Id: null, metaPixelId: null, tiktokPixelId: null, clarityId: null });
   // Phase 7.7 — structured per-day opening hours (replaces the old
@@ -449,7 +458,6 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         setDipCups(blob.dipCups);
         setSnacks(blob.snacks);
         setBundles(blob.bundles);
-        setSizeLargeUpcharge(blob.sizeLargeUpcharge);
         setStoreClosed(blob.storeClosed);
         setTrackingConfig(blob.trackingConfig);
         setOpeningHours(blob.openingHours);
@@ -532,7 +540,6 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       if (!product) return 0;
       let unit = product.basePrice;
       if (product.toppingsEnabled) {
-        if (product.size === 'L') unit += sizeLargeUpcharge;
         const toppingPrice = toppings[0]?.delta || 0;
         unit += product.toppings.length * toppingPrice;
         unit += baseOptions.find((o) => o.id === product.base)?.delta || 0;
@@ -541,10 +548,17 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         unit += fillingsTotal(product.fillings);
         unit += sauceStripeOptions.find((o) => o.id === product.sauceStripe)?.delta || 0;
         unit += dipOptions.find((o) => o.id === product.dip)?.delta || 0;
+        // Per-product-size brief — looked up against `product.sizeOptions`,
+        // a snapshot of the ACTIVE PRODUCT's own size tiers captured onto
+        // Selection when its page opened (see openProduct below and
+        // Selection.sizeOptions's own comment) — never a context-level
+        // global list, mirroring lib/pricing.ts's calcUnitPriceFromSelection
+        // exactly (same per-product scoping, same reasoning).
+        unit += product.sizeOptions.find((o) => o.id === product.sizeOptionId)?.delta || 0;
       }
       return unit;
     },
-    [sizeLargeUpcharge, toppings, baseOptions, sauceOptions, cheeseOptions, sauceStripeOptions, dipOptions, fillingsTotal]
+    [toppings, baseOptions, sauceOptions, cheeseOptions, sauceStripeOptions, dipOptions, fillingsTotal]
   );
 
   // bundleSlotIndex: when set, this ProductPage visit is filling one item of
@@ -571,7 +585,6 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         // `item.toppings` doesn't exist on either shape.
         toppingsEnabled: item.toppingsEnabled ?? Boolean(item.has_toppings),
         qty: 1,
-        size: 'M',
         toppings: [],
         base: baseOptions[0]?.id,
         sauce: sauceOptions[0]?.id,
@@ -579,6 +592,21 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         fillings: {},
         sauceStripe: sauceStripeOptions[0]?.id,
         dip: dipOptions[0]?.id,
+        // Per-product-size brief — THIS product's own size tiers, snapshotted
+        // onto Selection (see Selection.sizeOptions's own comment). `item`
+        // is always the fully-normalized product from `products` by the
+        // time this runs for real (see components/ProductPageStandalone.tsx's
+        // AutoOpenProduct — it waits for `products` to load before ever
+        // calling openProduct, the raw productHint is only ever used for a
+        // loading skeleton) so `item.sizeOptions` is populated in practice;
+        // the fallback below is defensive, same spirit as the
+        // toppingsEnabled fallback just above.
+        sizeOptions: item.sizeOptions && item.sizeOptions.length ? item.sizeOptions : FALLBACK_OPTION,
+        // Defaults to the first (cheapest, since options arrive sorted by
+        // sort_order — see lib/menu-i18n.ts) size option, same "pre-select
+        // index 0" pattern as base/sauce/cheese/dip above — required,
+        // single-select, never left unset.
+        sizeOptionId: (item.sizeOptions && item.sizeOptions[0]?.id) || FALLBACK_OPTION[0].id,
         bundleSlotIndex,
       });
       setProductPageOpen(true);
@@ -610,14 +638,16 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     });
   }, []);
 
-  // setSize/setQty/setOption are only ever invoked while the ProductPage is
+  // setQty/setOption are only ever invoked while the ProductPage is
   // open, i.e. selection is already set — same invariant the original JS
   // relied on implicitly (s.qty etc. would already throw at runtime if s
   // were null here). `s as Selection` tells the type checker what the
   // runtime already assumes, without adding a behavior-changing null guard;
   // matches the existing `(s as any)` cast setOption already used before
   // this pass, just narrowed to a real type instead of `any`.
-  const setSize = useCallback((size: 'M' | 'L') => setSelection((s) => ({ ...(s as Selection), size })), []);
+  // Per-product-size brief — `setSize`/the M/L toggle is fully retired;
+  // size selection now goes entirely through `setOption('sizeOptionId', id)`
+  // like every other option kind.
   const setQty = useCallback((fn: (qty: number) => number) => setSelection((s) => ({ ...(s as Selection), qty: Math.max(1, fn((s as Selection).qty)) })), []);
   const setOption = useCallback((key: string, id: string) => setSelection((s) => ({ ...(s as Selection), [key]: id })), []);
 
@@ -642,7 +672,6 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     if (!activeProduct || !selection) return;
     const details: string[] = [];
     if (selection.toppingsEnabled) {
-      if (selection.size === 'L') details.push(t.productPage.largeUpchargeDetail(`${sizeLargeUpcharge.toFixed(2)} €`));
       selection.toppings.forEach((topping) => details.push(topping));
       const baseOpt = baseOptions.find((o) => o.id === selection.base);
       if (baseOpt && baseOpt.id !== baseOptions[0]?.id) details.push(baseOpt.label);
@@ -658,6 +687,14 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       if (sauceStripeOpt && sauceStripeOpt.id !== sauceStripeOptions[0]?.id) details.push(sauceStripeOpt.label);
       const dipOpt = dipOptions.find((o) => o.id === selection.dip);
       if (dipOpt && dipOpt.id !== dipOptions[0]?.id) details.push(dipOpt.label);
+      // Pizza-size-feature brief — same "only note it in details when it's
+      // not the default/cheapest choice" convention as base/sauce/cheese/
+      // sauce-stripe/dip above. Per-product-size brief — looked up against
+      // `selection.sizeOptions`, THIS product's own snapshotted size tiers
+      // (see Selection.sizeOptions's own comment), never a context-level
+      // global list.
+      const sizeOpt = selection.sizeOptions.find((o) => o.id === selection.sizeOptionId);
+      if (sizeOpt && sizeOpt.id !== selection.sizeOptions[0]?.id) details.push(sizeOpt.label);
     }
 
     // Structured pricing data (money-correctness pass) — the actual
@@ -669,7 +706,6 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     // that, and the server already checks that independently.
     const selectionData: CartLineSelectionData | undefined = selection.toppingsEnabled
       ? {
-          size: selection.size,
           toppingIds: selection.toppings,
           baseId: selection.base,
           sauceId: selection.sauce,
@@ -677,6 +713,16 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
           fillings: selection.fillings,
           sauceStripeId: selection.sauceStripe,
           dipId: selection.dip,
+          // Pizza-size-feature brief — carried through to the cart line's
+          // structured pricing data exactly like baseId/sauceId/etc. above,
+          // so POST /api/orders (via lib/pricing.ts) can independently
+          // re-derive this line's exact price from the real, current
+          // sizeOptions delta instead of trusting `unitPrice`/`lineTotal`.
+          // Per-product-size brief — the server looks this id up against
+          // THIS SPECIFIC product's own sizeOptions (see lib/pricing.ts's
+          // calcUnitPriceFromSelection), so a tampered id from a different
+          // product's size group simply isn't found there and contributes 0.
+          sizeOptionId: selection.sizeOptionId,
         }
       : undefined;
 
@@ -731,8 +777,8 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     // instead of a flash of the bare page underneath first.
     goBack();
   }, [
-    activeProduct, selection, unitPrice, lineTotal, sizeLargeUpcharge,
-    baseOptions, sauceOptions, cheeseOptions, sauceStripeOptions, dipOptions, allFillings, goBack, t,
+    activeProduct, selection, unitPrice, lineTotal,
+    baseOptions, sauceOptions, cheeseOptions, sauceStripeOptions, dipOptions, allFillings, goBack,
   ]);
 
   const removeFromCart = useCallback((key: string) => {
@@ -1134,7 +1180,6 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     openProduct,
     closeProduct,
     toggleTopping,
-    setSize,
     setQty,
     setOption,
     setFillingQty,
@@ -1166,7 +1211,6 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     toppingPrice: toppings[0]?.delta || 0,
     fillingCategories,
     allFillings,
-    sizeLargeUpcharge,
     storeClosed,
     trackingConfig,
     openingHours,

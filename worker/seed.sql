@@ -182,4 +182,7 @@ INSERT INTO addons (id, type, name, price, image, active, sort_order) VALUES ('s
 
 -- Settings
 INSERT INTO admin_settings (key, value) VALUES ('topping_price', '1.5');
-INSERT INTO admin_settings (key, value) VALUES ('size_large_upcharge', '3.5');
+-- Per-product-size brief, Part 2 — `size_large_upcharge` removed; the M/L
+-- toggle it drove is fully retired. Size pricing now lives in per-product
+-- 'size'-kind option_groups rows (none of this generic demo seed data
+-- configures any, matching "no size group configured" behavior).

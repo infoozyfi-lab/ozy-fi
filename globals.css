@@ -336,10 +336,10 @@ footer{ padding: 56px 0 32px; }
 .pp-name{ font-family:'Anton', sans-serif; font-size: clamp(1.7rem, 5vw, 2.2rem); color: var(--cream); margin: 0 0 12px; }
 .pp-desc{ color: var(--muted); font-size: 1rem; margin: 0 0 28px; }
 .pp-label{ color: var(--gold); font-weight:700; font-size: 0.8rem; letter-spacing: 0.05em; text-transform: uppercase; margin: 0 0 12px; }
-.pp-toggle{ display:flex; border: 1px solid var(--line); border-radius: 999px; overflow:hidden; }
-.pp-toggle-opt{ flex:1; background: transparent; border:none; color: var(--muted); padding: 14px 10px; font-weight:700; font-size: 0.95rem; cursor:pointer; transition: background 0.15s ease, color 0.15s ease; }
-.pp-toggle-opt.active{ background: var(--ember); color: #1A0D06; }
-.pp-toggle-sub{ display:block; font-size: 0.7rem; font-weight:500; opacity: 0.85; margin-top: 2px; }
+/* Per-product-size brief, Part 2 — .pp-toggle/.pp-toggle-opt/.pp-toggle-sub
+   (the old M/L upcharge toggle's styling) removed along with the JSX that
+   used them (components/ProductPage.tsx); the per-product 'size' selector
+   is styled entirely by .pp-bottom-row/.pp-bottom-options below instead. */
 .pp-finish-row{ display:flex; gap: 12px; overflow-x:auto; padding-bottom: 6px; -webkit-overflow-scrolling: touch; scrollbar-width:none; }
 .pp-finish-row::-webkit-scrollbar{ display:none; }
 .pp-finish-tile{

@@ -184,9 +184,9 @@ const fi = {
     cartAriaLabel: 'Ostoskori',
     removeOneAriaLabel: 'Poista yksi',
     addOneAriaLabel: 'Lisää yksi',
+    // Per-product-size brief — see en.tsx's matching key comment; `size` is
+    // now the sole heading for the per-product 'size' option-group selector.
     size: 'Koko',
-    medium: 'Keskikokoinen',
-    large: 'Iso',
     finishToppings: 'Viimeistely — napauta lisätäksesi täytteitä',
     bottom: 'Pohja',
     change: 'vaihda',
@@ -212,7 +212,6 @@ const fi = {
     addToOrder: (price: string) => `Lisää tilaukseen — ${price}`,
     addToBundle: 'Lisää pakettiin',
     addToBundleExtra: (price: string) => `Lisää pakettiin — +${price}`,
-    largeUpchargeDetail: (price: string) => `Iso (+${price})`,
   },
 
   bundleModal: {

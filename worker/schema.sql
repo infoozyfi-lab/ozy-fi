@@ -89,7 +89,13 @@ CREATE TABLE option_groups (
   title_fi   TEXT,
   kind       TEXT NOT NULL,
   icon       TEXT,
-  sort_order INTEGER NOT NULL DEFAULT 0
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  -- Per-product-size brief (worker/migrations/021_option_group_product_id.sql)
+  -- — NULL (the default, every pre-existing group) means global, shared by
+  -- every product, exactly as every kind but 'size' still works today.
+  -- Only 'size'-kind groups are looked up by this column (see
+  -- lib/menu-i18n.ts's normalizeMenuBlob) — every other kind ignores it.
+  product_id TEXT REFERENCES products(id)
 );
 
 CREATE TABLE options (

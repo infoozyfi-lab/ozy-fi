@@ -1,0 +1,16 @@
+-- Per-product-size brief — makes `option_groups` scopable to a single
+-- product, starting with the `'size'` kind (pizza-size-feature brief's own
+-- delivery report flagged this gap: `option_groups` were entirely global,
+-- so 90 differently-priced pizzas couldn't each get their own size
+-- tiers/prices with that mechanism as it stood).
+--
+-- Nullable, additive column — every EXISTING row (every current
+-- 'base'/'sauce'/'cheese'/'sauce_stripe'/'dip'/'topping'/'filling' group,
+-- and any 'size' group created before this migration) backfills to NULL,
+-- which keeps meaning exactly what it means today: a global group, shared
+-- by every product, read by lib/menu-i18n.ts's normalizeMenuBlob() the
+-- same way it always has for every kind except 'size'. Only 'size' groups
+-- are looked up by `product_id` going forward (see that file) — nothing
+-- else in this project reads this column at all, so this migration cannot
+-- change any existing kind's behavior.
+ALTER TABLE option_groups ADD COLUMN product_id TEXT REFERENCES products(id);

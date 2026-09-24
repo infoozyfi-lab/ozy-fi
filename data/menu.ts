@@ -134,7 +134,11 @@ export const ITEMS = [
 }));
 
 export const TOPPING_PRICE = 1.5;
-export const SIZE_LARGE_UPCHARGE = 3.5;
+// Per-product-size brief, Part 2 — the M/L toggle (and the
+// `size_large_upcharge` admin_settings value it drove) is fully retired;
+// size pricing now lives entirely in per-product `option_groups`/`options`
+// rows (product_id-scoped 'size' kind groups), configured per-product from
+// the admin product edit page rather than as a single global constant here.
 export const TOPPINGS = ['Extra cheese', 'Pepperoni', 'Mushroom', 'Onion', 'Bacon', 'Jalapeño', 'Olives', 'Pineapple', 'Ham', 'Garlic'];
 export const BASE_OPTIONS = [
   { id: 'classic', label: 'Classic pizza base', delta: 0 },

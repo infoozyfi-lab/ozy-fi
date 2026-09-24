@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import ResourceForm from '@/components/admin/ResourceForm';
+import SizesEditor from '@/components/admin/SizesEditor';
 import { getProductFields } from '@/lib/admin-resource-fields';
 import type { RawCategory, RawProduct, ResourceField } from '@/lib/types';
 
@@ -168,6 +169,17 @@ function EditProductPageInner() {
               onSaved={() => router.push(returnUrl)}
               onCancel={() => router.push(returnUrl)}
             />
+            {/* Per-product-size brief — "the part that most directly
+                answers 'how do I change one pizza's Large price later'".
+                Rendered directly below the regular product form so editing
+                this pizza's size tiers is part of editing this pizza,
+                rather than a separate trip to the Option Groups tab.
+                Non-pizza products (has_toppings off, or toppings on with
+                no size group configured) render this with zero tiers,
+                which is a normal, fully supported state — "add a tier"
+                stays available so a product's size ladder can be
+                introduced later without any code changes. */}
+            <SizesEditor productId={product.id} productPrice={Number(product.price) || 0} />
           </>
         )}
       </div>
