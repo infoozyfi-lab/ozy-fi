@@ -52,6 +52,53 @@ function BottomRow({ label, options, current, onChange, t }: { label: string; op
   );
 }
 
+// Bug-fix + UI-change follow-up brief, Task 2 — the business owner
+// confirmed (after seeing the collapsed BottomRow dropdown live) that
+// pizza sizes specifically should render as always-visible tappable
+// buttons, matching the look of the old, now-retired Medium/Large toggle
+// (components/ProductPage.tsx's history — see PER-PRODUCT-SIZE-DELIVERY-
+// REPORT.md), NOT hidden behind a "change" tap the way base/sauce/cheese
+// still are. This is a dedicated component, used ONLY for the 'size'
+// option-group kind — BottomRow itself is untouched and still drives
+// every other option kind below unchanged.
+//
+// `hasRealTiers` (computed by the caller) hides this row entirely for a
+// product with no real 'size' group configured — `selection.sizeOptions`
+// is then just the single synthetic FALLBACK_OPTION entry (id: 'default'),
+// which is a real, working choice for BottomRow's collapsed style (it just
+// shows "Default" with nothing to change) but would be a meaningless
+// single button here, so it's suppressed instead per this brief's own
+// "shows no size row whatsoever" requirement.
+//
+// Price display choice: each button shows the tier's own RESULTING
+// ABSOLUTE price (e.g. "Perhe — 14.50 €"), not a "+X.XX €" delta off the
+// product's base price. The old M/L toggle could get away with a delta
+// badge because there were only ever two fixed, known tiers (Medium was
+// always literally the base price, so "+3.50 €" on Large was
+// self-explanatory). A per-product tier ladder can have any number of
+// tiers with no fixed "this one is the base" convention a customer would
+// recognize on sight (e.g. Normaali/Pannu/Perhe) — showing what they'll
+// actually pay for each tier directly is unambiguous regardless of how
+// many tiers there are or which one happens to be cheapest, and matches
+// how food-ordering UIs conventionally show size buttons.
+function SizeTierButtons({ options, current, basePrice, onChange }: { options: OptionItem[]; current: string | undefined; basePrice: number; onChange: (id: string) => void }) {
+  return (
+    <div className="pp-size-tiles">
+      {options.map((opt) => (
+        <button
+          key={opt.id}
+          type="button"
+          className={`pp-size-tile${opt.id === current ? ' active' : ''}`}
+          onClick={() => onChange(opt.id)}
+        >
+          <span className="pp-size-tile-label">{opt.label}</span>
+          <span className="pp-size-tile-price">{money(basePrice + opt.delta)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function SauceStripeRow({ options, current, onChange, t }: { options: OptionItem[]; current: string | undefined; onChange: (id: string) => void; t: any }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.id === current) || options[0];
@@ -342,6 +389,14 @@ export default function ProductPage() {
 
   const isBundleSlot = selection.bundleSlotIndex != null;
 
+  // Bug-fix + UI-change follow-up brief, Task 2 — a real, admin-configured
+  // 'size' group is anything other than the exact synthetic FALLBACK_OPTION
+  // shape (a single entry with id 'default' — see lib/menu-i18n.ts's
+  // normalizeMenuBlob and Product.sizeOptions's own comment). A real group
+  // with just one tier still counts (it's a genuine admin choice, not the
+  // fallback), so this checks the sentinel id, not the array length alone.
+  const hasRealSizeTiers = !(selection.sizeOptions.length === 1 && selection.sizeOptions[0].id === 'default');
+
   const [intPart, decPart] = unitPrice.toFixed(2).split('.');
 
   return (
@@ -379,28 +434,27 @@ export default function ProductPage() {
             <>
               {/* Per-product-size brief — the M/L toggle that used to live
                   here has been fully retired (Part 2). This is now the
-                  ONLY size-related control: the `'size'`-kind option-group
-                  selector, reusing BottomRow verbatim (the exact same
-                  required, single-select UI as 'base' below — a collapsed
-                  pill showing the current choice, expanding to a radio
-                  list with each non-default option's price delta). Reads
+                  ONLY size-related control. Bug-fix + UI-change follow-up
+                  brief, Task 2 — now rendered as always-visible tappable
+                  buttons (SizeTierButtons) instead of BottomRow's
+                  collapsed dropdown, per the business owner's explicit
+                  feedback after seeing the dropdown live. Reads
                   `selection.sizeOptions` — THIS product's own snapshotted
                   size tiers (see Selection.sizeOptions's own comment),
-                  never a context-level global list. Only ever renders a
-                  real row once a 'size' option_groups group is actually
-                  configured for this product — until then
-                  FALLBACK_OPTION's single 'Default' entry renders exactly
-                  like every other unconfigured option kind already does
-                  (see this component's SauceStripeRow/DipRow for the same
-                  fallback behavior), so this is invisible-in-effect on any
-                  product with no size group configured (e.g. a non-pizza
-                  item). */}
-              <div className="pp-section">
-                <p className="pp-label">{t.productPage.size}</p>
-                <div className="pp-bottom-list">
-                  <BottomRow label="size" options={selection.sizeOptions} current={selection.sizeOptionId} onChange={(id) => setOption('sizeOptionId', id)} t={t} />
+                  never a context-level global list.
+                  `hasRealSizeTiers` distinguishes a real, admin-configured
+                  'size' group (any shape, even a single tier) from the
+                  synthetic FALLBACK_OPTION single "Default" entry every
+                  unconfigured option kind gets — only the former renders a
+                  row at all, so a product with no 'size' group configured
+                  (e.g. a non-pizza item) shows no size row whatsoever,
+                  same as today. */}
+              {hasRealSizeTiers && (
+                <div className="pp-section">
+                  <p className="pp-label">{t.productPage.size}</p>
+                  <SizeTierButtons options={selection.sizeOptions} current={selection.sizeOptionId} basePrice={selection.basePrice} onChange={(id) => setOption('sizeOptionId', id)} />
                 </div>
-              </div>
+              )}
 
               <div className="pp-section">
                 <p className="pp-label">{t.productPage.finishToppings}</p>

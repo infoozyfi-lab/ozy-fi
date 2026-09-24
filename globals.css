@@ -338,8 +338,28 @@ footer{ padding: 56px 0 32px; }
 .pp-label{ color: var(--gold); font-weight:700; font-size: 0.8rem; letter-spacing: 0.05em; text-transform: uppercase; margin: 0 0 12px; }
 /* Per-product-size brief, Part 2 — .pp-toggle/.pp-toggle-opt/.pp-toggle-sub
    (the old M/L upcharge toggle's styling) removed along with the JSX that
-   used them (components/ProductPage.tsx); the per-product 'size' selector
-   is styled entirely by .pp-bottom-row/.pp-bottom-options below instead. */
+   used them (components/ProductPage.tsx). Bug-fix + UI-change follow-up
+   brief, Task 2 — .pp-size-tiles/.pp-size-tile below replaces it: the
+   per-product 'size' selector is now always-visible tappable buttons
+   (SizeTierButtons in components/ProductPage.tsx), not a collapsed
+   .pp-bottom-row/.pp-bottom-options dropdown (still used for
+   base/sauce/cheese below, unchanged). `flex: 1 1 calc(50% - 5px)` on
+   each tile is what gives the confirmed layout: two short-labeled tiles
+   sit side by side, and an odd one out wraps to its own row and grows
+   (flex-grow: 1, the "1" in the shorthand) to fill that row's full width
+   rather than sitting half-width and alone. */
+.pp-size-tiles{ display:flex; flex-wrap:wrap; gap: 10px; margin-bottom: 10px; }
+.pp-size-tile{
+  flex: 1 1 calc(50% - 5px); min-width: 120px;
+  display:flex; flex-direction:column; align-items:center; gap: 4px;
+  padding: 14px 10px; border-radius: 12px; border: 1px solid #3a2c22;
+  background: #1c140f; color: #f0e6da; cursor:pointer; text-align:center;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.pp-size-tile-label{ font-size: 0.95rem; font-weight:700; }
+.pp-size-tile-price{ font-size: 0.8rem; font-weight:500; opacity:0.8; }
+.pp-size-tile.active{ background: #f0793f; border-color: #f0793f; color: #1a0d06; }
+.pp-size-tile.active .pp-size-tile-price{ opacity: 1; }
 .pp-finish-row{ display:flex; gap: 12px; overflow-x:auto; padding-bottom: 6px; -webkit-overflow-scrolling: touch; scrollbar-width:none; }
 .pp-finish-row::-webkit-scrollbar{ display:none; }
 .pp-finish-tile{

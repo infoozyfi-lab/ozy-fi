@@ -651,10 +651,23 @@ footer{ padding: 56px 0 32px; }
 .pp-label{ color: var(--gold); font-weight:700; font-size: 0.8rem; letter-spacing: 0.05em; text-transform: uppercase; margin: 0 0 12px; }
 /* Per-product-size brief, Part 2 — .pp-toggle/.pp-toggle-opt/.pp-toggle-sub
    (the old M/L upcharge toggle's styling) removed along with the JSX that
-   used them (components/ProductPage.tsx); see globals.css's identical
-   removal note (that's the stylesheet the customer-facing site layout
-   actually loads — this file mirrors it but is loaded by the admin
-   layout, where these pp-* rules were already unused). */
+   used them (components/ProductPage.tsx). Bug-fix + UI-change follow-up
+   brief, Task 2 — .pp-size-tiles/.pp-size-tile mirrors globals.css's
+   identical addition (that's the stylesheet the customer-facing site
+   layout actually loads — this file mirrors it but is loaded by the admin
+   layout, where these pp-* rules are unused). */
+.pp-size-tiles{ display:flex; flex-wrap:wrap; gap: 10px; margin-bottom: 10px; }
+.pp-size-tile{
+  flex: 1 1 calc(50% - 5px); min-width: 120px;
+  display:flex; flex-direction:column; align-items:center; gap: 4px;
+  padding: 14px 10px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--tab-inactive-bg); color: var(--tab-inactive-text); cursor:pointer; text-align:center;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.pp-size-tile-label{ font-size: 0.95rem; font-weight:700; }
+.pp-size-tile-price{ font-size: 0.8rem; font-weight:500; opacity:0.8; }
+.pp-size-tile.active{ background: var(--ember); border-color: var(--ember); color: var(--text-on-accent); }
+.pp-size-tile.active .pp-size-tile-price{ opacity: 1; }
 .pp-finish-row{ display:flex; gap: 12px; overflow-x:auto; padding-bottom: 6px; -webkit-overflow-scrolling: touch; scrollbar-width:none; }
 .pp-finish-row::-webkit-scrollbar{ display:none; }
 .pp-finish-tile{
