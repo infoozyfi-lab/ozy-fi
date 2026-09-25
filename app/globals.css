@@ -644,8 +644,7 @@ footer{ padding: 56px 0 32px; }
 .pp-price-badge .pp-price-row{ display:flex; align-items:baseline; font-family:'Anton', sans-serif; font-size: 1.75rem; }
 .pp-price-dec{ font-size: 0.95rem; align-self:flex-start; margin-top:2px; }
 .pp-price-eur{ font-size: 0.75rem; margin-left: 2px; align-self:flex-start; margin-top:2px; }
-
-.pp-body{ padding: 44px 0 26px; }
+.pp-body{ padding: 44px 20px 26px; }
 .pp-name{ font-family:'Anton', sans-serif; font-size: clamp(1.7rem, 5vw, 2.2rem); color: var(--cream); margin: 0 0 12px; }
 .pp-desc{ color: var(--muted); font-size: 1rem; margin: 0 0 28px; }
 .pp-label{ color: var(--gold); font-weight:700; font-size: 0.8rem; letter-spacing: 0.05em; text-transform: uppercase; margin: 0 0 12px; }
