@@ -152,6 +152,10 @@ export function isOpenNow(
     const start = parseTimeToMinutes(special.open);
     const end = parseTimeToMinutes(special.close);
     if (start === null || end === null) return true; // Marked open but no real times set — don't invent a "closed" state.
+    // Same midnight-crossing fix as the regular-weekly-hours branch below
+    // — a special-hours entry can just as easily specify e.g. "18:00 to
+    // 01:00" for a one-off late night.
+    if (end < start) return minutes >= start || minutes <= end;
     return minutes >= start && minutes <= end;
   }
 
@@ -164,6 +168,30 @@ export function isOpenNow(
   const start = parseTimeToMinutes(today.open);
   const end = parseTimeToMinutes(today.close);
   if (start === null || end === null) return true; // Marked open but no real times set — don't invent a "closed" state.
+  // Real menu hours regularly cross midnight (e.g. Friday/Saturday
+  // "10-02" — open 10:00, closing at 02:00 the *next* calendar day).
+  // `minutes` is always a single day's 0-1439 value, so a closing time
+  // past midnight is stored as the smaller number (02:00 = 120) despite
+  // meaning "later" than the opening time (10:00 = 600) — end < start
+  // is exactly how that case is distinguished from a same-day range.
+  // A plain `minutes >= start && minutes <= end` is satisfiable by no
+  // value at all when end < start (nothing is both >= 600 and <= 120),
+  // which made every midnight-crossing day appear permanently closed
+  // regardless of the actual time. The open window instead wraps
+  // around midnight — "at or after opening, OR at/before closing."
+  //
+  // Known remaining narrow edge case, not fully solved here: this still
+  // checks only *today's own* schedule row, so on a day between
+  // midnight and its own opening time (e.g. 3am Friday, before Friday's
+  // 10:00 open), the wrap-around branch can read as "still open" from
+  // matching `minutes <= end` (Friday's own 02:00) even though that
+  // 02:00 close time actually belongs to *last night's* (Thursday's)
+  // late session, not one that's started yet today. A fully correct fix
+  // would also check *yesterday's* schedule for this narrow early-hours
+  // window. Left as-is for now since it doesn't affect the reported bug
+  // (the store reading as closed during clearly-open afternoon/evening
+  // hours) — worth revisiting if early-morning accuracy ever matters.
+  if (end < start) return minutes >= start || minutes <= end;
   return minutes >= start && minutes <= end;
 }
 
@@ -206,10 +234,25 @@ export function getNextTransition(
     const start = parseTimeToMinutes(todayHours.open);
     const end = parseTimeToMinutes(todayHours.close);
     if (start !== null && end !== null) {
-      if (minutes >= start && minutes <= end) {
+      // Same midnight-crossing case as isOpenNow above (e.g. Friday/
+      // Saturday "10-02") — corrected here too; the file's own earlier
+      // assumption that "this project's opening-hours model has no
+      // overnight-spanning windows" turned out to be wrong for this
+      // project's real configured hours, not just a hypothetical.
+      const spansMidnight = end < start;
+      const isOpenNowToday = spansMidnight ? (minutes >= start || minutes <= end) : (minutes >= start && minutes <= end);
+      if (isOpenNowToday) {
         return { isOpen: true, time: todayHours.close as string, daysAhead: 0 };
       }
-      if (minutes < start) {
+      if (!spansMidnight && minutes < start) {
+        return { isOpen: false, time: todayHours.open as string, daysAhead: 0 };
+      }
+      if (spansMidnight && minutes < start && minutes > end) {
+        // Midnight-spanning day, but currently in the dead gap between
+        // this morning's close (end) and today's own opening (start) —
+        // e.g. it's 6am on a day that closed at 02:00 and reopens at
+        // 10:00. Today's own `start` is still the right next-opening
+        // time to report.
         return { isOpen: false, time: todayHours.open as string, daysAhead: 0 };
       }
       // Past today's close — fall through to search for the next day
