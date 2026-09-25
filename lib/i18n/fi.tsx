@@ -11,17 +11,27 @@ import type { ReactNode } from 'react';
 const fi = {
   common: {
     loading: 'Ladataan…',
+    // SEO-täydennys, osa C — ks. vastaava kommentti en.js:ssä.
+    placeholderLabel: 'Paikkamerkki — tarvitsee oikeaa sisältöä',
+  },
+
+  // SEO gap-fill, Part A — see the matching comment in en.js.
+  breadcrumb: {
+    home: 'Etusivu',
   },
 
   header: {
     menu: 'Ruokalista',
-    offers: 'Tarjoukset',
-    giftCards: 'Lahjakortit',
+    // Audit-fixes-korjaukset, osa 6.5 — ks. en.tsx:n vastaava kommentti.
+    ourStory: 'Tarinamme',
+    findUs: 'Löydä meidät',
     trackOrder: 'Seuraa tilausta',
     cartAriaLabel: 'Ostoskori',
     openMenuAriaLabel: 'Avaa valikko',
     storeClosedBanner: 'Olemme tilapäisesti suljettu emmekä ota juuri nyt vastaan uusia tilauksia.',
-    scheduledOfferBanner: (label: string, pct: number) => `🔥 ${label}: ${pct}% alennus juuri nyt!`,
+    // amountText is a pre-formatted "10%" tai "2.00 €" (jaettu discount-
+    // value-malli — ks. lib/pricing.ts:n describeDiscountValue).
+    scheduledOfferBanner: (label: string, amountText: string) => `🔥 ${label}: ${amountText} alennus juuri nyt!`,
   },
 
   footer: {
@@ -77,8 +87,15 @@ const fi = {
     eyebrow: 'Pizzaa, kebabia ja hampurilaisia',
     titleStart: 'Aloita',
     titleEm: 'tilauksesi',
-    reviews: '· yli 320 arvostelua',
     openNow: 'Avoinna nyt',
+    closedNow: 'Suljettu nyt',
+    // Priority-fixes brief (roadmap gap analysis), Part 5 — same
+    // next-transition messaging as en.tsx's hero block; see that file's
+    // comment for when this is shown instead of the plain openNow/closedNow.
+    openClosesAt: (time: string) => `Avoinna — suljetaan klo ${time}`,
+    closedOpensAt: (time: string) => `Suljettu — avataan klo ${time}`,
+    closedOpensAtDay: (dayLabel: string, time: string) => `Suljettu — avataan ${dayLabel} klo ${time}`,
+    tomorrow: 'huomenna',
     etaRange: '25–35 min',
     subtitle: 'Tuoretta taikinaa, valmistettu tilauksesta, aina kuumana. Valitse kategoria tai selaa koko ruokalistaa — kotiinkuljetus tai nouto valitaan kassalla.',
   },
@@ -115,6 +132,14 @@ const fi = {
     loading: 'Ladataan ruokalistaa…',
     loadError: 'Ruokalistaa ei voitu ladata. Yritä uudelleen.',
     note: 'Lisätäytteet 2,50 €: 120 g pihvi, pekoni, juusto, ananas, sinihomejuusto, sipuli, kananmuna · Kastikkeet: ketsuppi, jogurttikastike, suolakurkku, sitruunamehu, majoneesi, amerikanmajoneesi, persilja, minttu, chilihiutaleet.',
+    relatedCategoriesHeading: 'Saatat pitää myös näistä',
+    // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 2 — menu
+    // search (see components/MenuSection.tsx).
+    searchPlaceholder: 'Hae ruokalistalta…',
+    searchLabel: 'Hae ruokalistan tuotteita',
+    clearSearch: 'Tyhjennä haku',
+    noResultsHeading: 'Tuloksia ei löytynyt',
+    noResults: (query: string) => `Yksikään tuote ei vastaa hakua "${query}". Kokeile toista hakusanaa.`,
   },
 
   story: {
@@ -124,6 +149,10 @@ const fi = {
     stat1Label: 'Valmistetaan tilauksesta',
     stat2Label: 'Tuotetta ruokalistalla',
     stat3Label: 'Päivää viikossa',
+    bannerAltFallback: (index: number) => `Kuva ozy.fi:n keittiöstä (${index + 1})`,
+    bannerPrev: 'Edellinen kuva',
+    bannerNext: 'Seuraava kuva',
+    bannerGoTo: (index: number) => `Siirry kuvaan ${index + 1}`,
   },
 
   visit: {
@@ -131,6 +160,8 @@ const fi = {
     openingHoursHeading: 'Aukioloajat',
     contactHeading: 'Yhteystiedot',
     closed: 'Suljettu',
+    // SEO gap-fill, Part C — ks. vastaava kommentti en.js:ssä.
+    notSet: '[Ei vielä asetettu — lisää Admin → Asetukset-kohdassa]',
     days: {
       mon: 'Maanantai', tue: 'Tiistai', wed: 'Keskiviikko', thu: 'Torstai',
       fri: 'Perjantai', sat: 'Lauantai', sun: 'Sunnuntai',
@@ -153,9 +184,12 @@ const fi = {
     cartAriaLabel: 'Ostoskori',
     removeOneAriaLabel: 'Poista yksi',
     addOneAriaLabel: 'Lisää yksi',
+    // Per-product-size brief — see en.tsx's matching key comment; `size` is
+    // now the sole heading for the per-product 'size' option-group selector.
     size: 'Koko',
-    medium: 'Keskikokoinen',
-    large: 'Iso',
+    // Option-gating-and-extras-system brief, Task 2 — see en.tsx's
+    // matching key comment.
+    extrasHeading: 'Lisät — napauta lisätäksesi',
     finishToppings: 'Viimeistely — napauta lisätäksesi täytteitä',
     bottom: 'Pohja',
     change: 'vaihda',
@@ -175,10 +209,12 @@ const fi = {
     climateBody: 'Tämän tuotteen arvioitu hiilijalanjälki lasketaan sen raaka-aineiden, pakkauksen ja valmistustavan perusteella. Kasvipohjaisten täytteiden ja juuston valitseminen yleensä pienentää tilauksesi jalanjälkeä.',
     loadingOptions: 'Ladataan vaihtoehtoja…',
     itemUnavailable: 'Tämä tuote ei ole juuri nyt saatavilla.',
+    relatedHeading: 'Saatat pitää myös näistä',
+    partOfBundleLabel: 'Saatavana myös yhdistelmätarjouksessa',
+    viewBundle: (bundleTitle: string) => `Katso "${bundleTitle}" -yhdistelmätarjous`,
     addToOrder: (price: string) => `Lisää tilaukseen — ${price}`,
     addToBundle: 'Lisää pakettiin',
     addToBundleExtra: (price: string) => `Lisää pakettiin — +${price}`,
-    largeUpchargeDetail: (price: string) => `Iso (+${price})`,
   },
 
   bundleModal: {
@@ -246,6 +282,16 @@ const fi = {
     card: 'Kortti',
     cardDesc: 'Kortti, Google Pay tai Apple Pay',
     cardGenericError: 'Maksua ei voitu suorittaa. Tarkista korttitietosi ja yritä uudelleen.',
+    cardUnavailableError: 'Korttimaksu ei ole juuri nyt käytettävissä. Valitse maksu noudettaessa tai yritä hetken kuluttua uudelleen.',
+    // Audit-fixes-korjaukset, osa 1 — kun korttimaksun PaymentIntent on
+    // luotu, taaksepäin siirtyminen lukitaan (ks. CheckoutModal.tsx), jotta
+    // tilaus/osoite ei voi enää hiljaa poiketa siitä mitä näytetään. Tämä on
+    // ainoa selkeä tapa perua se tila.
+    paymentLockedNotice: 'Tilauksesi on lukittu maksun ajaksi. Jos haluat muuttaa jotain, peruuta ja aloita alusta.',
+    cancelPaymentAction: 'Peruuta ja aloita alusta',
+    cancellingPayment: 'Perutaan…',
+    // Audit-fixes-korjaukset, osa 6.3.
+    securePaymentNotice: 'Turvallinen maksu',
     continue: 'Jatka',
     continueWithTotal: (total: string) => `Jatka — ${total}`,
     placeOrder: (total: string) => `Tilaa — ${total}`,
@@ -257,8 +303,21 @@ const fi = {
     snacks: 'Naposteltavat',
     added: 'Lisätty',
     // Growth features (Feature 2 — first-order welcome discount).
-    welcomeDiscountBanner: (pct: number) => `🎉 Ensimmäinen tilaus? Saat ${pct}% alennuksen — lisätään automaattisesti kassalla!`,
-    scheduledOfferBanner: (label: string, pct: number) => `🔥 ${label}: ${pct}% alennus — lisätään automaattisesti kassalla!`,
+    // amountText: ks. header.scheduledOfferBanner:n kommentti.
+    welcomeDiscountBanner: (amountText: string) => `🎉 Ensimmäinen tilaus? Saat ${amountText} alennuksen — lisätään automaattisesti kassalla!`,
+    scheduledOfferBanner: (label: string, amountText: string) => `🔥 ${label}: ${amountText} alennus — lisätään automaattisesti kassalla!`,
+    // Round-2 fixes brief, Part 1 / Part 5 — ks. en.tsx:n vastaavat
+    // kommentit.
+    deliveryFeeRow: 'Toimitusmaksu',
+    minOrderNotice: (amountNeeded: string, minimum: string) =>
+      `Lisää tilaukseen ${amountNeeded} saavuttaaksesi kotiinkuljetuksen ${minimum} vähimmäissumman.`,
+    orderTypeHeading: 'Miten haluat saada tilauksesi?',
+    orderTypeDelivery: 'Kotiinkuljetus',
+    orderTypeDeliveryDesc: 'Toimitetaan ovellesi',
+    orderTypePickup: 'Nouto',
+    orderTypePickupDesc: 'Nouda tilaus itse ravintolasta',
+    pickupInfoHeading: 'Noutopaikka ja aukioloajat',
+    pickupInfoIntro: 'Tule meille osoitteeseen:',
   },
 
   confirm: {
@@ -272,6 +331,16 @@ const fi = {
     stampCardApplied: (amount: string) => `Kanta-asiakasetu käytössä: −${amount}`,
     codNote: (total: ReactNode) => (
       <>Maksa <b>{total}</b> käteisellä, kun tilauksesi saapuu.</>
+    ),
+    // Round-2 fixes brief, Part 5 — nouto-tilauksen vastine yllä olevalle
+    // codNotelle (asiakas noutaa itse, ei kuriiri toimita).
+    codNotePickup: (total: ReactNode) => (
+      <>Maksa <b>{total}</b> käteisellä, kun noudat tilauksesi.</>
+    ),
+    // Part A (order confirmation screen) — shown instead of codNote when
+    // paymentMethod is 'card'.
+    cardPaidNote: (total: ReactNode) => (
+      <>Maksettu <b>{total}</b> — kiitos!</>
     ),
     saveOrderNumber: (trackLink: ReactNode) => (
       <>Tallenna tilausnumerosi — voit tarkistaa tilauksesi tilan milloin tahansa {trackLink}-sivulla.</>
@@ -287,6 +356,22 @@ const fi = {
     codeCopied: 'Kopioitu!',
     // Growth features batch 2 (Feature 6 — "Ozy Wow Moment").
     wowMomentReward: '✨ Wow-hetki! Voitit yllätyspalkinnon seuraavaan tilaukseesi:',
+  },
+
+  // Part B (Stripe return_url / redirect handling) — ks. lib/i18n/en.tsx:n
+  // sama kommentti.
+  checkoutReturn: {
+    checkingTitle: 'Tarkistetaan maksuasi…',
+    checkingMessage: 'Hetki, vahvistamme maksusi Stripen kautta.',
+    processingTitle: 'Maksua käsitellään',
+    processingMessage: 'Maksusi on vielä käsittelyssä. Päivitämme tilauksesi heti, kun maksu on vahvistettu — voit tarkistaa tilanteen milloin tahansa Seuraa tilausta -sivulla.',
+    failedTitle: 'Maksua ei suoritettu',
+    failedMessage: 'Maksu ei mennyt läpi, joten tilaustasi ei tehty. Yritä uudelleen.',
+    errorTitle: 'Jokin meni pieleen',
+    errorMessage: 'Emme voineet vahvistaa maksusi tilaa täällä. Jos et ole varma, meniikö tilauksesi läpi, tarkista tilanne Seuraa tilausta -sivulta tai ota meihin yhteyttä ennen uutta yritystä.',
+    successNoOrderNumMessage: 'Maksusi meni läpi — kiitos! Jos tilausnumerosi ei näy tässä, voit hakea tilauksesi puhelinnumerolla Seuraa tilausta -sivulla.',
+    backToMenu: 'Takaisin menuun',
+    trackOrderLink: 'Seuraa tilausta',
   },
 
   track: {
@@ -316,10 +401,15 @@ const fi = {
     minutesLeft: (n: number) => `noin ${n} min jäljellä`,
     cancelledNotice: 'Tämä tilaus on peruutettu. Jos tämä on odottamatonta, soita meille.',
     stepReceived: 'Tilaus vastaanotettu',
+    stepAccepted: 'Hyväksytty',
     stepPreparing: 'Valmistetaan',
+    stepReady: 'Valmis',
     stepOnTheWay: 'Matkalla',
     stepDelivered: 'Toimitettu',
+    stepReadyForPickup: 'Valmis noudettavaksi',
+    stepPickedUp: 'Noudettu',
     deliveringTo: (addr: string, method: string) => `Toimitetaan osoitteeseen ${addr} · ${method}`,
+    pickupAt: (method: string) => `Valmis noudettavaksi ravintolastamme · ${method}`,
     codPaymentLabel: 'Käteinen toimituksessa',
     trackDifferentOrder: '← Seuraa toista tilausta',
     // Growth features (Feature 1 — reorder).
@@ -381,6 +471,46 @@ const fi = {
     s7Body: 'Kysyttävää näistä ehdoista? Lähetä sähköpostia osoitteeseen hello@ozy.fi.',
   },
 
+  // SEO-täydennys, osa C — ks. vastaava kommentti en.js:ssä. Nämä
+  // suomenkieliset merkkijonot ovat matalamman luottamuksen käännöksiä
+  // (ei natiivipuhujan tarkistamia) — merkitty tämän toimituksen
+  // raporttiin tämän projektin oman käytännön mukaisesti (ks. tämän
+  // tiedoston alun kommentti).
+  about: {
+    metaTitle: 'Meistä — ozy.fi',
+    title: 'Meistä',
+    storyHeading: 'Tarinamme',
+    storyPlaceholder: 'Paikkamerkki — lisää tähän ozy.fi:n oikea tarina: miten kaikki alkoi, mikä tekee meistä erilaisen, ja mitä muuta haluatte kertoa asiakkaille.',
+    findUsHeading: 'Meidät löydät',
+  },
+
+  contact: {
+    metaTitle: 'Ota yhteyttä — ozy.fi',
+    title: 'Ota yhteyttä',
+    intro: 'Kysyttävää tilauksesta, toimituksesta tai muusta? Näin tavoitat meidät.',
+  },
+
+  delivery: {
+    metaTitle: 'Kotiinkuljetus — ozy.fi',
+    title: 'Kotiinkuljetus',
+    intro: 'Tilaatko kotiinkuljetuksena? Tässä mitä voit odottaa.',
+    feeLabel: 'Toimitusmaksu',
+    minOrderLabel: 'Tilauksen vähimmäissumma',
+    areaHeading: 'Toimitusalue',
+    areaConfiguredIntro: 'Toimitamme tällä hetkellä näihin postinumeroihin (lyhyt merkintä kuten "00" kattaa kaikki sillä alkavat postinumerot):',
+    areaUnset: 'Toimitusaluetta ei ole tällä hetkellä rajattu — syötä osoitteesi kassalla, niin vahvistamme sen siellä.',
+  },
+
+  pickup: {
+    metaTitle: 'Nouto — ozy.fi',
+    title: 'Nouto',
+    intro: 'Haluatko noutaa tilauksesi itse? Tässä mistä ja milloin.',
+    locationHeading: 'Noutopiste',
+    hoursHeading: 'Noutoajat',
+    orderingHeading: 'Miten tilaan noudettavaksi',
+    orderingInstructions: 'Tilaa verkossa aivan kuten aina — lisää tuotteet ostoskoriin ja siirry kassalle. Valitse vaiheessa 2 "Nouto" "Kotiinkuljetuksen" sijaan: sinun ei tarvitse antaa toimitusosoitetta, eikä toimitusmaksua peritä. Tilauksesi on valmiina alla mainitussa osoitteessa ja aukioloaikoina.',
+  },
+
   error: {
     heading: 'Jokin meni pieleen',
     body: 'Sivun lataamisessa tapahtui virhe. Yritä uudelleen — jos ongelma jatkuu, palaa etusivulle.',
@@ -406,8 +536,13 @@ const fi = {
         a: 'Kyllä, kotiinkuljetuksella on minimitilaussumma. Se näkyy ostoskorissasi, samoin kuin kuinka paljon sinun tarvitsee vielä lisätä sen täyttämiseksi.',
       },
       {
+        // Audit-fixes-korjaukset, osa 2 — ks. en.tsx:n vastaava kommentti:
+        // vastaus väitti korttimaksun olevan vielä tulossa, vaikka se on jo
+        // käytössä. Pidetään yhdenmukaisena components/CheckoutModal.tsx:n
+        // maksutapavalinnan kanssa ('cod' ja 'card', jälkimmäinen kuvattu
+        // siellä "Kortti, Google Pay tai Apple Pay").
         q: 'Miten voin maksaa?',
-        a: 'Käteisellä kuljettajalle toimituksen yhteydessä. Verkkomaksu kortilla on tulossa pian.',
+        a: 'Voit maksaa kortilla, Google Paylla tai Apple Paylla verkossa kassalla, tai valita käteismaksun ja maksaa kuljettajalle tilauksen saapuessa.',
       },
       {
         q: 'Kuinka kauan toimitus kestää?',
@@ -425,6 +560,32 @@ const fi = {
         q: 'Voinko muuttaa tai peruuttaa tilaukseni sen tekemisen jälkeen?',
         a: 'Soita meille mahdollisimman pian — voimme usein tehdä muutoksia, jos tilauksesi valmistus ei ole vielä alkanut, mutta emme voi taata sitä valmistuksen jo alettua.',
       },
+      // Priority-fixes-korjaukset (roadmap gap analysis), osa 3 — viisi
+      // uutta kysymystä. Halal-saatavuutta ei lisätä tähän tarkoituksella:
+      // meillä ei ole vahvistettua vastausta siihen, eikä tämän koko
+      // toimeksiannon säännöissä keksitä liiketoimintatietoja — tämä on
+      // merkitty toimituksen raporttiin liikkeenomistajan vahvistusta
+      // odottavaksi.
+      {
+        q: 'Mitä ruokaa tarjoatte?',
+        a: 'ozy.fi tarjoaa tuoretta, tilauksesta valmistettua pizzaa, kebabia ja hampurilaisia sekä schnitzeleitä, kanaa ja salaatteja — selaa koko ruokalistaa nähdäksesi kaiken tänään saatavilla olevan.',
+      },
+      {
+        q: 'Onko teillä nouto vai vain kotiinkuljetus?',
+        a: 'Molemmat. Valitse kassalla tilaustyypiksi "Nouto" välttääksesi toimitusmaksun — noutotilaukset valmistetaan heti niiden saavuttua (erillistä noutoaikaa ei vielä voi varata, joten tilaukset valmistuvat saapumisjärjestyksessä) ja ne ovat noudettavissa suoraan meiltä.',
+      },
+      {
+        q: 'Mitkä ovat aukioloaikanne?',
+        a: 'Ajantasaiset aukioloaikamme näkyvät etusivun yläosassa, samoin kuin se, olemmeko juuri nyt avoinna — ajat voivat vaihdella päivittäin, joten sieltä näet aina uusimman tiedon.',
+      },
+      {
+        q: 'Missä sijaitsette?',
+        a: 'Osoitteemme näkyy etusivun "Löydä meidät" -osiossa sekä Toimitus-sivullamme, yhdessä toimitusalueemme ja yhteystietojemme kanssa.',
+      },
+      {
+        q: 'Mitä kokoja on saatavilla?',
+        a: 'Pizzat ja muut muokattavat tuotteet ovat saatavilla Medium- ja Large-koossa (Large pientä lisämaksua vastaan) — valitse koko, pohja, kastike, juusto ja täytteet muokatessasi tuotetta. Tuotteet, joita ei voi muokata (kuten useimmat hampurilaiset), ovat saatavilla yhdessä koossa.',
+      },
     ],
   },
 
@@ -432,6 +593,47 @@ const fi = {
     heading: 'Sivua ei löytynyt',
     body: 'Etsimääsi sivua ei ole olemassa tai se on siirretty.',
     goHome: 'Etusivulle',
+  },
+
+  // Tilauskohtainen lasku (admin-paneeli, app/admin/orders/[id]/invoice) —
+  // ainoa kaksikielinen kohta admin-paneelissa, koska toisin kuin muu
+  // (tarkoituksella englanninkielinen, sisäinen) admin-käyttöliittymä,
+  // tämän sivun voi tulostaa/tallentaa ja antaa suoraan asiakkaalle.
+  invoice: {
+    documentTitle: 'Lasku',
+    orderNumber: 'Tilausnumero',
+    orderDate: 'Tilauspäivä',
+    customer: 'Asiakas',
+    itemsHeading: 'Tuotteet',
+    columnItem: 'Tuote',
+    columnQty: 'Määrä',
+    columnUnitPrice: 'Á-hinta',
+    columnLineTotal: 'Yhteensä',
+    subtotal: 'Välisumma',
+    discount: 'Alennus',
+    adjustment: 'Toimitusmaksu / muu lisäys',
+    total: 'Loppusumma',
+    paymentMethod: 'Maksutapa',
+    paymentStatus: 'Maksun tila',
+    vatNote: 'Hinnat sisältävät ALV:n, mikäli sovellettavissa.',
+    printButton: 'Tulosta / tallenna PDF',
+    backToOrder: '← Takaisin tilaukseen',
+    loading: 'Ladataan laskua…',
+    notFound: 'Tilausta ei voitu ladata.',
+    forbidden: 'Sinulla ei ole oikeutta laskuihin — pyydä esihenkilöä tai omistajaa.',
+    signInRequired: 'Kirjaudu sisään nähdäksesi tämän laskun.',
+    pickupLabel: 'Noutotilaus — asiakas noutaa itse, ei toimitusosoitetta.',
+    discountSourceLabel: {
+      manual_coupon: 'Alennuskoodi',
+      referral: 'Suosituspalkkio',
+      first_order_welcome: 'Ensitilausalennus',
+      stamp_card: 'Kanta-asiakaspalkkio',
+      scheduled_offer: 'Erikoistarjous',
+    } as Record<string, string>,
+    paymentMethodLabel: {
+      cod: 'Käteinen toimituksessa',
+      card: 'Kortti',
+    } as Record<string, string>,
   },
 
   languageSwitcher: {
