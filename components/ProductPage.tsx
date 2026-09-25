@@ -488,32 +488,6 @@ export default function ProductPage() {
             <p className="pp-additional-info">{activeProduct.additionalInfo}</p>
           )}
 
-          {/* Option-gating-and-extras-system brief, Task 2 — the general
-              "Extras" row. Deliberately OUTSIDE the `selection.toppingsEnabled`
-              block below (unlike every row inside it) — extras must work on
-              ANY product, explicitly including a non-customizable one like a
-              kebab (has_toppings=0), so it can't be gated behind that same
-              flag. `hasRealExtras` is genuinely per-product (see its own
-              comment above), so this shows only for a product the business
-              owner has actually given extras to. */}
-          {hasRealExtras && (
-            <div className="pp-section">
-              <p className="pp-label">{t.productPage.extrasHeading}</p>
-              <div className="pp-extras-list">
-                {selection.extraOptions.map((opt) => {
-                  const checked = selection.extraIds.includes(opt.id);
-                  return (
-                    <label key={opt.id} className={`pp-extra-row${checked ? ' is-selected' : ''}`}>
-                      <input type="checkbox" checked={checked} onChange={() => toggleExtra(opt.id)} />
-                      <span>{opt.label}</span>
-                      {opt.delta > 0 && <span className="opt-delta">+{opt.delta.toFixed(2)} €</span>}
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {selection.toppingsEnabled && (
             <>
               {/* Per-product-size brief — the M/L toggle that used to live
@@ -615,6 +589,40 @@ export default function ProductPage() {
 
               <ProductDetails t={t} />
             </>
+          )}
+
+          {/* Option-gating-and-extras-system brief, Task 2 — the general
+              "Extras" row. Deliberately OUTSIDE the `selection.toppingsEnabled`
+              block above (unlike every row inside it) — extras must work on
+              ANY product, explicitly including a non-customizable one like a
+              kebab (has_toppings=0), so it can't be gated behind that same
+              flag. `hasRealExtras` is genuinely per-product (see its own
+              comment above), so this shows only for a product the business
+              owner has actually given extras to.
+              Positioned here (after size/base/sauce/toppings/fillings/dip,
+              right before "Related products") rather than right after the
+              name/description — per direct feedback, having it appear
+              immediately under the product name read as visually odd; this
+              reads as a natural "one last thing before checkout" step
+              instead, and doesn't change for a kebab (which has no
+              toppingsEnabled content above it at all) — extras there simply
+              becomes the first and only section, same as before. */}
+          {hasRealExtras && (
+            <div className="pp-section">
+              <p className="pp-label">{t.productPage.extrasHeading}</p>
+              <div className="pp-extras-list">
+                {selection.extraOptions.map((opt) => {
+                  const checked = selection.extraIds.includes(opt.id);
+                  return (
+                    <label key={opt.id} className={`pp-extra-row${checked ? ' is-selected' : ''}`}>
+                      <input type="checkbox" checked={checked} onChange={() => toggleExtra(opt.id)} />
+                      <span>{opt.label}</span>
+                      {opt.delta > 0 && <span className="opt-delta">+{opt.delta.toFixed(2)} €</span>}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
           )}
 
           {/* Round-2 fixes brief, Part 3 — outside the toppingsEnabled
