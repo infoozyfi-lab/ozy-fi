@@ -226,7 +226,7 @@ const en = {
     size: 'Size',
     // Option-gating-and-extras-system brief, Task 2 — heading for the
     // general per-product "Extras" multi-select row (components/ProductPage.tsx).
-    extrasHeading: 'Extras',
+    extrasHeading: 'Extras — tap to add',
     finishToppings: 'Finish — tap to add toppings',
     bottom: 'Bottom',
     change: 'change',

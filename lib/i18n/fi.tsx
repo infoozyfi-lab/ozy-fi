@@ -189,7 +189,7 @@ const fi = {
     size: 'Koko',
     // Option-gating-and-extras-system brief, Task 2 — see en.tsx's
     // matching key comment.
-    extrasHeading: 'Lisät',
+    extrasHeading: 'Lisät — napauta lisätäksesi',
     finishToppings: 'Viimeistely — napauta lisätäksesi täytteitä',
     bottom: 'Pohja',
     change: 'vaihda',
