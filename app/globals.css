@@ -644,9 +644,17 @@ footer{ padding: 56px 0 32px; }
 .pp-price-badge .pp-price-row{ display:flex; align-items:baseline; font-family:'Anton', sans-serif; font-size: 1.75rem; }
 .pp-price-dec{ font-size: 0.95rem; align-self:flex-start; margin-top:2px; }
 .pp-price-eur{ font-size: 0.75rem; margin-left: 2px; align-self:flex-start; margin-top:2px; }
+
 .pp-body{ padding: 44px 20px 26px; }
 .pp-name{ font-family:'Anton', sans-serif; font-size: clamp(1.7rem, 5vw, 2.2rem); color: var(--cream); margin: 0 0 12px; }
 .pp-desc{ color: var(--muted); font-size: 1rem; margin: 0 0 28px; }
+/* Option-gating-and-extras-system brief, Task 3 — same type scale as
+   .pp-desc above (matching this project's existing typography, per that
+   task's explicit "not a new visual treatment" instruction), just
+   readable body-color text rather than muted, since this is business-
+   authored content (a prep note, an allergen callout) rather than the
+   ambient product description. */
+.pp-additional-info{ color: var(--cream); font-size: 0.95rem; line-height: 1.5; margin: -14px 0 28px; }
 .pp-label{ color: var(--gold); font-weight:700; font-size: 0.8rem; letter-spacing: 0.05em; text-transform: uppercase; margin: 0 0 12px; }
 /* Per-product-size brief, Part 2 — .pp-toggle/.pp-toggle-opt/.pp-toggle-sub
    (the old M/L upcharge toggle's styling) removed along with the JSX that
@@ -687,6 +695,7 @@ footer{ padding: 56px 0 32px; }
 .pp-qty button{ width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--bg); color: var(--cream); font-size: 1.1rem; cursor:pointer; }
 .pp-qty span{ font-family:'Anton', sans-serif; min-width: 18px; text-align:center; }
 .pp-add-btn{ flex:1; padding-top: 8px; padding-bottom: 8px; }
+
 /* ---------- PRODUCT PAGE — bottom accordion / fillings (moved out of
    ProductPage.js's <style jsx> block; static export was not reliably
    loading component-scoped styles, so these now live here as plain CSS)
@@ -771,6 +780,21 @@ footer{ padding: 56px 0 32px; }
 .pp-bottom-options label:last-child { border-bottom: none; }
 .pp-bottom-options label.is-current { background: rgba(232, 98, 42, 0.1); font-weight: 700; }
 .pp-bottom-options .opt-delta { margin-left: auto; color: var(--ember-dark); font-weight: 700; }
+
+/* Option-gating-and-extras-system brief, Task 2 — the general per-product
+   "Extras" multi-select row. Same bordered-row-list look as
+   .pp-bottom-options above (this project's existing pattern for an
+   option list), just always-expanded (no "change" toggle — a checkbox
+   list needs no collapse/expand step) and checkbox rather than radio. */
+.pp-extras-list { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.pp-extra-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; font-size: 14px; color: var(--cream);
+  border-bottom: 1px solid var(--line); cursor: pointer; background: var(--bg-card);
+}
+.pp-extra-row:last-child { border-bottom: none; }
+.pp-extra-row.is-selected { background: rgba(232, 98, 42, 0.1); font-weight: 700; }
+.pp-extra-row .opt-delta { margin-left: auto; color: var(--ember-dark); font-weight: 700; }
 
 .pp-cat-list { display: flex; flex-direction: column; gap: 10px; }
 .pp-cat { background: var(--bg-card); border-radius: 12px; overflow: hidden; }

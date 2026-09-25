@@ -224,6 +224,9 @@ const en = {
     // the pizza-size-feature brief have been removed — this is the smaller,
     // cleaner consolidation the brief asked for.
     size: 'Size',
+    // Option-gating-and-extras-system brief, Task 2 — heading for the
+    // general per-product "Extras" multi-select row (components/ProductPage.tsx).
+    extrasHeading: 'Extras',
     finishToppings: 'Finish — tap to add toppings',
     bottom: 'Bottom',
     change: 'change',

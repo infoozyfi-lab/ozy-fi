@@ -100,6 +100,11 @@ export function normalizeProducts(rawProducts: RawProduct[] | null | undefined, 
       toppings: Boolean(item.has_toppings),
       toppingsEnabled: Boolean(item.has_toppings),
       sort_order: item.sort_order,
+      // Option-gating-and-extras-system brief, Task 3 — see
+      // Product.additionalInfo's own comment. Same resolveText fallback
+      // rule as `desc` above; resolves to '' when neither column is set,
+      // which components/ProductPage.tsx treats as "render nothing."
+      additionalInfo: resolveText(item.additional_info, item.additional_info_fi, locale),
       // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 2 — see
       // Product.searchText's comment (lib/types.ts). Built from every raw
       // bilingual text field this row has, regardless of `locale`, so a
@@ -153,6 +158,14 @@ export function normalizeMenuBlob(raw: MenuData, locale: Locale): MenuBlob {
   // last one processed wins — same "last one wins" behavior every other
   // kind already has for multiple same-kind groups.
   const sizeOptionsByProduct: Record<string, OptionItem[]> = {};
+  // Option-gating-and-extras-system brief, Task 2 — same per-product
+  // keying as sizeOptionsByProduct above, generalized to the new 'extra'
+  // kind. Deliberately a SEPARATE map (not reusing sizeOptionsByProduct)
+  // since the two kinds are attached to different Product fields below
+  // (sizeOptions vs. extraOptions) with different fallback rules (size
+  // always gets a synthesized base entry when real tiers exist; extras
+  // never do — see Product.extraOptions's own comment).
+  const extraOptionsByProduct: Record<string, OptionItem[]> = {};
 
   const groups = raw.optionGroups || [];
   groups.forEach((g) => {
@@ -188,6 +201,18 @@ export function normalizeMenuBlob(raw: MenuData, locale: Locale): MenuBlob {
         // nothing to sort here, same as every other option kind.
         if (g.product_id && opts.length) {
           sizeOptionsByProduct[g.product_id] = opts;
+        }
+        break;
+      case 'extra':
+        // Option-gating-and-extras-system brief, Task 2 — same
+        // product_id-scoping rule as 'size' above (a group with no
+        // product_id is simply never applied to any product — 'extra' is
+        // per-product only, there is no "global extras list" concept).
+        // "Last one wins" if more than one 'extra' group somehow exists
+        // for the same product, same convention every other kind already
+        // has for duplicate same-kind groups.
+        if (g.product_id && opts.length) {
+          extraOptionsByProduct[g.product_id] = opts;
         }
         break;
       case 'topping':
@@ -265,6 +290,13 @@ export function normalizeMenuBlob(raw: MenuData, locale: Locale): MenuBlob {
     } else {
       p.sizeOptions = FALLBACK_OPTION;
     }
+    // Option-gating-and-extras-system brief, Task 2 — no synthesized entry
+    // and no FALLBACK_OPTION here, unlike sizeOptions just above: an
+    // unconfigured product simply gets an empty array (see
+    // Product.extraOptions's own comment for why), which
+    // components/ProductPage.tsx reads as "no real extras — render no
+    // extras row at all."
+    p.extraOptions = extraOptionsByProduct[p.id] || [];
   });
 
   const addons = raw.addons || [];

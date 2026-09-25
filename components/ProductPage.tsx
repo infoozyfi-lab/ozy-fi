@@ -369,7 +369,7 @@ function RelatedProducts({
 export default function ProductPage() {
   const {
     activeProduct, selection, unitPrice, lineTotal,
-    isProductPageOpen, closeProduct, toggleTopping, setQty, setOption,
+    isProductPageOpen, closeProduct, toggleTopping, toggleExtra, setQty, setOption,
     setFillingQty, addToCart, goToCheckoutDirect,
     toppings: TOPPINGS, toppingPrice: TOPPING_PRICE,
     baseOptions: BASE_OPTIONS, sauceOptions: SAUCE_OPTIONS, cheeseOptions: CHEESE_OPTIONS,
@@ -396,6 +396,45 @@ export default function ProductPage() {
   // with just one tier still counts (it's a genuine admin choice, not the
   // fallback), so this checks the sentinel id, not the array length alone.
   const hasRealSizeTiers = !(selection.sizeOptions.length === 1 && selection.sizeOptions[0].id === 'default');
+
+  // Option-gating-and-extras-system brief, Task 1 — same sentinel-id check
+  // as hasRealSizeTiers above, applied to each of the other option-group
+  // kinds this page renders. Base/sauce/cheese/sauce-stripe/dip are all
+  // still GLOBAL lists today (only 'size' and 'extra' are ever scoped per-
+  // product — see worker/schema.sql's option_groups.product_id comment),
+  // so "does real data exist for this product" reduces to "has the admin
+  // configured a real, non-fallback group for this kind AT ALL" — every
+  // toppingsEnabled product currently gets the same answer for these rows
+  // (there's no per-product base/sauce/cheese/sauce-stripe/dip data model
+  // to differ by), which is disclosed in this feature's delivery report.
+  // Only a real admin-configured group (any shape, even a single option)
+  // counts — never the synthetic single-entry fallback every unconfigured
+  // kind falls back to in lib/menu-i18n.ts's normalizeMenuBlob.
+  const hasRealBase = !(BASE_OPTIONS.length === 1 && BASE_OPTIONS[0].id === 'default');
+  const hasRealSauce = !(SAUCE_OPTIONS.length === 1 && SAUCE_OPTIONS[0].id === 'default');
+  const hasRealCheese = !(CHEESE_OPTIONS.length === 1 && CHEESE_OPTIONS[0].id === 'default');
+  const hasRealSauceStripe = !(SAUCE_STRIPE_OPTIONS.length === 1 && SAUCE_STRIPE_OPTIONS[0].id === 'default');
+  const hasRealDip = !(DIP_OPTIONS.length === 1 && DIP_OPTIONS[0].id === 'default');
+  // "More Fillings" section — fillingCategories has no synthetic fallback
+  // entry at all (it's simply an empty array when unconfigured, unlike
+  // every other kind above), so real data is just "is it non-empty."
+  // CurrentFillings (the running "Current fillings" summary right above
+  // "More Fillings") is gated by this SAME flag, not just the literal
+  // "More Fillings" section named in the brief — the two are one system
+  // with no independent existence (CurrentFillings has no way to ever
+  // gain an entry when there are no filling categories to add one from),
+  // so showing it alone would be exactly the kind of dead placeholder
+  // this task removes; see this feature's delivery report.
+  const hasRealFillingCategories = FILLING_CATEGORIES.length > 0;
+  // Option-gating-and-extras-system brief, Task 2 — UNLIKE every check
+  // above, this one IS genuinely per-product (selection.extraOptions is a
+  // snapshot of the active product's own extras — see Selection.extraOptions's
+  // own comment) and has no fallback/sentinel-id shape to check against at
+  // all (lib/menu-i18n.ts's normalizeMenuBlob never gives an unconfigured
+  // product anything but a plain empty array here — see
+  // Product.extraOptions's own comment) — a real, admin-added extra is the
+  // only thing that ever makes this true.
+  const hasRealExtras = selection.extraOptions.length > 0;
 
   const [intPart, decPart] = unitPrice.toFixed(2).split('.');
 
@@ -429,6 +468,49 @@ export default function ProductPage() {
         <div className="pp-body wrap">
           <h1 className="pp-name">{activeProduct.name}</h1>
           <p className="pp-desc">{activeProduct.desc}</p>
+
+          {/* Option-gating-and-extras-system brief, Task 3 — freeform
+              per-product note (worker/migrations/
+              023_extras_and_additional_info.sql's additional_info/
+              additional_info_fi). Placed directly after the description
+              (and before any customization UI) since it reads as part of
+              "what is this product" rather than "how do I customize it" —
+              a prep note or allergen callout belongs with the product's
+              own description, not buried below its options. Renders
+              nothing at all — no heading, no empty section — when unset,
+              same "only render if real data exists" principle as every
+              row below. Plain typography (pp-additional-info, defined
+              alongside pp-desc in app/globals.css/globals.css), not a new
+              visual treatment, per that task's own explicit scoping. */}
+          {activeProduct.additionalInfo && (
+            <p className="pp-additional-info">{activeProduct.additionalInfo}</p>
+          )}
+
+          {/* Option-gating-and-extras-system brief, Task 2 — the general
+              "Extras" row. Deliberately OUTSIDE the `selection.toppingsEnabled`
+              block below (unlike every row inside it) — extras must work on
+              ANY product, explicitly including a non-customizable one like a
+              kebab (has_toppings=0), so it can't be gated behind that same
+              flag. `hasRealExtras` is genuinely per-product (see its own
+              comment above), so this shows only for a product the business
+              owner has actually given extras to. */}
+          {hasRealExtras && (
+            <div className="pp-section">
+              <p className="pp-label">{t.productPage.extrasHeading}</p>
+              <div className="pp-extras-list">
+                {selection.extraOptions.map((opt) => {
+                  const checked = selection.extraIds.includes(opt.id);
+                  return (
+                    <label key={opt.id} className={`pp-extra-row${checked ? ' is-selected' : ''}`}>
+                      <input type="checkbox" checked={checked} onChange={() => toggleExtra(opt.id)} />
+                      <span>{opt.label}</span>
+                      {opt.delta > 0 && <span className="opt-delta">+{opt.delta.toFixed(2)} €</span>}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {selection.toppingsEnabled && (
             <>
@@ -474,37 +556,60 @@ export default function ProductPage() {
                 </div>
               </div>
 
-              <div className="pp-section">
-                <p className="pp-label">{t.productPage.bottom}</p>
-                <div className="pp-bottom-list">
-                  <BottomRow label="base" options={BASE_OPTIONS} current={selection.base} onChange={(id) => setOption('base', id)} t={t} />
-                  <BottomRow label="sauce" options={SAUCE_OPTIONS} current={selection.sauce} onChange={(id) => setOption('sauce', id)} t={t} />
-                  <BottomRow label="cheese" options={CHEESE_OPTIONS} current={selection.cheese} onChange={(id) => setOption('cheese', id)} t={t} />
+              {/* Option-gating-and-extras-system brief, Task 1 — this
+                  section (and each row inside it) now independently
+                  requires real admin-configured data for its own kind
+                  (hasRealBase/hasRealSauce/hasRealCheese — see their own
+                  comments above), not just `selection.toppingsEnabled`.
+                  The wrapping heading itself only shows when at least one
+                  of the three rows has something real to show — an empty
+                  "Bottom" heading over zero rows would be exactly the kind
+                  of dead placeholder this task removes. */}
+              {(hasRealBase || hasRealSauce || hasRealCheese) && (
+                <div className="pp-section">
+                  <p className="pp-label">{t.productPage.bottom}</p>
+                  <div className="pp-bottom-list">
+                    {hasRealBase && <BottomRow label="base" options={BASE_OPTIONS} current={selection.base} onChange={(id) => setOption('base', id)} t={t} />}
+                    {hasRealSauce && <BottomRow label="sauce" options={SAUCE_OPTIONS} current={selection.sauce} onChange={(id) => setOption('sauce', id)} t={t} />}
+                    {hasRealCheese && <BottomRow label="cheese" options={CHEESE_OPTIONS} current={selection.cheese} onChange={(id) => setOption('cheese', id)} t={t} />}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <CurrentFillings allFillings={ALL_FILLINGS} fillings={selection.fillings} onSetQty={setFillingQty} t={t} />
+              {/* Option-gating-and-extras-system brief, Task 1 — see
+                  hasRealFillingCategories's own comment: CurrentFillings and
+                  the "More Fillings" section below are one system, gated
+                  together. */}
+              {hasRealFillingCategories && (
+                <>
+                  <CurrentFillings allFillings={ALL_FILLINGS} fillings={selection.fillings} onSetQty={setFillingQty} t={t} />
 
-              <SauceStripeRow options={SAUCE_STRIPE_OPTIONS} current={selection.sauceStripe} onChange={(id) => setOption('sauceStripe', id)} t={t} />
+                  <div className="pp-section">
+                    <p className="pp-heading">{t.productPage.moreFillings}</p>
+                    <div className="pp-cat-list">
+                      {FILLING_CATEGORIES.map((cat) => (
+                        <MoreFillingsCategory
+                          key={cat.id}
+                          category={cat}
+                          fillings={selection.fillings}
+                          onSetQty={setFillingQty}
+                          open={openCat === cat.id}
+                          onToggle={() => setOpenCat((c) => (c === cat.id ? null : cat.id))}
+                          t={t}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
 
-              <div className="pp-section">
-                <p className="pp-heading">{t.productPage.moreFillings}</p>
-                <div className="pp-cat-list">
-                  {FILLING_CATEGORIES.map((cat) => (
-                    <MoreFillingsCategory
-                      key={cat.id}
-                      category={cat}
-                      fillings={selection.fillings}
-                      onSetQty={setFillingQty}
-                      open={openCat === cat.id}
-                      onToggle={() => setOpenCat((c) => (c === cat.id ? null : cat.id))}
-                      t={t}
-                    />
-                  ))}
-                </div>
-              </div>
+              {hasRealSauceStripe && (
+                <SauceStripeRow options={SAUCE_STRIPE_OPTIONS} current={selection.sauceStripe} onChange={(id) => setOption('sauceStripe', id)} t={t} />
+              )}
 
-              <DipRow options={DIP_OPTIONS} current={selection.dip} onChange={(id) => setOption('dip', id)} t={t} />
+              {hasRealDip && (
+                <DipRow options={DIP_OPTIONS} current={selection.dip} onChange={(id) => setOption('dip', id)} t={t} />
+              )}
 
               <ProductDetails t={t} />
             </>

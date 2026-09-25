@@ -45,6 +45,11 @@ const TOLERANCE = 0.02;
 const MAX_TOPPINGS = 20;
 const MAX_FILLING_QTY = 20;
 const MAX_BUNDLE_ITEMS = 50;
+// Option-gating-and-extras-system brief, Task 2 — same generous-but-bounded
+// cap as MAX_TOPPINGS; extras are a per-product admin-defined list, so in
+// practice this is never close to hit, but the shape check below still
+// needs a bound against an oversized/abusive request array.
+const MAX_EXTRAS = 20;
 
 function findDelta(options: { id: string; delta: number }[], id: string | undefined): number {
   if (!id) return 0;
@@ -86,6 +91,17 @@ function validateSelectionShape(selection: unknown): selection is CartLineSelect
   for (const key of ['baseId', 'sauceId', 'cheeseId', 'sauceStripeId', 'dipId', 'sizeOptionId'] as const) {
     if (s[key] !== undefined && typeof s[key] !== 'string') return false;
   }
+  // Option-gating-and-extras-system brief, Task 2 — extraIds is OPTIONAL
+  // (unlike toppingIds' required-array check above) so a historical
+  // selection_json blob from before this feature existed still validates
+  // — see CartLineSelectionData.extraIds's own comment. When present, same
+  // bounds-checked-shape-only treatment as toppingIds: individual ids are
+  // never checked against real options here (an id that doesn't match one
+  // simply contributes 0 in calcUnitPriceFromSelection below).
+  if (s.extraIds !== undefined) {
+    if (!Array.isArray(s.extraIds) || s.extraIds.length > MAX_EXTRAS) return false;
+    if (!s.extraIds.every((e) => typeof e === 'string')) return false;
+  }
   return true;
 }
 
@@ -109,14 +125,43 @@ function validateSelectionShape(selection: unknown): selection is CartLineSelect
 // existing "not found" fallback below — it can never resolve to another
 // product's price. Verified for real in this brief's runtime harness (see
 // the delivery summary), not just reasoned about.
+// Option-gating-and-extras-system brief, Task 2 — `extraOptions` mirrors
+// `sizeOptions` above: a REQUIRED-in-spirit (defaulted to `[]`) parameter,
+// never read off `menu`, and always THIS SPECIFIC LINE'S OWN product's
+// extras (menu.products.find(p => p.id === ...)!.extraOptions — see every
+// call site below). Same money-critical reasoning as sizeOptions: option
+// ids are globally unique, so a tampered extraId naming a DIFFERENT
+// product's extra simply isn't present in THIS product's own extraOptions
+// array and contributes 0 via findDelta's "not found" fallback — it can
+// never resolve to another product's extra price.
 export function calcUnitPriceFromSelection(
   basePrice: number,
   toppingsEligible: boolean,
   selection: CartLineSelectionData,
   menu: MenuBlob,
-  sizeOptions: OptionItem[]
+  sizeOptions: OptionItem[],
+  extraOptions: OptionItem[] = []
 ): number {
   let unit = basePrice;
+
+  // Option-gating-and-extras-system brief, Task 2 — extras are
+  // DELIBERATELY summed here, before the `toppingsEligible` early-return
+  // below, unlike every other option kind in this function (toppings/
+  // base/sauce/cheese/size/fillings/sauce-stripe/dip — all still gated
+  // behind has_toppings exactly as before this brief). Task 2's own goal
+  // is extras available on ANY product — explicitly including a non-
+  // customizable one like a kebab (has_toppings=0) — so this sum can't be
+  // behind that gate. Summed per selected extra's OWN price_delta (never
+  // the flat toppings[0]-only-times-count formula toppings above uses) —
+  // extras genuinely have different prices from each other (e.g. "Double
+  // meat +4.00€" vs. "Extra sauce +1.50€"), so only a real per-id lookup
+  // (findDelta, same primitive as everything else in this file) prices
+  // them correctly.
+  const selectedExtraIds = selection.extraIds || [];
+  for (const id of selectedExtraIds) {
+    unit += findDelta(extraOptions, id);
+  }
+
   if (!toppingsEligible) return unit;
 
   const toppingPrice = menu.toppings[0]?.delta || 0;
@@ -195,7 +240,7 @@ export function verifyProductLine(line: ProductLineInput, menu: MenuBlob): Price
     // calcUnitPriceFromSelection's header comment for why passing the
     // right product's own list here is what actually makes a
     // cross-product sizeOptionId tamper attempt fail).
-    expectedUnit = calcUnitPriceFromSelection(basePrice, toppingsEligible, line.selection, menu, product!.sizeOptions || []);
+    expectedUnit = calcUnitPriceFromSelection(basePrice, toppingsEligible, line.selection, menu, product!.sizeOptions || [], product!.extraOptions || []);
   }
   // No `selection` sent at all is treated as "no customization, base
   // price only" — the same thing a real customer gets by picking a
@@ -262,7 +307,7 @@ export function verifyBundleLine(line: BundleLineInput, menu: MenuBlob): PriceCh
     }
     const basePrice = product.price ?? 0;
     const toppingsEligible = Boolean(product.toppingsEnabled);
-    const unit = calcUnitPriceFromSelection(basePrice, toppingsEligible, item.selection, menu, product.sizeOptions || []);
+    const unit = calcUnitPriceFromSelection(basePrice, toppingsEligible, item.selection, menu, product.sizeOptions || [], product.extraOptions || []);
     // Same "customization extra over this product's own base price" the
     // client computes in StoreContext.addToCart's bundleSlotIndex branch
     // (`unitPrice - activeProduct.basePrice!`) — basePrice itself is
@@ -346,7 +391,7 @@ export function computeCurrentProductPrice(
   let resolvedSelection: CartLineSelectionData | undefined;
   if (selection !== undefined && validateSelectionShape(selection)) {
     resolvedSelection = selection;
-    unitPrice = calcUnitPriceFromSelection(basePrice, toppingsEligible, selection, menu, product!.sizeOptions || []);
+    unitPrice = calcUnitPriceFromSelection(basePrice, toppingsEligible, selection, menu, product!.sizeOptions || [], product!.extraOptions || []);
   }
   return { ok: true, productId, name: product!.name, image: product!.image, unitPrice, selection: resolvedSelection };
 }
@@ -387,7 +432,7 @@ export function computeCurrentBundlePrice(
     if (item.selection !== undefined && validateSelectionShape(item.selection)) {
       const basePrice = product.price ?? 0;
       const toppingsEligible = Boolean(product.toppingsEnabled);
-      const unit = calcUnitPriceFromSelection(basePrice, toppingsEligible, item.selection, menu, product.sizeOptions || []);
+      const unit = calcUnitPriceFromSelection(basePrice, toppingsEligible, item.selection, menu, product.sizeOptions || [], product.extraOptions || []);
       extrasTotal += unit - basePrice;
       resolvedItems.push({ productId: item.productId, selection: item.selection });
     } else {

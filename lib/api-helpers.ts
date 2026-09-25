@@ -46,6 +46,9 @@ export const ADMIN_TABLES: Record<string, AdminTableDef> = {
       // Admin SEO fields (worker/migrations/017_admin_seo_fields.sql) —
       // see that migration's header comment.
       'seo_title', 'seo_title_fi', 'canonical_url', 'noindex', 'og_image_url',
+      // Option-gating-and-extras-system brief, Task 3 (worker/migrations/
+      // 023_extras_and_additional_info.sql) — freeform per-product notes.
+      'additional_info', 'additional_info_fi',
     ],
   },
   // Per-product-size brief — `product_id` added (nullable, see

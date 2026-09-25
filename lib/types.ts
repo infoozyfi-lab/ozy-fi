@@ -91,6 +91,12 @@ export interface RawProduct {
   has_toppings?: number | boolean;
   sort_order?: number;
   active?: number;
+  // Option-gating-and-extras-system brief, Task 3 — freeform per-product
+  // notes (worker/migrations/023_extras_and_additional_info.sql). NULL/
+  // undefined means "nothing written" — see Product.additionalInfo's own
+  // comment for the customer-facing fallback (nothing rendered at all).
+  additional_info?: string | null;
+  additional_info_fi?: string | null;
   // Admin SEO fields (worker/migrations/017_admin_seo_fields.sql) — see
   // that migration's header comment for what each one overrides.
   seo_title?: string | null;
@@ -121,7 +127,13 @@ export interface RawOptionGroup {
   // CartLineSelectionData.size) was retired by the per-product-size
   // brief — `sizeOptionId` (see Selection/CartLineSelectionData below) is
   // now the only size-related field.
-  kind: 'base' | 'sauce' | 'cheese' | 'sauce_stripe' | 'dip' | 'topping' | 'filling' | 'size' | string;
+  // Option-gating-and-extras-system brief, Task 2 — 'extra' added
+  // alongside 'size'. Generalizes the exact same per-product mechanism
+  // (product_id-scoped groups — see that field's own comment below) but,
+  // unlike 'size' (single-select, required, always has a synthesized base
+  // tier), is multi-select and optional, with no synthesized entry — see
+  // lib/menu-i18n.ts's normalizeMenuBlob and Product.extraOptions.
+  kind: 'base' | 'sauce' | 'cheese' | 'sauce_stripe' | 'dip' | 'topping' | 'filling' | 'size' | 'extra' | string;
   title?: string;
   title_fi?: string | null;
   icon?: string | null;
@@ -242,6 +254,30 @@ export interface Product {
   // as StoreContext.openProduct()'s productHint (see this interface's own
   // header comment), which was never run through normalizeMenuBlob.
   sizeOptions?: OptionItem[];
+  // Option-gating-and-extras-system brief, Task 2 — THIS product's own
+  // admin-defined extras (e.g. "Double meat +4.00€"), built by
+  // lib/menu-i18n.ts's normalizeMenuBlob from whichever `'extra'`-kind
+  // option_groups row(s) have this product's own id as `product_id` —
+  // same per-product mechanism as `sizeOptions` above, generalized to a
+  // second kind. Unlike sizeOptions, this is NEVER defaulted to a single
+  // fallback/"Default" entry when unconfigured — an extra has no
+  // equivalent of a product's base price being auto-included (see this
+  // brief's own explicit "no synthesized base tier" instruction), so an
+  // unconfigured product simply gets an empty array here, and
+  // components/ProductPage.tsx renders no extras row at all for it.
+  // Always an array (never undefined) on a normalized product; optional
+  // here only because this same `Product` shape also covers a raw D1 row
+  // passed straight through as productHint (see this interface's own
+  // header comment), which was never run through normalizeMenuBlob.
+  extraOptions?: OptionItem[];
+  // Option-gating-and-extras-system brief, Task 3 — resolved, localized
+  // freeform note text (worker/migrations/
+  // 023_extras_and_additional_info.sql's additional_info/
+  // additional_info_fi columns), mirroring `desc` above exactly (same
+  // resolveText bilingual-fallback rule). Empty string when unset — see
+  // components/ProductPage.tsx for the "render nothing at all" rule that
+  // distinguishes empty from a real (even short) note.
+  additionalInfo?: string;
   // Priority-fixes brief (roadmap gap analysis), Bundle 1 Task 2 — menu
   // search. `name`/`desc` above are already resolved to ONE locale (see
   // normalizeProducts's resolveText calls), so they can't be used to match
@@ -461,6 +497,20 @@ export interface CartLineSelectionData {
   // binary upcharge toggle) — that field is retired by this brief
   // (Part 2), so `sizeOptionId` is now the sole size-related field here.
   sizeOptionId?: string;
+  // Option-gating-and-extras-system brief, Task 2 — the chosen `'extra'`-
+  // kind option ids (zero or more — multi-select, unlike every `...Id`
+  // field above), scoped to THIS line's own product exactly like
+  // `sizeOptionId` (see lib/pricing.ts's calcUnitPriceFromSelection — it
+  // looks these up against that specific product's own extraOptions,
+  // never a shared/global list, so a tampered id belonging to a different
+  // product's extras simply isn't found and contributes nothing).
+  // Optional (not required, unlike `toppingIds`) so a HISTORICAL
+  // selection_json blob written before this feature existed (a past
+  // order, reordered) still validates — validateSelectionShape treats a
+  // missing `extraIds` as "no extras selected," never a shape error, same
+  // backward-compatibility treatment the old M/L `size` key got from the
+  // per-product-size brief.
+  extraIds?: string[];
 }
 
 // One filled bundle-slot unit, as sent to POST /api/orders — see
@@ -543,6 +593,19 @@ export interface Selection {
   // snapshotted onto Selection rather than re-read from `products` on
   // every price calculation.
   sizeOptions: OptionItem[];
+  // Option-gating-and-extras-system brief, Task 2 — mirrors
+  // toppings/sizeOptions above: `extraIds` is the customer's current
+  // multi-select choice (zero, one, or several — unlike the single-select
+  // base/sauce/cheese/dip/sizeOptionId fields, this is an array, same
+  // shape convention as `toppings`), and `extraOptions` is a SNAPSHOT of
+  // the active product's own `Product.extraOptions`, captured once when
+  // the product page opens (context/StoreContext.tsx's openProduct) —
+  // same reasoning as `sizeOptions`'s own comment: calcUnitPrice looks up
+  // `extraIds` against THIS product's own extras without a separate
+  // context-level lookup, and a tampered id from a different product's
+  // extras group is never found here.
+  extraIds: string[];
+  extraOptions: OptionItem[];
   bundleSlotIndex: number | null;
 }
 

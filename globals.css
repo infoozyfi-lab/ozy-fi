@@ -335,6 +335,12 @@ footer{ padding: 56px 0 32px; }
 .pp-body{ padding: 44px 0 26px; }
 .pp-name{ font-family:'Anton', sans-serif; font-size: clamp(1.7rem, 5vw, 2.2rem); color: var(--cream); margin: 0 0 12px; }
 .pp-desc{ color: var(--muted); font-size: 1rem; margin: 0 0 28px; }
+/* Option-gating-and-extras-system brief, Task 3 — mirrors app/globals.css's
+   identical addition (that's the stylesheet the customer-facing site
+   actually loads — this file mirrors it but is loaded by the admin
+   layout, where these pp-* rules are unused, same as every other pp-*
+   rule already duplicated in this file). */
+.pp-additional-info{ color: #f0e6da; font-size: 0.95rem; line-height: 1.5; margin: -14px 0 28px; }
 .pp-label{ color: var(--gold); font-weight:700; font-size: 0.8rem; letter-spacing: 0.05em; text-transform: uppercase; margin: 0 0 12px; }
 /* Per-product-size brief, Part 2 — .pp-toggle/.pp-toggle-opt/.pp-toggle-sub
    (the old M/L upcharge toggle's styling) removed along with the JSX that
@@ -456,6 +462,19 @@ footer{ padding: 56px 0 32px; }
 .pp-bottom-options label:last-child { border-bottom: none; }
 .pp-bottom-options label.is-current { background: #2a1f14; font-weight: 700; }
 .pp-bottom-options .opt-delta { margin-left: auto; color: #f0793f; font-weight: 700; }
+
+/* Option-gating-and-extras-system brief, Task 2 — mirrors
+   app/globals.css's identical addition (unused here, see this file's
+   header note on .pp-* rules). */
+.pp-extras-list { border: 1px solid #3a2c22; border-radius: 12px; overflow: hidden; }
+.pp-extra-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; font-size: 14px; color: #f0e6da;
+  border-bottom: 1px solid #2a2018; cursor: pointer; background: #1c140f;
+}
+.pp-extra-row:last-child { border-bottom: none; }
+.pp-extra-row.is-selected { background: #2a1f14; font-weight: 700; }
+.pp-extra-row .opt-delta { margin-left: auto; color: #f0793f; font-weight: 700; }
 
 .pp-cat-list { display: flex; flex-direction: column; gap: 10px; }
 .pp-cat { background: #2a2018; border-radius: 12px; overflow: hidden; }

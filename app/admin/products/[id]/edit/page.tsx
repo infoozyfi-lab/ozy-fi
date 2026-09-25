@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import ResourceForm from '@/components/admin/ResourceForm';
 import SizesEditor from '@/components/admin/SizesEditor';
+import ExtrasEditor from '@/components/admin/ExtrasEditor';
 import { getProductFields } from '@/lib/admin-resource-fields';
 import type { RawCategory, RawProduct, ResourceField } from '@/lib/types';
 
@@ -180,6 +181,15 @@ function EditProductPageInner() {
                 stays available so a product's size ladder can be
                 introduced later without any code changes. */}
             <SizesEditor productId={product.id} productPrice={Number(product.price) || 0} />
+            {/* Option-gating-and-extras-system brief, Task 2 — same
+                reasoning as SizesEditor above: rendered directly below the
+                regular product form (and below Sizes) so editing this
+                product's extras is part of editing this product, not a
+                separate trip anywhere else. Works for ANY product — a
+                non-pizza item (kebab, burger, anything) is exactly the
+                case this general "Extras" system was built for, unlike
+                Sizes/toppings which stay pizza-builder-only. */}
+            <ExtrasEditor productId={product.id} />
           </>
         )}
       </div>

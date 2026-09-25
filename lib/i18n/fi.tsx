@@ -187,6 +187,9 @@ const fi = {
     // Per-product-size brief — see en.tsx's matching key comment; `size` is
     // now the sole heading for the per-product 'size' option-group selector.
     size: 'Koko',
+    // Option-gating-and-extras-system brief, Task 2 — see en.tsx's
+    // matching key comment.
+    extrasHeading: 'Lisät',
     finishToppings: 'Viimeistely — napauta lisätäksesi täytteitä',
     bottom: 'Pohja',
     change: 'vaihda',

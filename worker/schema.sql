@@ -70,6 +70,17 @@ CREATE TABLE products (
   has_toppings    INTEGER NOT NULL DEFAULT 0,
   sort_order      INTEGER NOT NULL DEFAULT 0,
   active          INTEGER NOT NULL DEFAULT 1,
+  -- Option-gating-and-extras-system brief, Task 3 — freeform per-product
+  -- notes (a special prep note, an allergen callout, a temporary
+  -- ingredient-substitution note — anything that doesn't fit any other
+  -- field). Nullable, same bilingual-optional convention as every other
+  -- `_fi` column here: NULL means "nothing written," not "empty on
+  -- purpose," and components/ProductPage.tsx renders nothing at all when
+  -- unset (see that file). Deliberately just two plain text columns, not a
+  -- richer content model — this is content flexibility only (see that
+  -- brief's own explicit scoping), never a per-product layout mechanism.
+  additional_info    TEXT,
+  additional_info_fi TEXT,
   -- Admin SEO fields (worker/migrations/017_admin_seo_fields.sql) — see
   -- that migration's header comment for the fallback chain each feeds.
   seo_title       TEXT,
@@ -79,7 +90,8 @@ CREATE TABLE products (
   og_image_url    TEXT
 );
 
--- kind: 'base' | 'sauce' | 'cheese' | 'sauce_stripe' | 'dip' | 'filling'
+-- kind: 'base' | 'sauce' | 'cheese' | 'sauce_stripe' | 'dip' | 'filling' |
+--       'size' | 'extra'
 -- title_fi only really shows to customers for 'filling' groups (rendered
 -- as a "More fillings" category heading) — harmless to have it on every
 -- kind regardless, one consistent column beats a special case.
@@ -92,9 +104,14 @@ CREATE TABLE option_groups (
   sort_order INTEGER NOT NULL DEFAULT 0,
   -- Per-product-size brief (worker/migrations/021_option_group_product_id.sql)
   -- — NULL (the default, every pre-existing group) means global, shared by
-  -- every product, exactly as every kind but 'size' still works today.
-  -- Only 'size'-kind groups are looked up by this column (see
-  -- lib/menu-i18n.ts's normalizeMenuBlob) — every other kind ignores it.
+  -- every product, exactly as every kind but 'size'/'extra' still works
+  -- today. Option-gating-and-extras-system brief, Task 2 — 'extra' now
+  -- reads this column too (generalizing the exact same per-product
+  -- mechanism 'size' already proved — see lib/menu-i18n.ts's
+  -- normalizeMenuBlob), so a business owner can give any single product
+  -- its own admin-defined extras (e.g. "Double meat +4.00€") without them
+  -- leaking onto any other product. Every other kind still ignores this
+  -- column and stays a single global list, unchanged.
   product_id TEXT REFERENCES products(id)
 );
 

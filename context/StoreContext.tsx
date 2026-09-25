@@ -55,6 +55,13 @@ interface StoreContextValue {
   openProduct: (item: Product, bundleSlotIndex?: number | null, options?: OpenProductOptions) => void;
   closeProduct: () => void;
   toggleTopping: (topping: string) => void;
+  // Option-gating-and-extras-system brief, Task 2 — mirrors toggleTopping
+  // above exactly (multi-select, same add/remove-by-id toggle shape), but
+  // keyed by the extra's own id rather than its label (toppings are keyed
+  // by label for historical reasons — see the TOPPING_EMOJI comment in
+  // components/ProductPage.tsx; extras have no such precedent to match,
+  // so this uses the correct, collision-proof identifier from the start).
+  toggleExtra: (extraId: string) => void;
   // Per-product-size brief, Part 2 — the old binary Medium/Large
   // `setSize`/`'M'|'L'` toggle is fully retired; `setOption('sizeOptionId',
   // id)` (the same generic setter base/sauce/cheese already use) is now
@@ -565,6 +572,18 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     (product: Selection | null) => {
       if (!product) return 0;
       let unit = product.basePrice;
+      // Option-gating-and-extras-system brief, Task 2 — mirrors
+      // lib/pricing.ts's calcUnitPriceFromSelection exactly: extras are
+      // summed BEFORE (independent of) the `toppingsEnabled` check below,
+      // unlike every other option kind in this function, since extras
+      // must price correctly on a non-customizable product too (e.g. a
+      // kebab). Each selected extra's OWN delta (never a flat rate),
+      // looked up only against `product.extraOptions` — THIS product's
+      // own snapshotted extras (Selection.extraOptions), never a
+      // context-level global list.
+      for (const id of product.extraIds) {
+        unit += product.extraOptions.find((o) => o.id === id)?.delta || 0;
+      }
       if (product.toppingsEnabled) {
         const toppingPrice = toppings[0]?.delta || 0;
         unit += product.toppings.length * toppingPrice;
@@ -633,6 +652,13 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         // index 0" pattern as base/sauce/cheese/dip above — required,
         // single-select, never left unset.
         sizeOptionId: (item.sizeOptions && item.sizeOptions[0]?.id) || FALLBACK_OPTION[0].id,
+        // Option-gating-and-extras-system brief, Task 2 — THIS product's
+        // own extras, snapshotted onto Selection exactly like sizeOptions
+        // above. No default-selected entry (unlike size's index-0
+        // pre-select) — extras start with nothing selected, since they're
+        // optional multi-select, not required single-select.
+        extraIds: [],
+        extraOptions: item.extraOptions && item.extraOptions.length ? item.extraOptions : [],
         bundleSlotIndex,
       });
       setProductPageOpen(true);
@@ -660,6 +686,19 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       return {
         ...s,
         toppings: has ? s.toppings.filter((t) => t !== topping) : [...s.toppings, topping],
+      };
+    });
+  }, []);
+
+  // Option-gating-and-extras-system brief, Task 2 — see this function's
+  // own StoreContextValue comment for why extras toggle by id, not label.
+  const toggleExtra = useCallback((extraId: string) => {
+    setSelection((s) => {
+      if (!s) return s;
+      const has = s.extraIds.includes(extraId);
+      return {
+        ...s,
+        extraIds: has ? s.extraIds.filter((id) => id !== extraId) : [...s.extraIds, extraId],
       };
     });
   }, []);
@@ -723,14 +762,24 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       if (sizeOpt && sizeOpt.id !== selection.sizeOptions[0]?.id) details.push(sizeOpt.label);
     }
 
+    // Option-gating-and-extras-system brief, Task 2 — extras are listed in
+    // `details` regardless of `selection.toppingsEnabled` (outside the
+    // `if` block above, unlike every other option kind), since extras must
+    // work on a non-customizable product too (e.g. a kebab).
+    selection.extraIds.forEach((id) => {
+      const extraOpt = selection.extraOptions.find((o) => o.id === id);
+      if (extraOpt) details.push(extraOpt.label);
+    });
+
     // Structured pricing data (money-correctness pass) — the actual
     // option/size/filling IDs behind the `details` display strings above,
     // so POST /api/orders can recompute the exact price from real D1
     // option deltas instead of trusting `unitPrice`/`lineTotal` as sent.
-    // Only set for a customizable product — a plain (non-toppingsEnabled)
-    // product's price is just its base price, nothing to verify beyond
-    // that, and the server already checks that independently.
-    const selectionData: CartLineSelectionData | undefined = selection.toppingsEnabled
+    // Set for a customizable product OR a product with its own real
+    // extras (Task 2 — `selection.extraOptions.length > 0`) — a plain
+    // product with neither has just its base price, nothing to verify
+    // beyond that, and the server already checks that independently.
+    const selectionData: CartLineSelectionData | undefined = (selection.toppingsEnabled || selection.extraOptions.length > 0)
       ? {
           toppingIds: selection.toppings,
           baseId: selection.base,
@@ -749,6 +798,12 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
           // calcUnitPriceFromSelection), so a tampered id from a different
           // product's size group simply isn't found there and contributes 0.
           sizeOptionId: selection.sizeOptionId,
+          // Option-gating-and-extras-system brief, Task 2 — carried
+          // through exactly like sizeOptionId above (server-side re-
+          // derivation, per-product tamper protection via lib/pricing.ts's
+          // calcUnitPriceFromSelection), regardless of toppingsEnabled —
+          // see this const's own updated comment.
+          extraIds: selection.extraIds,
         }
       : undefined;
 
@@ -1206,6 +1261,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     openProduct,
     closeProduct,
     toggleTopping,
+    toggleExtra,
     setQty,
     setOption,
     setFillingQty,

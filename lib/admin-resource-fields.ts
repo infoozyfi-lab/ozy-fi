@@ -25,6 +25,22 @@ export function getProductFields(categories: RawCategory[]): ResourceField[] {
     { key: 'name_fi', label: 'Name (Finnish, optional)', type: 'text' },
     { key: 'description', label: 'Description (English)', type: 'textarea' },
     { key: 'description_fi', label: 'Description (Finnish, optional)', type: 'textarea' },
+    // Option-gating-and-extras-system brief, Task 3 (worker/migrations/
+    // 023_extras_and_additional_info.sql) — freeform per-product notes,
+    // separate from the ingredients description above (a prep note, an
+    // allergen callout, a temporary substitution note — anything that
+    // doesn't fit any other field). Plain textarea — this admin panel has
+    // no rich-text editor precedent anywhere else (every other long-text
+    // field here, including description above, is a plain textarea too),
+    // so this deliberately doesn't introduce one.
+    {
+      key: 'additional_info', label: 'Additional info (English, optional)', type: 'textarea',
+      hint: 'Anything else worth telling a customer that doesn’t fit the description above — an allergen note, a prep detail, a temporary substitution. Shown on the product page only when filled in.',
+    },
+    {
+      key: 'additional_info_fi', label: 'Additional info (Finnish, optional)', type: 'textarea',
+      hint: 'Anything else worth telling a customer that doesn’t fit the description above — an allergen note, a prep detail, a temporary substitution. Shown on the product page only when filled in.',
+    },
     {
       key: 'meta_description', label: 'Meta description (English, optional)', type: 'textarea',
       hint: 'Shown in Google search results — aim for under ~160 characters. Leave blank to use the description above.',
