@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, type ChangeEvent, type FormEvent, type Key
 import { useStore } from '@/context/StoreContext';
 import { useTranslations } from '@/lib/i18n';
 import { computeDiscountAmount, describeDiscountValue } from '@/lib/pricing';
+import { useBodyScrollLock } from '@/lib/hooks';
 import type { Addon, CartLine, Customer, OpeningHours, OrderType } from '@/lib/types';
 import CardPaymentStep, { type CardPaymentHandle } from './CardPaymentStep';
 
@@ -113,6 +114,7 @@ export default function CheckoutModal() {
     // StoreContextValue).
     deliverySettings, contactInfo, openingHours, reorderOrderType,
   } = useStore();
+  useBodyScrollLock(isCheckoutOpen);
   const t = useTranslations();
   const STEP_LABELS: string[] = [t.checkout.stepCart, t.checkout.stepDetails, t.checkout.stepPayment];
 

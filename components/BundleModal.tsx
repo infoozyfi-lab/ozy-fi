@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useStore } from '@/context/StoreContext';
 import { useTranslations } from '@/lib/i18n';
+import { useBodyScrollLock } from '@/lib/hooks';
 import type { Product } from '@/lib/types';
 
 function money(n: number) {
@@ -22,6 +23,7 @@ export default function BundleModal() {
     addBundleToCart,
     products,
   } = useStore();
+  useBodyScrollLock(isBundleModalOpen);
   const t = useTranslations();
 
   const [pickerSlotIndex, setPickerSlotIndex] = useState<number | null>(null);

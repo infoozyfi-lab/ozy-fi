@@ -2,10 +2,12 @@
 
 import { useStore } from '@/context/StoreContext';
 import { useTranslations, useLocalePath } from '@/lib/i18n';
+import { useBodyScrollLock } from '@/lib/hooks';
 import type { Addon } from '@/lib/types';
 
 export default function DrinkUpsellModal() {
   const { isDrinkUpsellOpen, setDrinkUpsellOpen, continueFromUpsell, addDrinkToCart, drinks } = useStore();
+  useBodyScrollLock(isDrinkUpsellOpen);
   const t = useTranslations();
   const lp = useLocalePath();
 

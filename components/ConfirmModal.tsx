@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useStore } from '@/context/StoreContext';
 import { useTranslations } from '@/lib/i18n';
+import { useBodyScrollLock } from '@/lib/hooks';
 import OrderConfirmationCard from '@/components/OrderConfirmationCard';
 
 function CopyCodeButton({ code, copyLabel, copiedLabel }: { code: string; copyLabel: string; copiedLabel: string }) {
@@ -28,6 +29,7 @@ export default function ConfirmModal() {
   const { confirmedOrder, closeConfirm } = useStore();
   const t = useTranslations();
   const open = !!confirmedOrder;
+  useBodyScrollLock(open);
   const loyalty = confirmedOrder?.loyalty;
   // Rewards dashboard consolidation — the "every Nth order" threshold is
   // now admin-configurable (stamp_card_every_n_orders), so it's read from

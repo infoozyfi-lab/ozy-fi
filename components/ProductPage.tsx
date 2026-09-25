@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useStore } from '@/context/StoreContext';
 import { useTranslations, useLocalePath } from '@/lib/i18n';
+import { useBodyScrollLock } from '@/lib/hooks';
 import type { FillingCategory, FillingItem, OptionItem, Product, Bundle } from '@/lib/types';
 
 // Keyed by the ENGLISH topping label from the database — since Finnish
@@ -378,6 +379,7 @@ export default function ProductPage() {
     // Round-2 fixes brief, Part 3 — for RelatedProducts below.
     products: ALL_PRODUCTS, bundles: ALL_BUNDLES, openBundle,
   } = useStore();
+  useBodyScrollLock(isProductPageOpen);
   const t = useTranslations();
   const lp = useLocalePath();
 
