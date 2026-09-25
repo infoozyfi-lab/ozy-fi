@@ -16,7 +16,7 @@ import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale } from '@/lib/i18n/locales';
 //   curl -I https://<preview>/menu        -> expect 308 to /fi/menu (an old bookmarked/indexed URL)
 //   curl -I https://<preview>/fi/menu     -> expect 200, no redirect
 //
-// Two jobs:
+// Three jobs:
 //   1. A request with no /fi or /en prefix at all (the bare "/", or an
 //      old bookmarked/indexed URL like "/menu", "/product/abc", "/track")
 //      gets 308-redirected to the locale-prefixed equivalent — the
@@ -33,6 +33,31 @@ import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale } from '@/lib/i18n/locales';
 //      to match — so a later visit to the bare "/" remembers the language
 //      this visitor was actually just reading, instead of always
 //      bouncing back to Finnish.
+//   3. Fake-URL-404 bugfix — context/StoreContext.tsx's setUrl() pushes a
+//      handful of decorative, non-route paths via pushState for a nicer
+//      address bar while an overlay (checkout, the drink-upsell step, the
+//      bundle builder, the order-confirmation screen) is open — none of
+//      these are real Next.js pages. A customer whose browser reloads
+//      (a real refresh, a lost/restored connection, iOS's own occasional
+//      background-tab reload) while one of those URLs is showing used to
+//      get a genuine, routeless 404 and lose their progress. Below,
+//      FAKE_OVERLAY_PATHS is exactly that list (minus `/product/<slug>`,
+//      which had a second, separate bug — see setUrl's own comment in
+//      StoreContext.tsx — fixed at the source by pushing the product's
+//      real id, which the real /product/[id] route already resolves
+//      correctly; no rewrite needed for it here). A request that matches
+//      one is REWRITTEN (not redirected — the address bar keeps showing
+//      the decorative URL, exactly as intended) to that locale's /menu
+//      page — the same real page every "close this overlay" action in
+//      this app already navigates to (see StoreContext.tsx's goBack()) —
+//      so the customer lands on a normal, fully-working page with their
+//      cart intact (it's kept in sessionStorage, unaffected by this)
+//      instead of a 404. StoreContext.tsx's own mount-time effect then
+//      restores the checkout/drink-upsell overlay itself, for the cases
+//      where there's real, persisted data to restore it from — see that
+//      effect's comment for exactly which paths and why.
+const FAKE_OVERLAY_PATHS = new Set(['checkout', 'drinks', 'order-confirmed', 'bundle']);
+
 export function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
@@ -40,7 +65,20 @@ export function middleware(request: NextRequest) {
   const firstSegment = segments[1];
 
   if (isLocale(firstSegment)) {
-    const response = NextResponse.next();
+    // Exactly `/<locale>/<one of the fake overlay names>` — deliberately
+    // an exact 3-segment match (never a prefix match) so this can never
+    // swallow some other, unrelated real route that happens to start the
+    // same way, today or in the future.
+    const isFakeOverlayPath = segments.length === 3 && FAKE_OVERLAY_PATHS.has(segments[2]);
+
+    let response: NextResponse;
+    if (isFakeOverlayPath) {
+      const rewriteUrl = request.nextUrl.clone();
+      rewriteUrl.pathname = `/${firstSegment}/menu`;
+      response = NextResponse.rewrite(rewriteUrl);
+    } else {
+      response = NextResponse.next();
+    }
     response.cookies.set(LOCALE_COOKIE, firstSegment, {
       path: '/',
       maxAge: 60 * 60 * 24 * 365,

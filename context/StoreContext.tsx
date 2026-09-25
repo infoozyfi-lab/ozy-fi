@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useMemo, useEffect, type ReactNode, type Dispatch, type SetStateAction } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { trackViewItem, trackAddToCart, trackBeginCheckout, trackPurchase } from '@/lib/analytics';
 import { useLocale, useLocalePath, useTranslations } from '@/lib/i18n';
 import { normalizeCategories, normalizeProducts, normalizeMenuBlob } from '@/lib/menu-i18n';
@@ -215,13 +215,21 @@ interface StoreContextValue {
 
 const StoreContext = createContext<StoreContextValue | null>(null);
 
-function slugify(str: string) {
-  return str
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-}
-
+// Bugfix (fake-URL-404 report) — this file used to build the pushState
+// URL for an opened product via a `slugify(item.name)` helper, producing
+// e.g. `/product/margherita-pizza`. That was a second, DIFFERENT id
+// scheme from the real `/product/[id]` route (app/(site)/[locale]/
+// product/[id]/page.tsx), which looks a product up by its actual
+// database `id`, not a slugified name — so a customer who refreshed the
+// browser while a product overlay was open almost never landed back on
+// the right product (or any product at all): the slug frequently doesn't
+// match any real id, so the real page's own `getProduct(id)` lookup
+// misses and it calls `notFound()`. The fix below (in `openProduct`) now
+// pushes `/product/${item.id}` instead — the exact id the real route
+// already knows how to resolve — which removes the mismatch at its root
+// instead of adding a second lookup/rewrite layer just for this one path
+// shape. `slugify` no longer has any caller and was removed along with
+// this comment's neighbor.
 function setUrl(path: string) {
   if (typeof window === 'undefined') return;
   window.history.pushState({}, '', path);
@@ -243,6 +251,13 @@ interface StoreProviderProps {
 
 export function StoreProvider({ children, initialData }: StoreProviderProps) {
   const router = useRouter();
+  // Bugfix (fake-URL-404 report) — the real, visible browser URL (never
+  // affected by middleware.ts's rewrite of the fake overlay paths below
+  // to a real route's content; a rewrite only changes what gets rendered,
+  // never what the address bar/usePathname() report). Read once at mount
+  // by the restore-on-load effect further down, to notice "we're on a
+  // fake overlay path" after a hard refresh/direct load.
+  const pathname = usePathname();
 
   // Bilingual site — every route in this app now lives under /fi or /en
   // (see middleware.js). `locale` comes from the [locale] URL segment via
@@ -558,6 +573,79 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // Bugfix (fake-URL-404 report), part 2 of the fix — restores the
+  // checkout/drink-upsell overlay on a hard refresh or direct load of
+  // their fake pushState URL, instead of only avoiding the 404 (see
+  // middleware.ts's rewrite of these same paths to a real route's
+  // content). Runs once, at mount, on every top-level page (each of
+  // HomePageClient/MenuPageClient/ProductPageStandalone mounts its own
+  // StoreProvider — see those files) — so a refresh (a real, full page
+  // load) always re-triggers it, while a normal in-app pushState-only
+  // "open checkout" navigation never does (that doesn't remount this
+  // provider at all).
+  //
+  // Deliberately narrow in what it restores:
+  //   - /checkout and /drinks: restored, but ONLY when a saved cart
+  //     exists (read directly from sessionStorage — the exact same
+  //     source and shape as the cart-loading effect above — rather than
+  //     depending on effect-ordering against that effect's own `cart`
+  //     state update). This is the case the bug report calls out as the
+  //     worst ("money-adjacent... mid-checkout is exactly when this is
+  //     worst") and the one this app already has everything it needs to
+  //     restore correctly: the cart itself persists across reloads, and
+  //     CheckoutModal/DrinkUpsellModal only ever need `cart`/`cartTotal`
+  //     to render (see those components) — no other ephemeral state.
+  //   - /order-confirmed is deliberately NOT restored here: the order
+  //     confirmation (confirmedOrder) is plain in-memory React state,
+  //     never persisted anywhere, and the cart is already cleared the
+  //     moment an order is placed (see finalizeOrder above) — so there is
+  //     nothing left to restore, which is the intended, correct behavior
+  //     per the bug report's own instruction ("shouldn't necessarily be
+  //     able to replay a confirmation for an order that's no longer the
+  //     live cart state"): a refreshed /order-confirmed now shows a
+  //     normal working page with an empty cart, not a replayed receipt.
+  //   - /bundle is deliberately NOT restored here either, but for a
+  //     different reason: which bundle was being built (activeBundle)
+  //     and its slot contents (bundleSlots) are, like confirmedOrder,
+  //     plain in-memory state with no persisted counterpart — there is
+  //     no real data to restore it FROM. Reopening an empty/unknown
+  //     bundle modal would be worse than not reopening it at all. A
+  //     refreshed /bundle now shows a normal working page instead of a
+  //     404; re-starting a bundle from the menu is the one remaining gap
+  //     this report flags as a reasonable separate/later task rather
+  //     than something to paper over here.
+  //   - /product/<id> needs no restoring here at all — see the header
+  //     comment on `setUrl`/openProduct's own comment: it's now a real,
+  //     resolvable route that already re-opens the product overlay on
+  //     its own (components/ProductPageStandalone.tsx's AutoOpenProduct).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const afterLocale = (pathname || '').replace(new RegExp(`^/${locale}`), '') || '/';
+    if (afterLocale !== '/checkout' && afterLocale !== '/drinks') return;
+
+    let hasSavedCart = false;
+    try {
+      const saved = sessionStorage.getItem('ozy_cart');
+      const parsed = saved ? JSON.parse(saved) : [];
+      hasSavedCart = Array.isArray(parsed) && parsed.length > 0;
+    } catch {
+      hasSavedCart = false;
+    }
+    if (!hasSavedCart) return;
+
+    setCartOpen(false);
+    if (afterLocale === '/checkout') {
+      setDrinkUpsellOpen(false);
+      setCheckoutOpen(true);
+    } else {
+      setCheckoutOpen(false);
+      setDrinkUpsellOpen(true);
+    }
+    // Deliberately run only once, at mount — see this effect's own
+    // header comment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const fillingsTotal = useCallback(
     (fillings: Record<string, number> | undefined) =>
       Object.entries(fillings || {}).reduce((sum, [id, qty]) => {
@@ -662,7 +750,15 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         bundleSlotIndex,
       });
       setProductPageOpen(true);
-      if (bundleSlotIndex == null && !skipUrlPush) setUrl(lp(`/product/${slugify(item.name)}`));
+      // Fixed to push the product's real `id` (see this file's header
+      // comment on `setUrl`) instead of a slugified name — this URL now
+      // resolves correctly on the real /product/[id] route, so refreshing
+      // the browser while this overlay is open lands the customer on the
+      // real, fully-working standalone product page for this exact
+      // product (which auto-reopens this same overlay on top of itself —
+      // see components/ProductPageStandalone.tsx's AutoOpenProduct)
+      // instead of a 404.
+      if (bundleSlotIndex == null && !skipUrlPush) setUrl(lp(`/product/${item.id}`));
     },
     [baseOptions, sauceOptions, cheeseOptions, sauceStripeOptions, dipOptions, lp]
   );

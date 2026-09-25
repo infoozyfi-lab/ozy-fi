@@ -675,22 +675,27 @@ footer{ padding: 56px 0 32px; }
 .pp-size-tile-price{ font-size: 0.8rem; font-weight:500; opacity:0.8; }
 .pp-size-tile.active{ background: var(--ember); border-color: var(--ember); color: var(--text-on-accent); }
 .pp-size-tile.active .pp-size-tile-price{ opacity: 1; }
-.pp-finish-row{ display:flex; gap: 12px; overflow-x:auto; padding-bottom: 6px; -webkit-overflow-scrolling: touch; scrollbar-width:none; }
-.pp-finish-row::-webkit-scrollbar{ display:none; }
-.pp-finish-tile{
-  flex: 0 0 auto; width: 96px; border: 1px solid var(--line); border-radius: 10px; padding: 14px 8px 12px;
-  text-align:center; background: var(--bg-card); cursor:pointer; transition: border-color 0.15s ease, background 0.15s ease;
+.pp-finish-row{
+  display: flex; flex-direction: column; gap: 0; border: 1px solid var(--line);
+  border-radius: 12px; overflow: hidden;
 }
-.pp-finish-tile .emoji{ font-size: 1.9rem; display:block; margin-bottom: 8px; }
-.pp-finish-tile .fname{ color: var(--cream); font-size: 0.78rem; font-weight:600; display:block; line-height:1.25; min-height: 2.2em; }
-.pp-finish-tile .fprice{ color: var(--muted); font-size: 0.72rem; }
-.pp-finish-tile.selected{ border-color: var(--ember); background: rgba(232, 98, 42, 0.12); }
+.pp-finish-tile{
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  border: 1px solid transparent; border-bottom: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 16px; text-align: left; background: var(--bg-card);
+  cursor:pointer; transition: border-color 0.15s ease, background 0.15s ease;
+}
+.pp-finish-tile:last-child{ border-bottom: none; }
+.pp-finish-tile .emoji{ font-size: 1.5rem; flex-shrink: 0; }
+.pp-finish-tile .fname{ color: var(--cream); font-size: 0.9rem; font-weight:600; flex: 1; }
+.pp-finish-tile .fprice{ color: var(--muted); font-size: 0.8rem; flex-shrink: 0; }
+.pp-finish-tile.selected{ border-color: rgba(232, 98, 42, 0.55); background: rgba(232, 98, 42, 0.12); }
 /* Kept as the accent color deliberately: this marks the currently
    SELECTED option's price (an interactive selection state), which is a
    different role from the static listing prices the brief's product-
    card spec covers — those were changed to --cream, this wasn't. */
 .pp-finish-tile.selected .fprice{ color: var(--ember-dark); font-weight:700; }
-.pp-footer{ display:flex; align-items:center; gap: 14px; padding: 14px 18px; border-top: 1px solid var(--line); background: var(--bg-alt); flex-shrink:0; }
+.pp-footer{ display:flex; align-items:center; gap: 14px; padding: 8px 18px; border-top: 1px solid var(--line); background: var(--bg-alt); flex-shrink:0; }
 .pp-qty{ display:flex; align-items:center; gap: 14px; background: var(--bg-card); border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; flex-shrink:0; }
 .pp-qty button{ width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--bg); color: var(--cream); font-size: 1.1rem; cursor:pointer; }
 .pp-qty span{ font-family:'Anton', sans-serif; min-width: 18px; text-align:center; }
@@ -715,19 +720,29 @@ footer{ padding: 56px 0 32px; }
 
 .pp-fillings-list, .pp-cat-body {
   border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0;
 }
 .pp-filling-row {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
   padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--bg-card);
   border: 1px solid transparent; border-radius: 10px; transition: border-color 0.15s ease;
 }
+/* Two-column grid: every row still needs a bottom border to separate it
+   from the row below it in the SAME column, but the grid's own
+   left/right columns need a divider between them too — added here as a
+   left border on the right-hand column, rather than restructuring the
+   markup, since `.pp-filling-row` doesn't currently know which column
+   it's in. nth-child(2n) = every right-column item, given the JSX maps
+   these rows in reading order (left-to-right, top-to-bottom) as a plain
+   sequence, matching how CSS grid auto-placement fills them. */
+.pp-filling-row:nth-child(2n) { border-left: 1px solid var(--line); }
 .pp-filling-row.active {
   border-color: rgba(232, 98, 42, 0.55);
 }
 .pp-filling-row:last-child { border-bottom: none; }
 .pp-filling-row .fname {
   font-size: 15px; color: var(--cream); background:none; border:none; padding:0; margin:0;
-  text-align:left; cursor:pointer; font-family:inherit; flex:1;
+  text-align:left; cursor:pointer; font-family:inherit; width: 100%;
 }
 .pp-filling-row .fname:hover, .pp-filling-row .fname:focus-visible{ color: var(--ember-dark); }
 .pp-filling-row .fprice, .fqty-badge { color: var(--ember-dark); font-weight: 700; }
@@ -1125,6 +1140,8 @@ footer{ padding: 56px 0 32px; }
   display:flex; flex-direction:column; align-items:center; gap: 4px; transition: border-color 0.15s ease;
 }
 .drink-tile:hover{ border-color: var(--ember); }
+.drink-tile.in-cart{ border-color: rgba(232, 98, 42, 0.55); background: rgba(232, 98, 42, 0.12); }
+.drink-tile.in-cart .dprice{ color: var(--ember-dark); font-weight:700; }
 .drink-tile img{ width: 100%; height: 64px; object-fit:cover; border-radius: 6px; margin-bottom: 4px; }
 .drink-tile .dname{ font-size: 0.78rem; color: var(--cream); font-weight:600; line-height:1.25; min-height: 2.1em; }
 .drink-tile .dprice{ font-size: 0.75rem; color: var(--muted); }
@@ -1243,7 +1260,7 @@ footer{ padding: 56px 0 32px; }
 
 /* ---------- ORDER BAR (kotipizza-style persistent "View order" bar) ---------- */
 .order-bar{
-  position: fixed; left: 16px; right: 16px; z-index: 310;
+  position: fixed; left: 0; right: 0; z-index: 310;
   /* Audit-fixes brief, Part 6.10 — on an iPhone with a home indicator (or
      any device that reserves a bottom safe area), a plain `bottom: 16px`
      sits the bar right where the OS's own swipe-up gesture area is,
@@ -1253,19 +1270,19 @@ footer{ padding: 56px 0 32px; }
      second line adds the device's safe-area inset on top of the same
      16px breathing room for browsers that do support it. env()'s own
      0px fallback covers devices that support env() but report no inset. */
-  bottom: 16px;
-  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  bottom: 0;
+  bottom: env(safe-area-inset-bottom, 0px);
   display:flex; align-items:center; gap: 14px;
   background: var(--ember); color: var(--text-on-accent); border: none;
-  border-radius: 999px; padding: 14px 20px;
+  border-radius: 10px 10px 0 0; padding: 16px 20px;
   font-family: inherit; font-weight: 700; font-size: 1rem; cursor: pointer;
-  box-shadow: 0 10px 26px rgba(35,29,25,0.3);
+  box-shadow: 0 -4px 20px rgba(35,29,25,0.2);
   transition: bottom 0.2s ease, transform 0.15s ease;
 }
 .order-bar:active{ transform: scale(0.98); }
 .order-bar.on-product-page{
-  bottom: 92px;
-  bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+  bottom: 0;
+  bottom: env(safe-area-inset-bottom, 0px);
 }
 .order-bar-count{
   background: var(--text-on-accent); color: var(--ember); width: 26px; height: 26px; border-radius: 50%;

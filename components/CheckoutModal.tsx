@@ -552,7 +552,7 @@ export default function CheckoutModal() {
                 {drinks.map((d) => {
                   const line = cart.find((l) => l.drinkId === d.id);
                   return (
-                    <button type="button" className="drink-tile" key={d.id} onClick={() => addDrinkToCart(d)}>
+                    <button type="button" className={`drink-tile${line ? ' in-cart' : ''}`} key={d.id} onClick={() => addDrinkToCart(d)}>
                       <img src={d.image ?? undefined} alt={d.name} />
                       <span className="dname">{d.name}</span>
                       <span className="dprice">{line ? t.checkout.inCart(line.qty) : `${d.price.toFixed(2)} €`}</span>
