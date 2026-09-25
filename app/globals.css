@@ -808,7 +808,7 @@ footer{ padding: 56px 0 32px; }
   border-bottom: 1px solid var(--line); cursor: pointer; background: var(--bg-card);
 }
 .pp-extra-row:last-child { border-bottom: none; }
-.pp-extra-row.is-selected { background: rgba(232, 98, 42, 0.1); font-weight: 700; }
+.pp-extra-row.is-selected { border-color: rgba(232, 98, 42, 0.55); background: rgba(232, 98, 42, 0.12); font-weight: 700; }
 .pp-extra-row .opt-delta { margin-left: auto; color: var(--ember-dark); font-weight: 700; }
 
 .pp-cat-list { display: flex; flex-direction: column; gap: 10px; }
