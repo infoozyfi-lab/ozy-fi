@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent, type MouseEvent, type ChangeEvent } from 'react';
 import ConfirmDialog from './ConfirmDialog';
+import { useBodyScrollLock } from '@/lib/hooks';
 
 interface TwoFaStatus {
   enabled: boolean;
@@ -27,6 +28,11 @@ interface TwoFaSetupData {
 // in this sandbox); most authenticator apps also accept pasting the full
 // otpauth:// URI, so both are shown.
 export default function MyAccountModal({ onClose }: { onClose: () => void }) {
+  // Only ever mounted while open (app/admin/dashboard/page.tsx renders it
+  // conditionally: `{showMyAccount && <MyAccountModal .../>}`) — so `true`
+  // here just means "locked for as long as this component exists," with
+  // the hook's own cleanup unlocking on unmount.
+  useBodyScrollLock(true);
   const [status, setStatus] = useState<TwoFaStatus | null>(null); // { enabled, supported } | null while loading
   const [statusError, setStatusError] = useState('');
 
