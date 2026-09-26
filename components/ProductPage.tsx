@@ -529,6 +529,33 @@ export default function ProductPage() {
                       <span className="fprice">+{TOPPING_PRICE.toFixed(2)} €</span>
                     </button>
                   ))}
+                  {/* Merged into this same row/heading per direct feedback —
+                      Extras (per-product add-ons, e.g. a kebab's "Double
+                      meat") now render as more tiles in the exact same list
+                      as pizza Toppings, rather than as their own separate
+                      section further down the page. They're visually and
+                      behaviorally identical tiles (see hasRealExtras's own
+                      comment for why extras stay genuinely per-product data
+                      even though they render alongside the global toppings
+                      list here) — only `onClick` differs (toggleExtra vs
+                      toggleTopping) and extras have no per-item emoji, so
+                      they use the same generic fallback bullet every
+                      unrecognized topping already falls back to. */}
+                  {hasRealExtras && selection.extraOptions.map((opt) => {
+                    const checked = selection.extraIds.includes(opt.id);
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        className={`pp-finish-tile${checked ? ' selected' : ''}`}
+                        onClick={() => toggleExtra(opt.id)}
+                      >
+                        <span className="emoji">●</span>
+                        <span className="fname">{opt.label}</span>
+                        {opt.delta > 0 && <span className="fprice">+{opt.delta.toFixed(2)} €</span>}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -607,18 +634,27 @@ export default function ProductPage() {
               instead, and doesn't change for a kebab (which has no
               toppingsEnabled content above it at all) — extras there simply
               becomes the first and only section, same as before. */}
-          {hasRealExtras && (
+          {/* Only rendered here when there's no toppingsEnabled block above
+              to merge into (e.g. a kebab, has_toppings=0) — for a product
+              that DOES have toppingsEnabled (pizza), extras are already
+              merged into the combined Toppings/Extras tile row above, so
+              rendering this too would show every extra twice. */}
+          {!selection.toppingsEnabled && hasRealExtras && (
             <div className="pp-section">
               <p className="pp-label">{t.productPage.extrasHeading}</p>
               <div className="pp-extras-list">
                 {selection.extraOptions.map((opt) => {
                   const checked = selection.extraIds.includes(opt.id);
                   return (
-                    <label key={opt.id} className={`pp-extra-row${checked ? ' is-selected' : ''}`}>
-                      <input type="checkbox" checked={checked} onChange={() => toggleExtra(opt.id)} />
+                    <button
+                      type="button"
+                      key={opt.id}
+                      className={`pp-extra-row${checked ? ' is-selected' : ''}`}
+                      onClick={() => toggleExtra(opt.id)}
+                    >
                       <span>{opt.label}</span>
                       {opt.delta > 0 && <span className="opt-delta">+{opt.delta.toFixed(2)} €</span>}
-                    </label>
+                    </button>
                   );
                 })}
               </div>
