@@ -517,18 +517,22 @@ export default function ProductPage() {
               <div className="pp-section">
                 <p className="pp-label">{t.productPage.finishToppings}</p>
                 <div className="pp-finish-row">
-                  {TOPPINGS.map((topping) => (
-                    <button
-                      key={topping.id}
-                      type="button"
-                      className={`pp-finish-tile${selection.toppings.includes(topping.label) ? ' selected' : ''}`}
-                      onClick={() => toggleTopping(topping.label)}
-                    >
-                      <span className="emoji">{TOPPING_EMOJI[topping.label] || '●'}</span>
-                      <span className="fname">{topping.label}</span>
-                      <span className="fprice">+{TOPPING_PRICE.toFixed(2)} €</span>
-                    </button>
-                  ))}
+                  {TOPPINGS.map((topping) => {
+                    const isSelected = selection.toppings.includes(topping.label);
+                    return (
+                      <button
+                        key={topping.id}
+                        type="button"
+                        className={`pp-finish-tile${isSelected ? ' selected' : ''}`}
+                        onClick={() => toggleTopping(topping.label)}
+                      >
+                        <span className="emoji">{TOPPING_EMOJI[topping.label] || '●'}</span>
+                        <span className="fname">{topping.label}</span>
+                        <span className="fprice">+{TOPPING_PRICE.toFixed(2)} €</span>
+                        <span className="tile-add-btn">{isSelected ? '✓' : '+'}</span>
+                      </button>
+                    );
+                  })}
                   {/* Merged into this same row/heading per direct feedback —
                       Extras (per-product add-ons, e.g. a kebab's "Double
                       meat") now render as more tiles in the exact same list
@@ -553,6 +557,7 @@ export default function ProductPage() {
                         <span className="emoji">●</span>
                         <span className="fname">{opt.label}</span>
                         {opt.delta > 0 && <span className="fprice">+{opt.delta.toFixed(2)} €</span>}
+                        <span className="tile-add-btn">{checked ? '✓' : '+'}</span>
                       </button>
                     );
                   })}
@@ -654,6 +659,7 @@ export default function ProductPage() {
                     >
                       <span>{opt.label}</span>
                       {opt.delta > 0 && <span className="opt-delta">+{opt.delta.toFixed(2)} €</span>}
+                      <span className="tile-add-btn">{checked ? '✓' : '+'}</span>
                     </button>
                   );
                 })}
