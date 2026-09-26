@@ -802,14 +802,23 @@ footer{ padding: 56px 0 32px; }
    option list), just always-expanded (no "change" toggle — a checkbox
    list needs no collapse/expand step) and checkbox rather than radio. */
 .pp-extras-list { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+/* Matches .pp-finish-tile (the pizza Toppings row) exactly — same
+   element type (a plain <button>, no checkbox), same layout, same
+   selected-state colors — so Extras (used for kebab/etc. add-ons) and
+   Toppings look and behave identically, differing only in which real
+   data populates each list. */
 .pp-extra-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 16px; font-size: 14px; color: var(--cream);
-  border-bottom: 1px solid var(--line); cursor: pointer; background: var(--bg-card);
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  border: 1px solid transparent; border-bottom: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 16px; text-align: left; background: var(--bg-card);
+  color: var(--cream); font-size: 0.9rem; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 .pp-extra-row:last-child { border-bottom: none; }
-.pp-extra-row.is-selected { border-color: rgba(232, 98, 42, 0.55); background: rgba(232, 98, 42, 0.12); font-weight: 700; }
-.pp-extra-row .opt-delta { margin-left: auto; color: var(--ember-dark); font-weight: 700; }
+.pp-extra-row.is-selected { border-color: rgba(232, 98, 42, 0.55); background: rgba(232, 98, 42, 0.12); }
+.pp-extra-row .opt-delta { margin-left: auto; color: var(--muted); font-size: 0.8rem; flex-shrink: 0; }
+.pp-extra-row.is-selected .opt-delta { color: var(--ember-dark); font-weight: 700; }
 
 .pp-cat-list { display: flex; flex-direction: column; gap: 10px; }
 .pp-cat { background: var(--bg-card); border-radius: 12px; overflow: hidden; }
