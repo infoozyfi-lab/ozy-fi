@@ -1281,29 +1281,26 @@ footer{ padding: 56px 0 32px; }
 
 /* ---------- ORDER BAR (kotipizza-style persistent "View order" bar) ---------- */
 .order-bar{
-  position: fixed; left: 0; right: 0; z-index: 310;
+  position: fixed; left: 16px; right: 16px; z-index: 310;
   /* Audit-fixes brief, Part 6.10 — on an iPhone with a home indicator (or
-     any device that reserves a bottom safe area), a plain `bottom: 16px`
-     sits the bar right where the OS's own swipe-up gesture area is,
-     partly under/behind the home indicator. The plain 16px stays first as
-     a fallback for browsers with no env() support at all (they'll ignore
-     the second, invalid-to-them declaration and keep this one); the
-     second line adds the device's safe-area inset on top of the same
-     16px breathing room for browsers that do support it. env()'s own
-     0px fallback covers devices that support env() but report no inset. */
-  bottom: 0;
-  bottom: env(safe-area-inset-bottom, 0px);
+     any device that reserves a bottom safe area), sitting the bar flush
+     at the very bottom edge puts it right where the OS's own swipe-up
+     gesture area is, partly under/behind the home indicator. calc()'s
+     first operand is the 16px of breathing room this floating,
+     Wolt-style button wants above the screen edge regardless of device;
+     env()'s own 0px fallback covers devices that report no safe-area
+     inset at all, so the calc() is always valid even there. */
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   display:flex; align-items:center; gap: 14px;
   background: var(--ember); color: var(--text-on-accent); border: none;
-  border-radius: 10px 10px 0 0; padding: 16px 20px;
+  border-radius: 999px; padding: 16px 20px;
   font-family: inherit; font-weight: 700; font-size: 1rem; cursor: pointer;
-  box-shadow: 0 -4px 20px rgba(35,29,25,0.2);
+  box-shadow: 0 8px 24px rgba(35,29,25,0.28);
   transition: bottom 0.2s ease, transform 0.15s ease;
 }
 .order-bar:active{ transform: scale(0.98); }
 .order-bar.on-product-page{
-  bottom: 0;
-  bottom: env(safe-area-inset-bottom, 0px);
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
 }
 .order-bar-count{
   background: var(--text-on-accent); color: var(--ember); width: 26px; height: 26px; border-radius: 50%;
