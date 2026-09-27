@@ -5,7 +5,7 @@ import { useStore } from '@/context/StoreContext';
 import { useTranslations } from '@/lib/i18n';
 
 export default function OrderBar() {
-  const { cart, cartTotal, goToCheckout, isProductPageOpen, isCheckoutOpen, isDrinkUpsellOpen } = useStore();
+  const { cart, cartTotal, goToCheckout, isProductPageOpen, isCheckoutOpen, isDrinkUpsellOpen, isBundleModalOpen } = useStore();
   const t = useTranslations();
 
   const itemCount = cart.reduce((sum, line) => sum + line.qty, 0);
@@ -49,7 +49,7 @@ export default function OrderBar() {
   return (
     <button
       type="button"
-      className={`order-bar${isProductPageOpen ? ' on-product-page' : ''}`}
+      className={`order-bar${(isProductPageOpen || isBundleModalOpen || isDrinkUpsellOpen) ? ' on-product-page' : ''}`}
       onClick={goToCheckout}
     >
       <span
