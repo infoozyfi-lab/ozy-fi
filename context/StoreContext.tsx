@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef, type ReactNode, type Dispatch, type SetStateAction } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { trackViewItem, trackAddToCart, trackBeginCheckout, trackPurchase } from '@/lib/analytics';
 import { useLocale, useLocalePath, useTranslations } from '@/lib/i18n';
 import { normalizeCategories, normalizeProducts, normalizeMenuBlob } from '@/lib/menu-i18n';
@@ -267,13 +267,18 @@ interface StoreProviderProps {
 
 export function StoreProvider({ children, initialData }: StoreProviderProps) {
   const router = useRouter();
-  // Bugfix (fake-URL-404 report) — the real, visible browser URL (never
-  // affected by middleware.ts's rewrite of the fake overlay paths below
-  // to a real route's content; a rewrite only changes what gets rendered,
-  // never what the address bar/usePathname() report). Read once at mount
-  // by the restore-on-load effect further down, to notice "we're on a
-  // fake overlay path" after a hard refresh/direct load.
-  const pathname = usePathname();
+  // Checkout-restore bug report — this file used to keep a `usePathname()`
+  // value here for the restore-on-load effect further down to check
+  // against. That was the actual root cause of that bug (see the long
+  // comment on that effect for the full explanation): `usePathname()`
+  // reflects a middleware REWRITE's destination during the render that
+  // produces the initial hydration pass, not the real, unaffected browser
+  // URL a `rewrite` (as opposed to a `redirect`) is specifically defined
+  // to leave alone. That effect now reads `window.location.pathname`
+  // fresh, inside its own body, instead — removed here entirely rather
+  // than left declared-but-unused, so nothing else in this file is
+  // tempted to reuse a value that's specifically unreliable for this
+  // exact purpose.
 
   // Bilingual site — every route in this app now lives under /fi or /en
   // (see middleware.js). `locale` comes from the [locale] URL segment via
@@ -648,7 +653,33 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
   //     its own (components/ProductPageStandalone.tsx's AutoOpenProduct).
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const afterLocale = (pathname || '').replace(new RegExp(`^/${locale}`), '') || '/';
+    // Checkout-restore bug report — confirmed root cause: this used to key
+    // off `usePathname()` (captured once, at mount, since this effect
+    // intentionally has an empty dependency array — see its own comment
+    // below). That's exactly the value that breaks under a middleware
+    // REWRITE like the one above: per Next.js's own documented App Router
+    // behavior (see e.g. vercel/next.js#52700), `usePathname()` reflects
+    // the REWRITE DESTINATION (here, `/menu`) during the render that
+    // produces the initial hydration pass, and only later (on some
+    // subsequent client-side navigation) catches up to the real,
+    // browser-visible URL. Since this effect's `[]` deps capture whichever
+    // value was current on that very first render, it was reading "/menu"
+    // — never "/checkout" or "/drinks" — every single time, so the
+    // `afterLocale !== '/checkout' && afterLocale !== '/drinks'` check
+    // below always took the early return and this code silently never ran
+    // on a real refresh. This was invisible to this feature's own prior
+    // test harness because that harness supplied a mocked `usePathname()`
+    // returning the fake overlay path directly, which is exactly what the
+    // real hook does NOT reliably do across a middleware rewrite.
+    //
+    // The fix: read `window.location.pathname` instead — the browser's
+    // own, always-accurate address bar value. A `rewrite` (as opposed to a
+    // `redirect`) is specifically defined to leave the visible URL
+    // unchanged, so this is the one source that's guaranteed correct
+    // regardless of Next.js's internal router/hydration timing, and it
+    // needs no dependency-array changes since it's read fresh inside the
+    // effect body rather than captured from a hook's return value.
+    const afterLocale = (window.location.pathname || '').replace(new RegExp(`^/${locale}`), '') || '/';
     if (afterLocale !== '/checkout' && afterLocale !== '/drinks') return;
 
     let hasSavedCart = false;
