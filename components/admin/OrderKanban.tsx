@@ -96,6 +96,26 @@ function ageColor(mins: number): string {
 // OrderDetailRow — the list view's equivalent of this file's detail popup —
 // can gate its own "Refund" button on the exact same logic, rather than a
 // hand-copied second version that could quietly drift from this one.
+// Kitchen-queue safety brief — a card order starts life with
+// payment_status 'pending' the instant it's created (before Stripe's
+// webhook confirms the charge — see app/api/orders/route.ts), and flips
+// to 'failed' if the card is declined. Until (and unless) it reaches
+// 'paid', kitchen staff moving quickly through this board could easily
+// miss the small PaymentStatusPill badge and prepare/dispatch food that
+// was never actually paid for. A COD order's own payment_status values
+// ('cod', or 'refunded'/'partially_refunded' after the fact) are a
+// completely different, legitimate case — a COD order is never
+// "unconfirmed", the customer just hasn't paid yet in person — so this
+// is deliberately scoped to `payment_method === 'card'` only.
+// Exported so this is the one place that decision lives — nothing else
+// (the separate all-orders list view in app/admin/dashboard/page.tsx, the
+// invoice page, analytics) reads this at all, and none of them should:
+// this is specifically about which orders are safe to hand to the
+// kitchen, not a blanket "hide unpaid orders everywhere" rule.
+export function isAwaitingOrFailedPayment(order: Pick<OrderRow, 'payment_method' | 'payment_status'>): boolean {
+  return order.payment_method === 'card' && (order.payment_status === 'pending' || order.payment_status === 'failed');
+}
+
 export function isRefundEligible(order: OrderRow): boolean {
   if (order.payment_method === 'card') {
     return order.payment_status === 'paid' || order.payment_status === 'partially_refunded';
@@ -606,6 +626,12 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
   const [soundOn, setSoundOn] = useState(true);
   const [soundUnlocked, setSoundUnlocked] = useState(false);
   const [showCancelled, setShowCancelled] = useState(false);
+  // Kitchen-queue safety brief — starts OPEN (unlike showCancelled above),
+  // not collapsed: a cancelled order is just historical clutter, but an
+  // order awaiting/failed payment is exactly the case a busy kitchen
+  // could otherwise miss entirely, so it's shown expanded by default and
+  // only collapses if staff choose to.
+  const [showAwaitingPayment, setShowAwaitingPayment] = useState(true);
   const [flash, setFlash] = useState(false);
   const [, forceTick] = useState(0);
 
@@ -842,7 +868,21 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
     }
   };
 
-  const activeOrders = orders.filter((o) => o.status !== 'cancelled');
+  // Kitchen-queue safety brief — pending/failed CARD orders are pulled out
+  // of the normal active queue here, the same way cancelledOrders already
+  // is below, so the columns above only ever show orders that are safe to
+  // actually prepare. This is purely a client-side split of the same
+  // polled `orders` array (see the 15s-poll `load()` effect above) — no
+  // new endpoint, no new request — so the instant a 'pending' order's
+  // webhook lands and the next poll picks up payment_status: 'paid', it
+  // automatically stops matching isAwaitingOrFailedPayment and reappears
+  // in the real queue below on its own, with no extra plumbing needed for
+  // that transition.
+  const activeOrders = orders.filter((o) => o.status !== 'cancelled' && !isAwaitingOrFailedPayment(o));
+  const awaitingPaymentOrders = orders
+    .filter((o) => o.status !== 'cancelled' && isAwaitingOrFailedPayment(o))
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  const awaitingPaymentCount = awaitingPaymentOrders.length;
   const cancelledOrders = orders
     .filter((o) => o.status === 'cancelled')
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -878,6 +918,63 @@ export default function OrderKanban({ token, size = 'normal' }: { token: string 
         <p>Loading orders…</p>
       ) : (
         <>
+          {/* Kitchen-queue safety brief — placed ABOVE the real board
+              (rather than tucked below it, like the cancelled-orders link
+              further down) and expanded by default, specifically because
+              this is the one section staff must not be able to scroll
+              past without noticing. Visually de-emphasized from a real
+              active card (muted warning tint, explicit "don't prepare"
+              copy) so it never reads as "just another order to cook". */}
+          {awaitingPaymentCount > 0 && (
+            <div
+              style={{
+                marginBottom: large ? 20 : 14, border: '1px solid var(--gold)', borderRadius: 10,
+                background: 'rgba(212, 165, 74, 0.08)', padding: large ? 14 : 10,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setShowAwaitingPayment((v) => !v)}
+                style={{
+                  background: 'none', border: 'none', color: 'var(--gold)', fontSize: large ? 16 : 13, fontWeight: 700,
+                  cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 6, width: '100%', textAlign: 'left',
+                }}
+              >
+                {showAwaitingPayment ? '▾' : '▸'} ⏳ {awaitingPaymentCount} order{awaitingPaymentCount === 1 ? '' : 's'} awaiting/failed payment — do not prepare
+              </button>
+
+              {showAwaitingPayment && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+                  {awaitingPaymentOrders.map((order) => {
+                    const mins = minutesAgo(order.created_at);
+                    return (
+                      <button
+                        key={order.id}
+                        type="button"
+                        onClick={() => setViewingOrder(order)}
+                        style={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          background: 'var(--bg-card)', border: '1px solid var(--line)', borderRadius: 8,
+                          padding: large ? '12px 14px' : '10px 12px', cursor: 'pointer', textAlign: 'left', opacity: 0.85,
+                        }}
+                      >
+                        <span>
+                          <strong style={{ fontSize: large ? 16 : 13 }}>{order.order_num}</strong>
+                          <span style={{ color: 'var(--muted)', fontSize: large ? 14 : 12, marginLeft: 8 }}>{order.customer_name}</span>
+                          <span style={{ color: 'var(--muted)', fontSize: large ? 14 : 12, marginLeft: 8 }}>· {mins}m ago</span>
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <PaymentStatusPill status={order.payment_status} />
+                          <span style={{ fontSize: large ? 14 : 13, color: 'var(--muted)' }}>{formatCurrency(order.total)}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(${large ? 280 : 240}px, 1fr))`, gap: large ? 18 : 14 }}>
             {COLUMNS.map((col) => {
               const colOrders = activeOrders
