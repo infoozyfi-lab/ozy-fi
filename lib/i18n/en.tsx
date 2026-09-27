@@ -12,6 +12,14 @@ const en = {
     // SEO gap-fill, Part C — eyebrow label on the clearly-marked
     // placeholder blocks in AboutPageClient.tsx/PickupPageClient.tsx.
     placeholderLabel: 'Placeholder — needs real content',
+    // Add-to-cart-improvements brief, item 8 — small "Added!" toast shown
+    // alongside the flying-to-cart animation and cart-count update on
+    // every real add-to-cart (see StoreContext.tsx's notifyItemAdded and
+    // components/AddedToast.tsx). No existing toast/snackbar pattern was
+    // found anywhere in this codebase, so this is a new (small, additive)
+    // one, styled to match the site's existing pill/rounded visual
+    // language rather than inventing a new look.
+    addedToCart: (name: string) => `${name} added to cart`,
   },
 
   // SEO gap-fill, Part A — visible breadcrumb trail + matching
@@ -164,6 +172,9 @@ const en = {
     clearSearch: 'Clear search',
     noResultsHeading: 'No items found',
     noResults: (query: string) => `No menu items match "${query}". Try a different search.`,
+    // Search-improvements brief, items 4 and 5.
+    recentSearchesHeading: 'Recent searches',
+    didYouMean: (name: string) => `Did you mean "${name}"?`,
   },
 
   story: {
@@ -279,6 +290,10 @@ const en = {
     stepCart: 'Cart',
     stepDetails: 'Details',
     stepPayment: 'Payment',
+    // Checkout-improvements brief, item 10 — spoken/visible confirmation
+    // of "you are on step X of Y", alongside the existing dot+label
+    // indicator (see CheckoutModal.tsx's StepIndicator).
+    stepOfLabel: (current: number, total: number) => `Step ${current} of ${total}`,
     backAriaLabel: 'Back',
     closeAriaLabel: 'Close',
     title: 'Your order',
@@ -374,6 +389,22 @@ const en = {
     // Visit.tsx/PickupPageClient.tsx already use), never invented.
     pickupInfoHeading: 'Pickup location & hours',
     pickupInfoIntro: 'Come to us at:',
+    // Checkout-improvements brief, item 13 — a real-time/distance-based
+    // estimate would need a new paid routing/maps API call; this reuses
+    // a simpler, already-configured static estimate instead (two new
+    // admin_settings keys, see app/admin/dashboard/page.tsx's
+    // SETTINGS_FIELDS), shown only once the owner has actually set a
+    // value (never an invented number).
+    estimatedDeliveryTime: (minutes: number) => `~${minutes} min to your area`,
+    estimatedPickupTime: (minutes: number) => `~${minutes} min until ready for pickup`,
+    // Checkout-improvements brief, item 12 — "save this address for next
+    // time". No new save step/checkbox: every order already stores the
+    // delivery address for fulfillment, so a returning customer's most
+    // recent delivery address is simply looked up by phone (same
+    // phone-matching trust model as the existing first-order-discount and
+    // order-tracking lookups) and used to fill in empty fields only.
+    addressPrefilledNotice: "We've filled in the address from your last order — feel free to change it.",
+    addressPrefilledClear: 'Not you? Clear',
   },
 
   confirm: {

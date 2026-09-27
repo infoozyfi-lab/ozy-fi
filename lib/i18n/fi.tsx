@@ -13,6 +13,8 @@ const fi = {
     loading: 'Ladataan…',
     // SEO-täydennys, osa C — ks. vastaava kommentti en.js:ssä.
     placeholderLabel: 'Paikkamerkki — tarvitsee oikeaa sisältöä',
+    // Ks. en.tsx:n vastaava kommentti (ostoskoriin lisäämisen "Lisätty!"-ilmoitus).
+    addedToCart: (name: string) => `${name} lisätty ostoskoriin`,
   },
 
   // SEO gap-fill, Part A — see the matching comment in en.js.
@@ -140,6 +142,9 @@ const fi = {
     clearSearch: 'Tyhjennä haku',
     noResultsHeading: 'Tuloksia ei löytynyt',
     noResults: (query: string) => `Yksikään tuote ei vastaa hakua "${query}". Kokeile toista hakusanaa.`,
+    // Search-improvements brief, items 4 and 5.
+    recentSearchesHeading: 'Viimeisimmät haut',
+    didYouMean: (name: string) => `Tarkoititko "${name}"?`,
   },
 
   story: {
@@ -241,6 +246,8 @@ const fi = {
     stepCart: 'Ostoskori',
     stepDetails: 'Tiedot',
     stepPayment: 'Maksu',
+    // Ks. en.tsx:n vastaava kommentti (kohta 10 — "Vaihe X/Y").
+    stepOfLabel: (current: number, total: number) => `Vaihe ${current}/${total}`,
     backAriaLabel: 'Takaisin',
     closeAriaLabel: 'Sulje',
     title: 'Tilauksesi',
@@ -318,6 +325,11 @@ const fi = {
     orderTypePickupDesc: 'Nouda tilaus itse ravintolasta',
     pickupInfoHeading: 'Noutopaikka ja aukioloajat',
     pickupInfoIntro: 'Tule meille osoitteeseen:',
+    // Ks. en.tsx:n vastaavat kommentit (kohdat 13 ja 12).
+    estimatedDeliveryTime: (minutes: number) => `~${minutes} min alueellesi`,
+    estimatedPickupTime: (minutes: number) => `~${minutes} min kunnes valmis noudettavaksi`,
+    addressPrefilledNotice: 'Täytimme osoitteen edellisestä tilauksestasi — voit muuttaa sitä vapaasti.',
+    addressPrefilledClear: 'Eikö tämä ole sinun? Tyhjennä',
   },
 
   confirm: {

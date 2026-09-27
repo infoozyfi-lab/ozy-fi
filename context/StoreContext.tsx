@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useMemo, useEffect, type ReactNode, type Dispatch, type SetStateAction } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, useEffect, useRef, type ReactNode, type Dispatch, type SetStateAction } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { trackViewItem, trackAddToCart, trackBeginCheckout, trackPurchase } from '@/lib/analytics';
 import { useLocale, useLocalePath, useTranslations } from '@/lib/i18n';
@@ -72,6 +72,14 @@ interface StoreContextValue {
   addToCart: () => void;
   removeFromCart: (key: string) => void;
   addDrinkToCart: (drink: Addon) => void;
+  // Add-to-cart-improvements brief, items 8/9 — set (with a fresh `key`,
+  // so re-adding the same item quickly still restarts the toast) by the
+  // three real cart-mutating actions (addToCart's non-bundle-slot
+  // branch, addDrinkToCart, addBundleToCart) via the internal
+  // notifyItemAdded helper below, and auto-cleared after ~1.8s. Never
+  // set when addToCart is only filling a bundle slot — that path doesn't
+  // touch the real cart. Read by components/AddedToast.tsx.
+  addedNotice: { key: number; message: string } | null;
   updateCartQty: (key: string, nextQty: number) => void;
   setCartOpen: Dispatch<SetStateAction<boolean>>;
   goToCheckout: () => void;
@@ -176,7 +184,15 @@ interface StoreContextValue {
   // Only ever used for DISPLAY here (the cart/checkout UI) — the server
   // independently re-reads admin_settings and enforces the real fee/
   // minimum at order-creation time, never trusting this client value.
-  deliverySettings: { fee: number; minimumOrder: number };
+  // Checkout-improvements brief, item 13 — two new admin_settings keys
+  // (estimated_delivery_minutes/estimated_pickup_minutes, see
+  // app/admin/dashboard/page.tsx's SETTINGS_FIELDS), parsed the exact
+  // same "0 == not configured, never an invented number" way as
+  // fee/minimumOrder above. A genuinely real-time/distance-based
+  // estimate would need a new paid routing/maps API call — this reuses
+  // a simpler, already-configured static per-order-type estimate
+  // instead, which is both cheaper and immediately available.
+  deliverySettings: { fee: number; minimumOrder: number; estimatedDeliveryMinutes: number; estimatedPickupMinutes: number };
   drinks: Addon[];
   dipCups: Addon[];
   snacks: Addon[];
@@ -435,7 +451,11 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
   // StoreContextValue above. 0/0 until the /api/menu fetch below resolves,
   // same "real data, harmless default until loaded" contract as the rest
   // of this file's admin_settings-backed state.
-  const [deliverySettings, setDeliverySettings] = useState<{ fee: number; minimumOrder: number }>({ fee: 0, minimumOrder: 0 });
+  const [deliverySettings, setDeliverySettings] = useState<{ fee: number; minimumOrder: number; estimatedDeliveryMinutes: number; estimatedPickupMinutes: number }>({ fee: 0, minimumOrder: 0, estimatedDeliveryMinutes: 0, estimatedPickupMinutes: 0 });
+  // Add-to-cart-improvements brief, items 8/9 — see addedNotice's own
+  // comment on StoreContextValue above.
+  const [addedNotice, setAddedNotice] = useState<{ key: number; message: string } | null>(null);
+  const addedNoticeTimeoutRef = useRef<number | null>(null);
   const [drinks, setDrinks] = useState<Addon[]>([]);
   const [dipCups, setDipCups] = useState<Addon[]>([]);
   const [snacks, setSnacks] = useState<Addon[]>([]);
@@ -526,9 +546,17 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         {
           const rawFee = Number(data.settings?.delivery_fee);
           const rawMin = Number(data.settings?.minimum_order);
+          // Checkout-improvements brief, item 13 — same parsing contract
+          // as fee/minimumOrder above; /api/menu already passes every
+          // admin_settings row through verbatim (lib/menu-data.ts), so
+          // these two new keys need no other plumbing to reach here.
+          const rawDeliveryMinutes = Number(data.settings?.estimated_delivery_minutes);
+          const rawPickupMinutes = Number(data.settings?.estimated_pickup_minutes);
           setDeliverySettings({
             fee: Number.isFinite(rawFee) ? rawFee : 0,
             minimumOrder: Number.isFinite(rawMin) ? rawMin : 0,
+            estimatedDeliveryMinutes: Number.isFinite(rawDeliveryMinutes) && rawDeliveryMinutes > 0 ? rawDeliveryMinutes : 0,
+            estimatedPickupMinutes: Number.isFinite(rawPickupMinutes) && rawPickupMinutes > 0 ? rawPickupMinutes : 0,
           });
         }
         setFeatured(blob.featured);
@@ -829,6 +857,33 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
   const unitPrice = useMemo(() => calcUnitPrice(selection), [selection, calcUnitPrice]);
   const lineTotal = useMemo(() => (selection ? unitPrice * selection.qty : 0), [unitPrice, selection]);
 
+  // Add-to-cart-improvements brief, items 8/9 — centralized here rather
+  // than duplicated in every component that can add to the cart, and
+  // called from exactly the 3 real cart-mutating call sites below
+  // (addToCart's non-bundle-slot branch, addDrinkToCart, addBundleToCart)
+  // — deliberately never from addToCart's bundleSlotIndex branch, which
+  // fills a bundle slot rather than touching the real cart.
+  const notifyItemAdded = useCallback((name: string) => {
+    setAddedNotice({ key: Date.now(), message: t.common.addedToCart(name) });
+    if (addedNoticeTimeoutRef.current != null) window.clearTimeout(addedNoticeTimeoutRef.current);
+    addedNoticeTimeoutRef.current = window.setTimeout(() => setAddedNotice(null), 1800);
+
+    // Item 9 — a short single haptic pulse on supporting devices. Per
+    // MDN, calling navigator.vibrate() on a browser/device that doesn't
+    // implement the Vibration API (e.g. iOS Safari) is a silent no-op,
+    // never a thrown error — so this is genuinely safe to call
+    // unconditionally. The typeof guards here are defensive
+    // TypeScript-strict style (navigator.vibrate isn't declared on every
+    // lib.dom.d.ts target) rather than because the call itself is unsafe.
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate(18);
+    }
+  }, [t]);
+
+  useEffect(() => () => {
+    if (addedNoticeTimeoutRef.current != null) window.clearTimeout(addedNoticeTimeoutRef.current);
+  }, []);
+
   const addToCart = useCallback(() => {
     if (!activeProduct || !selection) return;
     const details: string[] = [];
@@ -949,13 +1004,14 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
       },
     ]);
     trackAddToCart({ productId: activeProduct.id, name: activeProduct.name, details, qty: selection.qty, unitPrice, lineTotal });
+    notifyItemAdded(activeProduct.name);
     // Deliberately not closing the overlay here — navigating straight to
     // /menu means the whole page (overlay included) swaps out in one go,
     // instead of a flash of the bare page underneath first.
     goBack();
   }, [
     activeProduct, selection, unitPrice, lineTotal,
-    baseOptions, sauceOptions, cheeseOptions, sauceStripeOptions, dipOptions, allFillings, goBack,
+    baseOptions, sauceOptions, cheeseOptions, sauceStripeOptions, dipOptions, allFillings, goBack, notifyItemAdded,
   ]);
 
   const removeFromCart = useCallback((key: string) => {
@@ -987,7 +1043,8 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         },
       ];
     });
-  }, []);
+    notifyItemAdded(drink.name);
+  }, [notifyItemAdded]);
 
   const updateCartQty = useCallback((key: string, nextQty: number) => {
     setCart((c) => {
@@ -1332,8 +1389,9 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
         bundleItems,
       },
     ]);
+    notifyItemAdded(activeBundle.title);
     closeBundleModal();
-  }, [activeBundle, bundleReady, bundleSlots, bundleTotal, closeBundleModal]);
+  }, [activeBundle, bundleReady, bundleSlots, bundleTotal, closeBundleModal, notifyItemAdded]);
 
   const closeConfirm = useCallback(() => {
     setConfirmedOrder(null);
@@ -1418,6 +1476,7 @@ export function StoreProvider({ children, initialData }: StoreProviderProps) {
     bundleExtrasTotal,
     bundleTotal,
     addBundleToCart,
+    addedNotice,
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
