@@ -1043,6 +1043,17 @@ const SETTINGS_FIELDS: SettingsField[] = [
   { key: 'address', label: 'Address' },
   { key: 'minimum_order', label: 'Minimum order (€)', number: true },
   { key: 'delivery_fee', label: 'Delivery fee (€)', number: true },
+  // Checkout-improvements brief, item 13 — a plain, admin-set estimate
+  // shown to the customer during checkout ("~35 minutes to your area" /
+  // "~20 min until ready for pickup" — see context/StoreContext.tsx's
+  // deliverySettings and components/CheckoutModal.tsx). Deliberately NOT
+  // a real-time/distance-based estimate, which would need a new paid
+  // routing/maps API call — this reuses the same simple, already-
+  // configured-settings pattern as minimum_order/delivery_fee above, at
+  // no extra cost. Left blank (0), the checkout screen simply shows no
+  // estimate rather than a guessed number.
+  { key: 'estimated_delivery_minutes', label: 'Estimated delivery time (minutes)', number: true, step: '1' },
+  { key: 'estimated_pickup_minutes', label: 'Estimated pickup time (minutes)', number: true, step: '1' },
   // Audit-fixes brief, Part 7 — optional map coordinates, used only to
   // add a `geo` block to the Restaurant structured data (see
   // app/(site)/[locale]/layout.tsx's getRestaurantSchema). Both blank by

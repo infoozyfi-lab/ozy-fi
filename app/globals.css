@@ -276,6 +276,40 @@ h2{ font-family:'Anton', sans-serif; font-size: clamp(2rem, 4vw, 3rem); color: v
 .menu-search-empty{ padding: 8px 0 32px; color: var(--muted); border-top: 1px solid var(--line); margin-top: 8px; }
 .menu-search-empty-heading{ color: var(--cream); font-weight: 700; font-size: 1.1rem; margin: 20px 0 6px; }
 
+/* Search-improvements brief, item 2 — highlighted matched substring
+   (fuzzy or exact) inside a result's name/description. Uses <mark> for
+   its built-in semantics (screen readers announce it), restyled to fit
+   this site's palette rather than the browser-default yellow. */
+.search-hl{ background: rgba(232, 98, 42, 0.28); color: var(--cream); border-radius: 3px; padding: 0 1px; }
+
+/* Search-improvements brief, item 4 — recent-searches quick-tap list,
+   shown under the input while it's focused and empty. Dropdown-style
+   panel matching .mini-summary's card language (bordered, rounded,
+   var(--bg-card)) rather than inventing a new surface. */
+.menu-search-recent{
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 5;
+  background: var(--bg-card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 10px 8px; box-shadow: 0 12px 28px rgba(35,29,25,0.28);
+}
+.menu-search-recent-heading{
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted);
+  padding: 2px 10px 6px;
+}
+.menu-search-recent-item{
+  display:block; width:100%; text-align:left; background: transparent; border: none; cursor: pointer;
+  color: var(--cream); font-size: 0.92rem; font-family: inherit; padding: 9px 10px; border-radius: 8px;
+}
+.menu-search-recent-item:hover{ background: var(--bg-alt); }
+
+/* Search-improvements brief, item 5 — "Did you mean...?" tappable
+   prompt shown on a genuine zero-result search. */
+.menu-search-suggestion{
+  display:inline-flex; align-items:center; gap: 6px; margin-top: 10px; padding: 9px 16px;
+  background: var(--bg-card); border: 1px solid var(--ember-dark); border-radius: 999px;
+  color: var(--ember-dark); font-weight: 700; font-size: 0.88rem; font-family: inherit; cursor: pointer;
+}
+.menu-search-suggestion:hover{ background: rgba(232, 98, 42, 0.12); }
+
 /* ---------- STORY ---------- */
 .story{ background: var(--bg-alt); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 /* Bundle 1 Task 5 — story banner slider. This used to be a two-column
@@ -970,6 +1004,13 @@ footer{ padding: 56px 0 32px; }
 .checkout-step-line{ flex:1; height:1px; background: var(--line); margin-top: 13px; }
 .checkout-step-line.done{ background: var(--gold); }
 
+/* Checkout-improvements brief, item 10 — explicit "Step X of Y" text,
+   alongside (not instead of) the dot+label indicator above. A new class
+   scoped to CheckoutModal's own StepIndicator only — .checkout-steps/
+   .checkout-step-dot/-label/-line are shared with TrackPageClient.tsx's
+   unrelated order-tracking timeline, so nothing here touches those. */
+.checkout-step-of{ font-size: 0.78rem; color: var(--muted); text-align:center; margin: 2px 0 4px; }
+
 /* Round-2 fixes brief, Part 4 (item 2) — a short fade+rise on the
    step-content wrapper, re-triggered every time `step` changes (see the
    `key={step}` on this wrapper in CheckoutModal.tsx — React mounts a new
@@ -996,6 +1037,13 @@ footer{ padding: 56px 0 32px; }
 /* Collapsible mini order summary shown on Details / Payment steps */
 .mini-summary{
   border: 1px solid var(--line); border-radius: 12px; margin-bottom: 20px; overflow:hidden; background: var(--bg-card);
+  /* Checkout-improvements brief, item 14 — keep the order total/summary
+     visible while scrolling through the later steps. .mini-summary's
+     scrolling ancestor is .pp-scroll (CheckoutModal.tsx), not the page,
+     so `sticky` here (not `fixed`) tracks correctly within that panel
+     without needing extra offset math; .pp-topbar is a sibling OUTSIDE
+     .pp-scroll, so there's no double-header overlap to account for. */
+  position: sticky; top: 0; z-index: 4;
 }
 .mini-summary-head{
   appearance:none; -webkit-appearance:none;
@@ -1323,6 +1371,53 @@ footer{ padding: 56px 0 32px; }
 }
 .order-bar-label{ flex:1; text-align:left; }
 .order-bar-total{ font-family:'Anton', sans-serif; font-size: 1.05rem; }
+
+/* Add-to-cart-improvements brief, item 6 — invisible fixed placeholder
+   used as the flying-to-cart animation's landing target on the very
+   first add to an empty cart, when OrderBar.tsx has nothing to render
+   yet (it returns null while itemCount === 0). Positioned to match
+   where the real .order-bar-count badge sits once the bar appears, so
+   the flight lands in the same visual spot either way. Never visible
+   itself (opacity: 0, no pointer events) — see components/OrderBar.tsx. */
+.order-bar-anchor-placeholder{
+  position: fixed; left: 34px; bottom: calc(34px + env(safe-area-inset-bottom, 0px));
+  width: 1px; height: 1px; opacity: 0; pointer-events: none;
+}
+
+/* Add-to-cart-improvements brief, item 6 — the flying thumbnail itself.
+   A small cloned "ghost" element, absolutely positioned at the source
+   item's on-screen center by lib/flyToCart.ts, then transitioned to the
+   cart indicator's position/scale. Skipped entirely under
+   prefers-reduced-motion (flyToCart.ts returns early — the cart still
+   updates instantly either way, this is purely the extra visual). */
+.fly-to-cart-ghost{
+  position: fixed; z-index: 600; border-radius: 12px; background-size: cover; background-position: center;
+  box-shadow: 0 6px 18px rgba(35,29,25,0.35);
+  transition: transform 0.55s cubic-bezier(0.3, 0.05, 0.2, 1), opacity 0.55s ease;
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+
+/* Add-to-cart-improvements brief, item 8 — small "Added!" toast, shown
+   alongside the flying animation and cart-count update (see
+   components/AddedToast.tsx). New pattern — no existing toast/snackbar
+   anywhere in this codebase — styled to match .order-bar's pill shape
+   and the ember accent used throughout the app. */
+.added-toast{
+  position: fixed; left: 50%; z-index: 610;
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  transform: translate(-50%, 8px); opacity: 0;
+  background: var(--bg-card); color: var(--cream); border: 1px solid var(--line);
+  border-radius: 999px; padding: 10px 20px; font-size: 0.9rem; font-weight: 600;
+  box-shadow: 0 10px 24px rgba(35,29,25,0.3);
+  display:flex; align-items:center; gap: 8px; max-width: calc(100vw - 32px);
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.added-toast::before{ content: '✓'; color: var(--ember); font-weight: 800; }
+.added-toast.show{ transform: translate(-50%, 0); opacity: 1; }
+@media (prefers-reduced-motion: reduce){
+  .added-toast{ transition: opacity 0.2s ease; transform: translate(-50%, 0); }
+}
 
 /* ---------- LEGAL / TRACK ORDER PAGES ---------- */
 .legal-page, .track-page{ padding: 48px 0 90px; }
