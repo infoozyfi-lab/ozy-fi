@@ -1,0 +1,55 @@
+# Search, cart & checkout improvements — delivery report
+
+This delivers all 13 active items from `cowork-brief-search-cart-checkout-improvements.md` (item 11, Google Places autocomplete, was explicitly skipped per the brief). Every item is additive: nothing about pricing, payment, order-creation, or the real add-to-cart/checkout logic was changed — only new UX on top of it. Every rule from the brief was followed: no `cookies()` from `next/headers` anywhere, all new code is strict TypeScript with no `any`, and no new npm dependency was added for anything (fuzzy matching, the flying animation, and the toast are all hand-rolled).
+
+This round also carries forward the `ozy-fi-ssr-migration.zip` you sent, which already includes the fake-URL-404 fix from the previous round.
+
+## A note on how this was verified
+
+This sandbox has no npm registry access (confirmed again this round — same disclosed limitation as every prior delivery on this project), so nothing here could go through `npm install` + a real Next.js build. Instead, every new/changed file was checked with a real TypeScript syntax pass, and the actual logic was exercised with real-execution Node harnesses that `require()` the real `.ts` files directly (transpiled on the fly, not reimplemented) — the same methodology used throughout this project. New harnesses: `worker/test-data/fuzzy-match-verify.js` (18 checks), `recent-searches-verify.js` (10), `hold-repeat-verify.js` (9), `fly-to-cart-verify.js` (10), `last-address-verify.js` (8), and `cart-checkout-source-checks.js` (59 structural checks across every touched file). All 18 pre-existing harnesses from prior rounds were re-run too — everything still passes, zero regressions.
+
+## Area 1 — Search improvements
+
+**1. Typo-tolerant matching.** New `lib/fuzzyMatch.ts` implements Levenshtein distance from scratch (no library) with a tolerance that scales with query length (exact match required for ≤3 characters, 1 typo allowed up to 5, 2 beyond that). It checks whole words and same-length slices of longer words, which is what correctly catches your own example — "bologna" finds "Bolognese" at distance 1, even though the two full words differ by 3 edits. Runs entirely against the product data already loaded on the page; no new API call.
+
+**2. Highlighted matches.** A small `Highlight` component wraps the matched span in `<mark class="search-hl">`, styled to fit the site's ember palette instead of the browser's default yellow. Applied to both the product name and the description/ingredients text.
+
+**3. Searching ingredients/description too.** This turned out to already be substantially in place: `Product.searchText` (built in `lib/menu-i18n.ts`) already concatenates name **and** description in both languages. The fuzzy-matching upgrade in item 1 runs against that same field, so "chicken" now finds a product whose ingredients mention chicken even if the name doesn't — with no separate matching mechanism needed. Flagging this rather than claiming it as new work: the only genuinely new part here is that the match is now fuzzy and highlighted, not that description text is searched at all.
+
+**4. Recent searches.** New `lib/recentSearches.ts` stores the last 5 completed searches in `localStorage` (a per-visitor convenience, not account data — no server storage, per the brief). Shown as tappable suggestions the moment the search box is focused and empty; disappears once you start typing.
+
+**5. "Did you mean...?"** Reuses the same fuzzy-match logic (with a slightly more lenient tolerance, since this only needs to suggest one close name, not gate every result) to suggest the closest real product name on a genuine zero-result search. Tapping it re-runs the search with that name.
+
+## Area 2 — Add-to-cart improvements
+
+**Finding worth flagging up front:** the brief assumed add-to-cart happens from "the menu grid, product page, drink upsell." Tracing the actual code found the menu grid tiles are plain navigation links to the product page, not add-to-cart buttons — there are exactly 4 real places a customer adds something to the cart: the main product page's Add button, the drink-upsell modal, the bundle-builder's finish button, and the drinks/dips/snacks quick-add rows inside checkout. All 4 got every feature below; nothing was missed by going with the brief's assumed 3.
+
+**6. Flying-to-cart animation.** New `lib/flyToCart.ts` clones a small thumbnail of the item and animates it (plain CSS transition + `getBoundingClientRect()` math, no library) from wherever it was clicked to the cart indicator, with a landing pulse — reusing the pulse `OrderBar.tsx` already had, rather than building a second one. It fully respects `prefers-reduced-motion: reduce` (skips the visual entirely; the cart itself always still updates instantly either way). One real bug this surfaced and fixed along the way: the cart indicator (`OrderBar`) used to render nothing at all whenever the cart was empty or checkout was open, which meant the very first add to an empty cart had no visual target to fly toward. `OrderBar.tsx` now always renders a findable anchor — either the real, visible badge, or an invisible placeholder in the same spot when the bar itself is hidden.
+
+**7. Hold-to-increase quantity.** New `useHoldRepeat` hook (`lib/hooks.ts`): holding a +/− button repeats after a 500ms delay, then every 120ms, without double-firing a plain tap and without breaking keyboard/screen-reader activation (which only ever dispatches a `click`, never the pointer events this hook listens for). Wired into every quantity stepper in the app: the main product-page stepper, the filling-quantity steppers, and the cart-line stepper in checkout's step 1.
+
+**8. "Added!" toast.** There was no existing toast/snackbar pattern anywhere in this codebase (checked `app/`, `components/`, `lib/`), so this is a small new one — new `components/AddedToast.tsx` — styled to match the site's existing pill shape and ember accent rather than inventing a new visual language. Centralized in `StoreContext.tsx`'s new `notifyItemAdded` helper, called from the 3 places that actually touch the real cart (never from the bundle-slot-filling path, which doesn't touch the cart at all).
+
+**9. Haptic feedback.** A single ~18ms `navigator.vibrate()` pulse, called from the same `notifyItemAdded` helper. Per MDN, calling `vibrate()` on a browser/device without the Vibration API (iOS Safari included) is a documented silent no-op, never a thrown error — so this is genuinely safe to call unconditionally, as the brief asked to confirm before shipping it that way.
+
+## Area 3 — Checkout improvements
+
+**10. Clearer step indicator.** The existing `StepIndicator` in `CheckoutModal.tsx` already showed a dot + label per step, not just dots as the brief assumed — so this adds an explicit "Step 2 of 3" text line above it (and `aria-current="step"` on the active dot for screen readers) rather than replacing what was already there.
+
+**11. Skipped**, per the brief — Google Places autocomplete not pursued; the address field stays plain manual entry.
+
+**12. Save address for next time.** No new "save my address" step or checkbox was added, because none is needed: every delivery order already stores the customer's name and address for fulfillment. A new endpoint, `GET /api/checkout/last-address`, looks up the most recent delivery order for a phone number — using the exact same phone-matching helper (`phoneMatches`) three other endpoints in this codebase already use for phone-based lookups, so this doesn't introduce any new trust model, just reuses the existing one. It fires from the same phone-field blur that already checks first-order-discount eligibility. It only fills in fields that are still empty — it never overwrites something you're actively typing — and shows a small "we filled this in from your last order" notice with a one-tap "clear" option. **One real limitation found and worth knowing:** this project's `orders` table has never stored a postal code (only the free-text address line), so the postal code field can't be prefilled — only name and address. That's not something this change could fix without altering how orders are stored; flagging it rather than silently faking a value.
+
+**13. Delivery time estimate.** A true real-time, distance-based estimate would need a new paid routing/maps API call — exactly the kind of thing the brief asked to flag rather than quietly add. Instead, this adds two new plain admin-configurable settings — "Estimated delivery time" and "Estimated pickup time," in minutes — next to the existing minimum-order/delivery-fee fields in Admin → Settings. When set, checkout shows "~35 min to your area" (or the pickup equivalent) right where the delivery/pickup choice is made; if left blank, no estimate is shown at all rather than a guessed number. This is deliberately the cheaper, already-available option the brief itself invited recommending, and needs no new account or API key. **If a real-time estimate is wanted later:** that would require signing up for a routing/distance API (Google Distance Matrix, Mapbox, or similar) and getting an API key from that provider — a recurring paid cost this change does not add.
+
+**14. Sticky order summary.** `.mini-summary` (the collapsible order-total block already shown in checkout's Details/Payment steps) now has `position: sticky` so it stays visible while scrolling through the address and payment fields — a pure CSS change, no logic touched.
+
+## A finding about the site's CSS
+
+While adding new styles, it turned out there are **two** `globals.css` files in this project — `app/globals.css` and one at the project root. Tracing every `import` in the codebase found that **both** page layouts (`app/(site)/[locale]/layout.tsx` and `app/admin/layout.tsx`) actually resolve to `app/globals.css`; the root-level `globals.css` isn't imported anywhere and appears to be a stale leftover from an earlier project layout. All of this round's new styles went into `app/globals.css` (the one that's actually live); the orphaned root file was left untouched rather than guessing at fixing something outside this brief's scope. Worth a look next time you're cleaning up the repo — it's dead weight, not a bug, but harmless to delete.
+
+## Files changed
+
+- New: `lib/fuzzyMatch.ts`, `lib/recentSearches.ts`, `lib/flyToCart.ts`, `components/AddedToast.tsx`, `app/api/checkout/last-address/route.ts`
+- Modified: `components/MenuSection.tsx`, `components/OrderBar.tsx`, `components/ProductPage.tsx`, `components/BundleModal.tsx`, `components/DrinkUpsellModal.tsx`, `components/CheckoutModal.tsx`, `components/HomePageClient.tsx`, `components/MenuPageClient.tsx`, `components/ProductPageStandalone.tsx`, `context/StoreContext.tsx`, `lib/hooks.ts`, `lib/i18n/en.tsx`, `lib/i18n/fi.tsx`, `app/admin/dashboard/page.tsx`, `app/globals.css`
+- New tests: `worker/test-data/fuzzy-match-verify.js`, `recent-searches-verify.js`, `hold-repeat-verify.js`, `fly-to-cart-verify.js`, `last-address-verify.js`, `cart-checkout-source-checks.js`
