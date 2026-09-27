@@ -16,6 +16,7 @@ import DrinkUpsellModal from '@/components/DrinkUpsellModal';
 import CheckoutModal from '@/components/CheckoutModal';
 import ConfirmModal from '@/components/ConfirmModal';
 import OrderBar from '@/components/OrderBar';
+import AddedToast from '@/components/AddedToast';
 
 export default function HomePageClient({ initialData }: { initialData?: StoreProviderInitialData | null }) {
   return (
@@ -37,6 +38,7 @@ export default function HomePageClient({ initialData }: { initialData?: StorePro
       <CheckoutModal />
       <ConfirmModal />
       <OrderBar />
+      <AddedToast />
     </StoreProvider>
   );
 }

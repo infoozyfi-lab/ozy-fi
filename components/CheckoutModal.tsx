@@ -4,7 +4,8 @@ import { useState, useRef, useEffect, type ChangeEvent, type FormEvent, type Key
 import { useStore } from '@/context/StoreContext';
 import { useTranslations } from '@/lib/i18n';
 import { computeDiscountAmount, describeDiscountValue } from '@/lib/pricing';
-import { useBodyScrollLock } from '@/lib/hooks';
+import { useBodyScrollLock, useHoldRepeat } from '@/lib/hooks';
+import { triggerFlyToCart } from '@/lib/flyToCart';
 import type { Addon, CartLine, Customer, OpeningHours, OrderType } from '@/lib/types';
 import CardPaymentStep, { type CardPaymentHandle } from './CardPaymentStep';
 
@@ -37,27 +38,57 @@ function isValidFinnishPhone(raw: string) {
   return /^(\+358[1-9]\d{6,9}|0[1-9]\d{6,9})$/.test(cleaned);
 }
 
-function StepIndicator({ step, stepLabels }: { step: number; stepLabels: string[] }) {
+function StepIndicator({ step, stepLabels, t }: { step: number; stepLabels: string[]; t: any }) {
   return (
-    <div className="checkout-steps">
-      {stepLabels.map((label, i) => {
-        const n = i + 1;
-        const isActive = step === n;
-        const isDone = step > n;
-        return (
-          <div key={label} style={{ display: 'contents' }}>
-            <div className="checkout-step">
-              <div className={`checkout-step-dot${isActive ? ' active' : isDone ? ' done' : ''}`}>
-                {isDone ? '✓' : n}
+    <>
+      {/* Checkout-improvements brief, item 10 — an explicit, unambiguous
+          "Step X of Y" line alongside the existing dot+label indicator
+          below (which was already showing per-step labels, not just dots
+          as first assumed — this adds to it rather than replacing it).
+          aria-current="step" on the active dot (added below) gives screen
+          reader users the same information the dots convey visually. */}
+      <p className="checkout-step-of">{t.checkout.stepOfLabel(step, stepLabels.length)}</p>
+      <div className="checkout-steps">
+        {stepLabels.map((label, i) => {
+          const n = i + 1;
+          const isActive = step === n;
+          const isDone = step > n;
+          return (
+            <div key={label} style={{ display: 'contents' }}>
+              <div className="checkout-step">
+                <div
+                  className={`checkout-step-dot${isActive ? ' active' : isDone ? ' done' : ''}`}
+                  aria-current={isActive ? 'step' : undefined}
+                >
+                  {isDone ? '✓' : n}
+                </div>
+                <span className={`checkout-step-label${isActive ? ' active' : ''}`}>{label}</span>
               </div>
-              <span className={`checkout-step-label${isActive ? ' active' : ''}`}>{label}</span>
+              {n < stepLabels.length && (
+                <div className={`checkout-step-line${step > n ? ' done' : ''}`} />
+              )}
             </div>
-            {n < stepLabels.length && (
-              <div className={`checkout-step-line${step > n ? ' done' : ''}`} />
-            )}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+// Add-to-cart-improvements brief, item 7 — "hold to increase quantity",
+// applied to the cart-line qty stepper in the step-1 order review. A
+// small component of its own (rather than calling useHoldRepeat directly
+// inside the cart.map() below) because hooks can't be called a variable
+// number of times inside a loop — one per cart line, whose count changes
+// as items are added/removed.
+function CartLineQty({ qty, onDec, onInc }: { qty: number; onDec: () => void; onInc: () => void }) {
+  const decRepeat = useHoldRepeat(onDec);
+  const incRepeat = useHoldRepeat(onInc);
+  return (
+    <div className="cs-qty">
+      <button type="button" {...decRepeat}>−</button>
+      <span>{qty}</span>
+      <button type="button" {...incRepeat}>+</button>
     </div>
   );
 }
@@ -208,6 +239,35 @@ export default function CheckoutModal() {
     }
   };
 
+  // Checkout-improvements brief, item 12 — "save this address for next
+  // time", fired from the same phone-field blur as checkFirstOrderEligibility
+  // above. Only ever fills fields the customer hasn't already typed
+  // something into (never overwrites active input), and only once per
+  // distinct phone number typed, same one-shot-per-value pattern as
+  // checkedPhoneRef above.
+  const [addressPrefilled, setAddressPrefilled] = useState(false);
+  const prefilledPhoneRef = useRef('');
+
+  const tryPrefillAddress = async (rawPhone: string) => {
+    const cleaned = rawPhone.trim();
+    if (!isValidFinnishPhone(cleaned) || prefilledPhoneRef.current === cleaned) return;
+    prefilledPhoneRef.current = cleaned;
+    try {
+      const res = await fetch(`/api/checkout/last-address?phone=${encodeURIComponent(cleaned)}`);
+      const data = (await res.json().catch(() => ({ found: false }))) as { found?: boolean; name?: string; address?: string };
+      if (!data.found) return;
+      setCustomer((c) => ({
+        ...c,
+        name: c.name.trim() ? c.name : (data.name || c.name),
+        address: c.address.trim() ? c.address : (data.address || c.address),
+      }));
+      setAddressPrefilled(true);
+    } catch {
+      // Advisory convenience only — silently skip on any failure, exactly
+      // like checkFirstOrderEligibility above.
+    }
+  };
+
   // Growth features batch 2 (Feature 5) — "best banner" choice between
   // the welcome discount and an active scheduled offer, since the two
   // are mutually exclusive server-side (app/api/orders/route.ts applies
@@ -238,9 +298,14 @@ export default function CheckoutModal() {
         ? { kind: 'scheduledOffer', amountText: describeDiscountValue(activeScheduledOffer.discount), label: activeScheduledOffer.label }
         : null;
 
-  type HandleAddFn = ((item: Addon) => void) & { _t?: number };
+  type HandleAddFn = ((item: Addon, sourceEl?: HTMLElement | null) => void) & { _t?: number };
 
-  const handleAdd: HandleAddFn = (item) => {
+  const handleAdd: HandleAddFn = (item, sourceEl) => {
+    // Add-to-cart-improvements brief, item 6 — flies from whichever
+    // element triggered this (the row itself works for both a mouse
+    // click and a keyboard Enter/Space activation, since it contains the
+    // item's image either way).
+    if (sourceEl) triggerFlyToCart(sourceEl);
     addDrinkToCart(item);
     setJustAddedId(item.id);
     window.clearTimeout(handleAdd._t);
@@ -485,7 +550,7 @@ export default function CheckoutModal() {
 
       <div className="pp-scroll">
         <div className="wrap" style={{ paddingTop: 24, paddingBottom: 40 }}>
-          <StepIndicator step={step} stepLabels={STEP_LABELS} />
+          <StepIndicator step={step} stepLabels={STEP_LABELS} t={t} />
 
           {/* Round-2 fixes brief, Part 4 (item 2) — `key={step}` forces
               React to mount a fresh element every time the step changes,
@@ -513,11 +578,11 @@ export default function CheckoutModal() {
                         <span className="cs-details">{l.details.join(', ')}</span>
                       )}
                       <div className="cs-qty-row">
-                        <div className="cs-qty">
-                          <button type="button" onClick={() => updateCartQty(l.key, l.qty - 1)}>−</button>
-                          <span>{l.qty}</span>
-                          <button type="button" onClick={() => updateCartQty(l.key, l.qty + 1)}>+</button>
-                        </div>
+                        <CartLineQty
+                          qty={l.qty}
+                          onDec={() => updateCartQty(l.key, l.qty - 1)}
+                          onInc={() => updateCartQty(l.key, l.qty + 1)}
+                        />
                         <button type="button" className="cs-remove" onClick={() => removeFromCart(l.key)}>{t.checkout.remove}</button>
                       </div>
                     </div>
@@ -552,7 +617,15 @@ export default function CheckoutModal() {
                 {drinks.map((d) => {
                   const line = cart.find((l) => l.drinkId === d.id);
                   return (
-                    <button type="button" className={`drink-tile${line ? ' in-cart' : ''}`} key={d.id} onClick={() => addDrinkToCart(d)}>
+                    <button
+                      type="button"
+                      className={`drink-tile${line ? ' in-cart' : ''}`}
+                      key={d.id}
+                      onClick={(e) => {
+                        triggerFlyToCart(e.currentTarget);
+                        addDrinkToCart(d);
+                      }}
+                    >
                       <img src={d.image ?? undefined} alt={d.name} />
                       <span className="dname">{d.name}</span>
                       <span className="dprice">{line ? t.checkout.inCart(line.qty) : `${d.price.toFixed(2)} €`}</span>
@@ -622,6 +695,27 @@ export default function CheckoutModal() {
                 </label>
               </div>
 
+              {/* Checkout-improvements brief, item 13 — a real-time/
+                  distance-based estimate would need a new paid routing/
+                  maps API call (flagged in this feature's delivery
+                  summary, not silently added); this reuses a simpler,
+                  already-configured static per-order-type estimate
+                  instead (admin_settings.estimated_delivery_minutes/
+                  estimated_pickup_minutes — see app/admin/dashboard/
+                  page.tsx). Shown only once the owner has actually set a
+                  value for the currently-selected order type — never an
+                  invented number. */}
+              {orderType === 'delivery' && deliverySettings.estimatedDeliveryMinutes > 0 && (
+                <p className="desc" style={{ marginTop: -4, marginBottom: 16 }}>
+                  🕒 {t.checkout.estimatedDeliveryTime(deliverySettings.estimatedDeliveryMinutes)}
+                </p>
+              )}
+              {orderType === 'pickup' && deliverySettings.estimatedPickupMinutes > 0 && (
+                <p className="desc" style={{ marginTop: -4, marginBottom: 16 }}>
+                  🕒 {t.checkout.estimatedPickupTime(deliverySettings.estimatedPickupMinutes)}
+                </p>
+              )}
+
               <p className="desc" style={{ marginBottom: 16 }}>{t.checkout.orderDetails}</p>
               <label className={errors.name ? 'has-error' : ''}>
                 {t.checkout.fullName}
@@ -666,11 +760,32 @@ export default function CheckoutModal() {
                   type="tel"
                   value={customer.phone}
                   onChange={onField('phone')}
-                  onBlur={() => checkFirstOrderEligibility(customer.phone)}
+                  onBlur={() => {
+                    checkFirstOrderEligibility(customer.phone);
+                    tryPrefillAddress(customer.phone);
+                  }}
                   placeholder={t.checkout.phonePlaceholder}
                 />
                 {errors.phone && <span className="field-error">{errors.phone}</span>}
               </label>
+              {/* Checkout-improvements brief, item 12 — shown right where
+                  the phone field just triggered it, since the address
+                  fields it filled sit above (out of view by then). */}
+              {addressPrefilled && orderType === 'delivery' && (
+                <p className="desc" style={{ marginTop: -8, marginBottom: 16 }}>
+                  {t.checkout.addressPrefilledNotice}{' '}
+                  <button
+                    type="button"
+                    className="change-btn"
+                    onClick={() => {
+                      setCustomer((c) => ({ ...c, address: '', postalCode: '' }));
+                      setAddressPrefilled(false);
+                    }}
+                  >
+                    {t.checkout.addressPrefilledClear}
+                  </button>
+                </p>
+              )}
               {/* Feature 2 / Feature 5 — welcome discount or scheduled
                   offer, whichever is more favorable (see
                   bestAutoDiscount above). Advisory only — the discount
@@ -886,8 +1001,8 @@ export default function CheckoutModal() {
                         key={item.id}
                         role="button"
                         tabIndex={0}
-                        onClick={() => handleAdd(item)}
-                        onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => { if (e.key === 'Enter' || e.key === ' ') handleAdd(item); }}
+                        onClick={(e) => handleAdd(item, e.currentTarget)}
+                        onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => { if (e.key === 'Enter' || e.key === ' ') handleAdd(item, e.currentTarget); }}
                       >
                         <img src={item.image ?? undefined} alt={item.name} />
                         {isJustAdded ? (

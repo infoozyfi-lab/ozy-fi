@@ -1,9 +1,30 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useStore } from '@/context/StoreContext';
 import { useTranslations, useLocalePath } from '@/lib/i18n';
+import { findFuzzyMatch, fuzzyContains, suggestClosestName, type FuzzyMatch } from '@/lib/fuzzyMatch';
+import { getRecentSearches, addRecentSearch } from '@/lib/recentSearches';
+
+// Search-improvements brief, item 2 — wraps the matched portion of
+// `text` in a <mark>, using the {start,end} span findFuzzyMatch already
+// computed against this SAME text (lowercased) — never re-searches here,
+// so the highlight can never disagree with why a result matched. Renders
+// plain text unchanged when there's no match to show (a query that only
+// matched a DIFFERENT field, e.g. the other locale's name — see this
+// component's own comment below on that pre-existing, unchanged edge
+// case — or no query at all).
+function Highlight({ text, match }: { text: string; match: FuzzyMatch | null }) {
+  if (!match) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, match.start)}
+      <mark className="search-hl">{text.slice(match.start, match.end)}</mark>
+      {text.slice(match.end)}
+    </>
+  );
+}
 
 // Audit-fixes brief, Part 6.6 — this used to be a single hardcoded
 // constant (132px), sized to cover the sticky <header> (components/
@@ -74,10 +95,53 @@ export default function MenuSection({
   // (lib/menu-i18n.ts's normalizeProducts), which carries both locales'
   // name/description already lowercased, so a query typed in either
   // language finds a match regardless of which locale is currently shown.
+  //
+  // Search-improvements brief, item 1 — `fuzzyContains` (lib/
+  // fuzzyMatch.ts) replaces the old plain `.includes(query)` substring
+  // check with the same exact-substring fast path PLUS a small
+  // Levenshtein-based tolerance for a 1-2 character typo (e.g. "bologna"
+  // still finds "Bolognese" — see that file's own test harness for the
+  // worked example against this project's real menu data). Item 3
+  // ("search ingredient/description text too") needs no separate change
+  // here at all: `searchText` already concatenates name + description in
+  // both locales (see normalizeProducts's own comment) — it was already
+  // being searched, just via plain substring matching; it's now searched
+  // with the same typo tolerance as the name.
   const [search, setSearch] = useState('');
   const query = search.trim().toLowerCase();
-  const matchesSearch = (item: (typeof items)[number]) => !query || (item.searchText || '').includes(query);
+  const matchesSearch = (item: (typeof items)[number]) => !query || fuzzyContains(item.searchText || '', query);
   const totalMatches = query ? items.filter(matchesSearch).length : items.length;
+
+  // Search-improvements brief, item 4 — recent searches (localStorage,
+  // per-visitor UI convenience — see lib/recentSearches.ts's own
+  // comment). Loaded once on mount (a plain array in state, not read
+  // fresh from storage on every render) and updated locally whenever a
+  // search is recorded, so this component never needs to re-read
+  // localStorage mid-session.
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  useEffect(() => {
+    setRecentSearches(getRecentSearches());
+  }, []);
+  // Item 4 — shown only "when the search input is focused and empty"
+  // (the brief's own wording), so this needs to track focus separately
+  // from the search text itself.
+  const [searchFocused, setSearchFocused] = useState(false);
+  const recordSearch = () => {
+    if (search.trim()) setRecentSearches(addRecentSearch(search));
+  };
+
+  // Search-improvements brief, item 5 — "did you mean". Only computed
+  // (and only ever shown) once a search has genuinely come up with zero
+  // results — reuses the exact same fuzzy-match module as item 1, just
+  // against the full catalog of real product names instead of one
+  // product's own searchText. useMemo'd since this runs the (still
+  // small, but non-trivial) full-catalog scan — no need to redo it on
+  // every render while typing continues to match something, or while
+  // nothing has changed.
+  const didYouMean = useMemo(
+    () => (query && totalMatches === 0 ? suggestClosestName(query, items.map((i) => i.name)) : null),
+    [query, totalMatches, items]
+  );
 
   useEffect(() => {
     const header = document.querySelector('header');
@@ -266,6 +330,17 @@ export default function MenuSection({
               className="menu-search-input"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              // Search-improvements brief, item 4 — a search is "recorded"
+              // once the customer is done typing it (blur), not on every
+              // keystroke; recordSearch() itself no-ops on an empty value.
+              // The recent-searches dropdown below is what would normally
+              // disappear on this same blur before a tap on one of its
+              // buttons can register — each of those buttons uses
+              // onMouseDown+preventDefault (see below) specifically to
+              // avoid that race, a standard, well-known fix for this exact
+              // input-blur-vs-dropdown-click interaction.
+              onBlur={() => { setSearchFocused(false); recordSearch(); }}
               placeholder={t.menuSection.searchPlaceholder}
               aria-label={t.menuSection.searchLabel}
             />
@@ -278,6 +353,28 @@ export default function MenuSection({
               >
                 ×
               </button>
+            )}
+            {/* Search-improvements brief, item 4 — recent searches, shown
+                only while the input is focused AND empty (the brief's own
+                condition), as quick-tap suggestions. */}
+            {searchFocused && !search && recentSearches.length > 0 && (
+              <div className="menu-search-recent" role="listbox" aria-label={t.menuSection.recentSearchesHeading}>
+                <p className="menu-search-recent-heading">{t.menuSection.recentSearchesHeading}</p>
+                {recentSearches.map((q) => (
+                  <button
+                    type="button"
+                    key={q}
+                    className="menu-search-recent-item"
+                    // Keeps the input focused through the click so this
+                    // isn't wiped by onBlur before onClick ever fires —
+                    // see this input's own onBlur comment above.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setSearch(q)}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
         </div>
@@ -326,6 +423,20 @@ export default function MenuSection({
           <div className="menu-search-empty">
             <p className="menu-search-empty-heading">{t.menuSection.noResultsHeading}</p>
             <p>{t.menuSection.noResults(search.trim())}</p>
+            {/* Search-improvements brief, item 5 — "did you mean". Tapping
+                it re-runs the search as a normal typed query (not a
+                separate code path), so every existing behavior (fuzzy
+                matching, highlighting, category filtering) applies to it
+                identically. */}
+            {didYouMean && (
+              <button
+                type="button"
+                className="menu-search-suggestion"
+                onClick={() => setSearch(didYouMean)}
+              >
+                {t.menuSection.didYouMean(didYouMean)}
+              </button>
+            )}
           </div>
         )}
 
@@ -351,7 +462,23 @@ export default function MenuSection({
             </p>
 
             {catItems
-              .map((item) => (
+              .map((item) => {
+                // Search-improvements brief, item 2 — computed per
+                // displayed field (name, description), independently,
+                // against that field's OWN text — never derived from the
+                // combined searchText match used for filtering above,
+                // since searchText mixes in the other locale's name/
+                // description too. A query that only matched, say, the
+                // Finnish name while the English UI is showing still
+                // surfaces the product (unchanged, pre-existing bilingual
+                // search behavior — see normalizeProducts's own comment)
+                // but simply shows no highlight, since the actual matching
+                // text isn't visible on screen to highlight. `null` (no
+                // query, or no match in this particular field) renders as
+                // plain unhighlighted text — see Highlight's own comment.
+                const nameMatch = query ? findFuzzyMatch(item.name.toLowerCase(), query) : null;
+                const descMatch = query && item.desc ? findFuzzyMatch(item.desc.toLowerCase(), query) : null;
+                return (
                 <Link
                   key={item.id}
                   href={lp(`/product/${item.id}`)}
@@ -360,7 +487,7 @@ export default function MenuSection({
                   <span className="menu-item-info">
 
                     <span className="name-row">
-                      <h3>{item.name}</h3>
+                      <h3><Highlight text={item.name} match={nameMatch} /></h3>
 
                       {item.tag && (
                         <span className="tag">
@@ -371,7 +498,7 @@ export default function MenuSection({
 
                     {item.desc && (
                       <p className="desc">
-                        {item.desc}
+                        <Highlight text={item.desc} match={descMatch} />
                       </p>
                     )}
 
@@ -401,7 +528,8 @@ export default function MenuSection({
 
                   </span>
                 </Link>
-              ))}
+                );
+              })}
           </div>
         ))}
 

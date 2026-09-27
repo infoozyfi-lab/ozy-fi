@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useStore } from '@/context/StoreContext';
 import { useTranslations } from '@/lib/i18n';
 import { useBodyScrollLock } from '@/lib/hooks';
+import { triggerFlyToCart } from '@/lib/flyToCart';
 import type { Product } from '@/lib/types';
 
 function money(n: number) {
@@ -27,6 +28,9 @@ export default function BundleModal() {
   const t = useTranslations();
 
   const [pickerSlotIndex, setPickerSlotIndex] = useState<number | null>(null);
+  // Add-to-cart-improvements brief, item 6 — flies from the bundle's own
+  // hero image (below) when the finished bundle is added to the cart.
+  const heroImgRef = useRef<HTMLImageElement | null>(null);
 
   if (!activeBundle) {
     return <div className="bundle-modal" aria-hidden="true" />;
@@ -96,7 +100,7 @@ export default function BundleModal() {
         ) : (
           <>
             <div className="pp-hero">
-              <img className="pp-hero-img" src={activeBundle.image ?? undefined} alt={activeBundle.title} />
+              <img ref={heroImgRef} className="pp-hero-img" src={activeBundle.image ?? undefined} alt={activeBundle.title} />
               <div className="pp-price-badge">
                 <div className="pp-price-row">
                   <span>{bundleTotal.toFixed(2)}</span>
@@ -163,7 +167,10 @@ export default function BundleModal() {
             className="btn-primary pp-add-btn"
             type="button"
             disabled={!bundleReady}
-            onClick={addBundleToCart}
+            onClick={() => {
+              triggerFlyToCart(heroImgRef.current);
+              addBundleToCart();
+            }}
           >
             {bundleReady ? t.bundleModal.addBundleToOrder(money(bundleTotal)) : t.bundleModal.fillEverySlot}
           </button>

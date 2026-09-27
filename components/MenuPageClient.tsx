@@ -12,6 +12,7 @@ import DrinkUpsellModal from '@/components/DrinkUpsellModal';
 import CheckoutModal from '@/components/CheckoutModal';
 import ConfirmModal from '@/components/ConfirmModal';
 import OrderBar from '@/components/OrderBar';
+import AddedToast from '@/components/AddedToast';
 import { useTranslations, useLocalePath } from '@/lib/i18n';
 
 export default function MenuPageClient({
@@ -104,6 +105,7 @@ export default function MenuPageClient({
       <CheckoutModal />
       <ConfirmModal />
       <OrderBar />
+      <AddedToast />
     </StoreProvider>
   );
 }

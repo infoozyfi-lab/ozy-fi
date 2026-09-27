@@ -3,6 +3,7 @@
 import { useStore } from '@/context/StoreContext';
 import { useTranslations, useLocalePath } from '@/lib/i18n';
 import { useBodyScrollLock } from '@/lib/hooks';
+import { triggerFlyToCart } from '@/lib/flyToCart';
 import type { Addon } from '@/lib/types';
 
 export default function DrinkUpsellModal() {
@@ -18,7 +19,11 @@ export default function DrinkUpsellModal() {
 
   const featured = drinks.slice(0, 2);
 
-  const pick = (drink: Addon) => {
+  // Add-to-cart-improvements brief, item 6 — `sourceEl` is the clicked
+  // card itself (via e.currentTarget below), which has the drink's <img>
+  // inside it; triggerFlyToCart handles finding that image itself.
+  const pick = (drink: Addon, sourceEl: HTMLElement | null) => {
+    triggerFlyToCart(sourceEl);
     addDrinkToCart(drink);
     continueFromUpsell();
   };
@@ -36,7 +41,7 @@ export default function DrinkUpsellModal() {
               type="button"
               className="upsell-card"
               key={d.id}
-              onClick={() => pick(d)}
+              onClick={(e) => pick(d, e.currentTarget)}
             >
               <img src={d.image ?? undefined} alt={d.name} />
               <span className="upsell-card-name">{d.name}</span>

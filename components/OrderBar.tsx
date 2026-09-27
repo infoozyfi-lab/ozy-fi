@@ -31,7 +31,20 @@ export default function OrderBar() {
     prevCountRef.current = itemCount;
   }, [itemCount]);
 
-  if (itemCount === 0 || isCheckoutOpen || isDrinkUpsellOpen) return null;
+  // Add-to-cart-improvements brief, item 6 — the flying-to-cart animation
+  // (lib/flyToCart.ts) needs a landing target that's always findable in
+  // the DOM, including on the very first add to an empty cart, when this
+  // component would otherwise render nothing at all (the bar is hidden
+  // whenever there's nothing to show, or while checkout/drink-upsell is
+  // open over it). Rather than have the animation guess a position, an
+  // invisible fixed placeholder — positioned where the real bar's count
+  // badge would sit — stands in for it whenever the real bar isn't shown,
+  // carrying the same `data-cart-fly-target` attribute the real badge
+  // does. This is visual-only: it changes nothing about when the bar
+  // itself is shown or how cart state works.
+  if (itemCount === 0 || isCheckoutOpen || isDrinkUpsellOpen) {
+    return <div className="order-bar-anchor-placeholder" data-cart-fly-target data-cart-indicator aria-hidden="true" />;
+  }
 
   return (
     <button
@@ -39,7 +52,13 @@ export default function OrderBar() {
       className={`order-bar${isProductPageOpen ? ' on-product-page' : ''}`}
       onClick={goToCheckout}
     >
-      <span className={`order-bar-count${pulsing ? ' pulse' : ''}`}>{itemCount}</span>
+      <span
+        className={`order-bar-count${pulsing ? ' pulse' : ''}`}
+        data-cart-fly-target
+        data-cart-indicator
+      >
+        {itemCount}
+      </span>
       <span className="order-bar-label">{t.orderBar.viewOrder}</span>
       <span className="order-bar-total">{cartTotal.toFixed(2)} €</span>
     </button>

@@ -10,6 +10,7 @@ import DrinkUpsellModal from '@/components/DrinkUpsellModal';
 import CheckoutModal from '@/components/CheckoutModal';
 import ConfirmModal from '@/components/ConfirmModal';
 import OrderBar from '@/components/OrderBar';
+import AddedToast from '@/components/AddedToast';
 import { useTranslations } from '@/lib/i18n';
 import type { RawProduct } from '@/lib/types';
 
@@ -112,6 +113,7 @@ export default function ProductPageStandalone({
       <CheckoutModal />
       <ConfirmModal />
       <OrderBar />
+      <AddedToast />
     </StoreProvider>
   );
 }

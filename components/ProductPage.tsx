@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useStore } from '@/context/StoreContext';
 import { useTranslations, useLocalePath } from '@/lib/i18n';
-import { useBodyScrollLock } from '@/lib/hooks';
+import { useBodyScrollLock, useHoldRepeat } from '@/lib/hooks';
+import { triggerFlyToCart } from '@/lib/flyToCart';
 import type { FillingCategory, FillingItem, OptionItem, Product, Bundle } from '@/lib/types';
 
 // Keyed by the ENGLISH topping label from the database — since Finnish
@@ -169,11 +170,17 @@ function DipRow({ options, current, onChange, t }: { options: OptionItem[]; curr
 }
 
 function QtyStepper({ qty, onDec, onInc, t }: { qty: number; onDec: () => void; onInc: () => void; t: any }) {
+  // Add-to-cart-improvements brief, item 7 — holding either button (not
+  // just tapping) repeats after an initial delay. See lib/hooks.ts's
+  // useHoldRepeat for why this doesn't double-fire a plain tap and still
+  // works for keyboard/screen-reader activation.
+  const decRepeat = useHoldRepeat(onDec);
+  const incRepeat = useHoldRepeat(onInc);
   return (
     <div className="pp-qty-stepper">
-      <button type="button" aria-label={t.productPage.removeOneAriaLabel} onClick={onDec} disabled={qty <= 0}>−</button>
+      <button type="button" aria-label={t.productPage.removeOneAriaLabel} {...decRepeat} disabled={qty <= 0}>−</button>
       {qty > 0 && <span>{qty}</span>}
-      <button type="button" aria-label={t.productPage.addOneAriaLabel} onClick={onInc}>+</button>
+      <button type="button" aria-label={t.productPage.addOneAriaLabel} {...incRepeat}>+</button>
     </div>
   );
 }
@@ -384,6 +391,13 @@ export default function ProductPage() {
   const lp = useLocalePath();
 
   const [openCat, setOpenCat] = useState<string | null>(null);
+  // Add-to-cart-improvements brief, item 6 — flies from this product's own
+  // hero image (below) when actually added to the real cart.
+  const heroImgRef = useRef<HTMLImageElement | null>(null);
+  // Item 7 — hold-to-repeat on the main quantity stepper (setQty already
+  // self-clamps at a minimum of 1, so no clamping needed here).
+  const mainQtyDecRepeat = useHoldRepeat(() => setQty((q) => q - 1));
+  const mainQtyIncRepeat = useHoldRepeat(() => setQty((q) => q + 1));
 
   if (!activeProduct || !selection) {
     return <div className="product-page" aria-hidden="true" />;
@@ -457,7 +471,7 @@ export default function ProductPage() {
 
       <div className="pp-scroll">
         <div className="pp-hero">
-          <img className="pp-hero-img" src={activeProduct.image ?? undefined} alt={activeProduct.name} />
+          <img ref={heroImgRef} className="pp-hero-img" src={activeProduct.image ?? undefined} alt={activeProduct.name} />
           <div className="pp-price-badge">
             <div className="pp-price-row">
               <span>{intPart}</span>
@@ -685,12 +699,23 @@ export default function ProductPage() {
       <div className="pp-footer">
         {!isBundleSlot && (
           <div className="pp-qty">
-            <button type="button" onClick={() => setQty((q) => q - 1)}>−</button>
+            <button type="button" {...mainQtyDecRepeat}>−</button>
             <span>{selection.qty}</span>
-            <button type="button" onClick={() => setQty((q) => q + 1)}>+</button>
+            <button type="button" {...mainQtyIncRepeat}>+</button>
           </div>
         )}
-        <button className="btn-primary pp-add-btn" type="button" onClick={addToCart}>
+        <button
+          className="btn-primary pp-add-btn"
+          type="button"
+          onClick={() => {
+            // Add-to-cart-improvements brief, item 6 — only for a genuine
+            // add to the real cart, never when this ProductPage visit is
+            // just filling a bundle slot (that path doesn't touch the
+            // cart at all — see StoreContext.tsx's addToCart).
+            if (!isBundleSlot) triggerFlyToCart(heroImgRef.current);
+            addToCart();
+          }}
+        >
           {/* basePrice is typed optional (Product.basePrice?) but always populated
               once a product is active/selected here — non-null assertions are a
               no-op fix under strict mode, same behavior as before. */}
