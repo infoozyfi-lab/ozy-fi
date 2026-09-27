@@ -1348,15 +1348,16 @@ footer{ padding: 56px 0 32px; }
 }
 .order-bar:active{ transform: scale(0.98); }
 .order-bar.on-product-page{
-  /* On the product page, .pp-footer (the Add to Cart bar) already
-     occupies the very bottom of the screen — this floating "View
-     Order" pill needs to sit clearly ABOVE that footer, not at the
-     same 16px-from-edge position the rest of the site uses (which
-     would land it directly on top of/overlapping the Add to Cart
-     button). ~75px roughly clears pp-footer's own height (its
-     padding plus the button inside it) with a small visible gap
-     above it, before adding the same safe-area inset as everywhere
-     else. */
+  /* Despite the class name (kept as-is to avoid a wider rename), this
+     now covers every full-screen overlay whose own bottom footer bar
+     (.pp-footer or .upsell-footer) would otherwise sit at the exact
+     same screen position as this floating "View Order" pill — the
+     product page, the bundle builder (which reuses .pp-footer), and
+     the drink-upsell step (.upsell-footer) — see OrderBar.tsx's own
+     class-name condition for the full list. ~75px roughly clears any
+     of those footers' own height (padding plus the button/row inside)
+     with a small visible gap above it, before adding the same
+     safe-area inset as everywhere else. */
   bottom: calc(75px + env(safe-area-inset-bottom, 0px));
 }
 .order-bar-count{
