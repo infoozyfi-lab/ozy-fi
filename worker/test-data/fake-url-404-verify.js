@@ -149,6 +149,14 @@ function check(cond, label, detail) {
   // Execute the REAL extracted body in a sandbox with mocked bindings —
   // same technique prior rounds used to test a hook body without a full
   // React render.
+  // Checkout-restore-bug follow-up round — the real effect body no longer
+  // takes a separate `pathname` argument at all: it reads
+  // `window.location.pathname` directly (the fix for that later-found
+  // bug — see worker/test-data/checkout-restore-fix-verify.js for the
+  // full root-cause explanation). This harness's own `pathname` parameter
+  // is kept as this function's own input name (so every call site below
+  // is untouched) but is now wired into the mocked `window.location`
+  // instead of a bare extra argument, to match the real, current source.
   function runEffect({ pathname, locale, savedCart }) {
     const calls = [];
     const sessionStorage = {
@@ -157,13 +165,13 @@ function check(cond, label, detail) {
     const setCartOpen = (v) => calls.push(['setCartOpen', v]);
     const setCheckoutOpen = (v) => calls.push(['setCheckoutOpen', v]);
     const setDrinkUpsellOpen = (v) => calls.push(['setDrinkUpsellOpen', v]);
-    const window = {}; // typeof window !== 'undefined' guard
+    const window = { location: { pathname } }; // typeof window !== 'undefined' guard + real read source
     const fn = new Function(
-      'pathname', 'locale', 'window', 'sessionStorage',
+      'locale', 'window', 'sessionStorage',
       'setCartOpen', 'setCheckoutOpen', 'setDrinkUpsellOpen',
       effectBody
     );
-    fn(pathname, locale, window, sessionStorage, setCartOpen, setCheckoutOpen, setDrinkUpsellOpen);
+    fn(locale, window, sessionStorage, setCartOpen, setCheckoutOpen, setDrinkUpsellOpen);
     return calls;
   }
 
@@ -213,8 +221,8 @@ function check(cond, label, detail) {
     try {
       const calls = [];
       const sessionStorage = { getItem: () => '{not json' };
-      const fn = new Function('pathname', 'locale', 'window', 'sessionStorage', 'setCartOpen', 'setCheckoutOpen', 'setDrinkUpsellOpen', effectBody);
-      fn('/fi/checkout', 'fi', {}, sessionStorage, () => calls.push('cartOpen'), () => calls.push('checkoutOpen'), () => calls.push('drinkOpen'));
+      const fn = new Function('locale', 'window', 'sessionStorage', 'setCartOpen', 'setCheckoutOpen', 'setDrinkUpsellOpen', effectBody);
+      fn('fi', { location: { pathname: '/fi/checkout' } }, sessionStorage, () => calls.push('cartOpen'), () => calls.push('checkoutOpen'), () => calls.push('drinkOpen'));
       check(calls.length === 0, 'corrupt sessionStorage JSON is caught and treated as "no cart" (does not open checkout, does not throw)', calls);
     } catch (e) {
       threw = true;
